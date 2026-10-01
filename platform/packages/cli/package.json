@@ -1,0 +1,41 @@
+{
+  "name": "adport",
+  "version": "0.6.1",
+  "description": "adport CLI — the open control plane for paid media",
+  "license": "Apache-2.0",
+  "type": "module",
+  "bin": {
+    "adport": "./dist/index.js"
+  },
+  "files": ["dist"],
+  "scripts": {
+    "build": "tsup src/index.ts --format esm --sourcemap --clean",
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit",
+    "clean": "rm -rf dist"
+  },
+  "dependencies": {
+    "@adport/core": "workspace:*",
+    "@adport/mcp": "workspace:*",
+    "@adport/provider-apple": "workspace:*",
+    "@adport/provider-google": "workspace:*",
+    "@adport/provider-meta": "workspace:*",
+    "@adport/provider-microsoft": "workspace:*",
+    "@adport/provider-reddit": "workspace:*",
+    "@adport/provider-snapchat": "workspace:*",
+    "@adport/provider-spotify": "workspace:*",
+    "@adport/provider-pinterest": "workspace:*",
+    "@adport/provider-linkedin": "workspace:*",
+    "@adport/provider-x": "workspace:*",
+    "@adport/provider-tiktok": "workspace:*",
+    "commander": "^13.0.0",
+    "yaml": "^2.6.0",
+    "zod": "^4.4.3"
+  },
+  "devDependencies": {
+    "@types/node": "^26.1.2",
+    "tsup": "^8.3.0",
+    "typescript": "^5.8.0",
+    "vitest": "^4.1.10"
+  }
+}

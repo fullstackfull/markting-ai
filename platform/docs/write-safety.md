@@ -1,0 +1,40 @@
+# Write safety and audit contract
+
+Every Adport mutation uses the same `ToolRegistry` definition and the same policy engine, whether invoked from the CLI, stdio MCP server, cloud REST API, or remote MCP endpoint. A provider or adapter must not expose a separate write path.
+
+## Two-step operation
+
+1. Call a write tool without `pending_operation_id`. Adport checks static policy, asks the provider to build or validate a write plan, applies required coercions such as paused creation, checks budget deltas, writes a `validated` audit event, and returns the preview plus a pending id and expiry.
+2. Review the summary, field changes, coercions, and budget deltas.
+3. Call the same tool with identical arguments and the returned pending id. Adport rejects expired ids, provider or argument mismatches, newly protected accounts, and policy violations. Only then can the provider apply the plan.
+
+In MCP Apps hosts, the preview widget can show an **Approve and apply** button. It sends the original validated arguments and pending id through the same MCP write tool; it is not a separate or privileged write path. The button shows only after the server returns an eligible pending operation. If the host cannot confirm the result, check the operation status before trying again, since a timed-out write may still have succeeded. Hosts may also impose their own tool-permission prompt, which Adport cannot suppress.
+
+Self-hosted pending operations are file-backed under `${ADPORT_HOME:-~/.config/adport}/pending/`. Cloud pending operations are tenant-scoped Postgres rows. Both expire after the configured TTL (15 minutes by default), and both bind the tool, provider, account, operation kind, and canonicalized payload into the operation hash.
+
+## Policy controls
+
+Run `adport policy` to see the active values and their source. Current controls include:
+
+- `protected_accounts`: accounts on which all writes are rejected;
+- `paused_creation`: coerces supported new campaigns to paused and reports the coercion;
+- `max_budget_delta_pct`: limits relative changes where a current budget is known;
+- `max_daily_budget_micros`: limits the resulting daily budget in shared policy units;
+- `pending_ttl_minutes`: limits the approval window.
+
+Provider-native validation is used where available, but a provider dry run is not the approval. The Adport pending id remains required.
+
+## Append-only audit trail
+
+Self-hosted audit files live under `${ADPORT_HOME:-~/.config/adport}/audit/` as monthly `audit-YYYY-MM.jsonl` files. Cloud audit events use an organization-scoped Postgres identity table and include the actor user or API key. Each write entry contains:
+
+- `ts`: ISO timestamp;
+- `event`: `validated`, `applied`, `rejected`, or `note`;
+- `provider`, `tool`, and `accountId`;
+- optional `pendingId`;
+- human-readable `summary`;
+- optional structured `details` such as created resource ids.
+
+`adport audit note` appends a record for a relevant change made outside Adport. `adport audit export` reads the source log and emits JSONL or a JSON array to stdout; it never rewrites the original files.
+
+The local log is append-only by application behavior, not tamper-evident storage. Cloud rows are not exposed for browser mutation and are deleted only by configured retention or tenant deletion. Archive exports in an access-controlled system if regulatory retention, immutability, signatures, or centralized review is required.

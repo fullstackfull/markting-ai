@@ -1,0 +1,47 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-test:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        node: [22, 24]
+    steps:
+      - uses: actions/checkout@v7
+      - uses: pnpm/action-setup@v6
+      - uses: actions/setup-node@v7
+        with:
+          node-version: ${{ matrix.node }}
+          cache: pnpm
+      - name: Verify provider landing pages
+        run: |
+          node scripts/build-provider-pages.mjs --check
+          node --test scripts/test-provider-pages.mjs
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm build
+      - run: pnpm typecheck
+      - run: pnpm test
+      - name: Connector submission catalog guard
+        run: node --test scripts/test-connector-catalog.mjs
+      - name: CLI smoke (fail-closed and explicit demo mode)
+        run: |
+          export ADPORT_HOME="$(mktemp -d)"
+          node packages/cli/dist/index.js tools list
+          if node packages/cli/dist/index.js accounts --json; then
+            echo "Expected accounts to fail without credentials or --demo"
+            exit 1
+          fi
+          node packages/cli/dist/index.js --demo accounts --json
+          node packages/cli/dist/index.js --demo report --metrics spend,clicks,roas
+          node packages/cli/dist/index.js --demo audit run

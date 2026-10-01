@@ -1,0 +1,49 @@
+import { describe, expect, it } from 'vitest';
+import config, { buildContentSecurityPolicy } from '../next.config';
+
+describe('content security policy', () => {
+  const supabaseOrigin = 'https://example.supabase.co';
+
+  it('keeps ordinary forms restricted to Adport', () => {
+    const policy = buildContentSecurityPolicy(supabaseOrigin);
+    expect(policy).toContain("form-action 'self'");
+    expect(policy).not.toContain('form-action \'self\' https:');
+  });
+
+  it('never allows eval outside development mode', () => {
+    expect(buildContentSecurityPolicy(supabaseOrigin)).not.toContain('unsafe-eval');
+    expect(buildContentSecurityPolicy(supabaseOrigin, true)).not.toContain('unsafe-eval');
+    expect(buildContentSecurityPolicy(supabaseOrigin, false, true)).toContain("script-src 'self' 'unsafe-inline' 'unsafe-eval'");
+  });
+
+  it('allows registered HTTPS and loopback OAuth callbacks on the consent page', () => {
+    const policy = buildContentSecurityPolicy(supabaseOrigin, true);
+    expect(policy).toContain(
+      "form-action 'self' https: http://localhost:* http://127.0.0.1:* http://[::1]:*",
+    );
+  });
+
+  it('limits the relaxed form navigation policy to the OAuth consent page', async () => {
+    const configured = await config.headers?.();
+    const general = configured?.find((entry) => entry.source === '/(.*)');
+    const consent = configured?.find((entry) => entry.source === '/oauth/authorize');
+    const value = (entry: typeof general) => entry?.headers.find(
+      (header) => header.key === 'Content-Security-Policy',
+    )?.value;
+
+    expect(value(general)).toMatch(/form-action 'self'$/);
+    expect(value(general)).not.toContain("form-action 'self' https:");
+    expect(value(consent)).toContain(
+      "form-action 'self' https: http://localhost:* http://127.0.0.1:* http://[::1]:*",
+    );
+  });
+
+  it('keeps opener isolation enabled and popup completion private', async () => {
+    const configured = await config.headers?.();
+    const general = configured?.find(entry => entry.source === '/(.*)');
+    expect(general?.headers).toContainEqual({ key: 'Cross-Origin-Opener-Policy', value: 'same-origin' });
+    const popup = configured?.find(entry => entry.source === '/oauth/provider-complete');
+    expect(popup?.headers).toContainEqual({ key: 'Cache-Control', value: 'private, no-store, max-age=0' });
+    expect(popup?.headers).toContainEqual({ key: 'Referrer-Policy', value: 'no-referrer' });
+  });
+});

@@ -1,0 +1,114 @@
+/* Provider guides and the integrations directory. Shared tokens and components live in site.css. */
+
+.provider { padding-inline: var(--gutter); }
+.breadcrumbs { display: flex; flex-wrap: wrap; gap: 0.6rem; padding-top: 1.75rem; color: var(--muted); font-size: 0.875rem; }
+.breadcrumbs a { text-decoration: none; }
+.breadcrumbs a:hover { color: var(--ink); }
+.breadcrumbs [aria-current] { color: var(--ink); font-weight: 650; }
+
+/* Hero ----------------------------------------------------------------- */
+
+.p-hero { display: grid; grid-template-columns: minmax(0, 1.05fr) minmax(0, 0.95fr); gap: 3rem clamp(3rem, 6vw, 6rem); align-items: center; padding-block: clamp(2.5rem, 6vw, 4.5rem) clamp(3rem, 7vw, 5rem); }
+.p-kicker { display: flex; align-items: center; gap: 0.6rem; color: var(--ink-soft); font-size: 0.9375rem; font-weight: 700; }
+.p-logo { display: inline-grid; width: 2.25rem; height: 2.25rem; place-items: center; border: 1px solid var(--rule); border-radius: 0.6rem; background: var(--raised); }
+.p-logo svg { width: 1.25rem; height: 1.25rem; fill: currentColor; }
+.p-hero h1, .p-directory-hero h1 { margin-top: 1.1rem; font-size: clamp(2.5rem, 5.4vw, 4.75rem); font-weight: 820; line-height: 0.98; letter-spacing: -0.04em; text-wrap: balance; }
+.p-hero .lede { max-width: 34rem; margin-top: 1.5rem; }
+.p-hero .hero-actions { margin-top: 2rem; }
+.local-option { margin-top: 1.25rem; color: var(--muted); font-size: 0.9375rem; }
+.local-option .text-link { margin-left: 0.25rem; }
+
+.p-prompts .console-title { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.p-prompt-list { display: grid; gap: 1rem; padding: 1.4rem 1.4rem 0.5rem; list-style: none; font-size: 0.9375rem; line-height: 1.55; }
+.p-prompt-note { padding: 0.9rem 1.4rem 1.2rem; color: var(--muted); font-size: 0.8125rem; }
+
+/* Sections ------------------------------------------------------------- */
+
+.p-section { padding-block: clamp(3.5rem, 7vw, 5.5rem); border-top: 1px solid var(--rule); scroll-margin-top: 4.5rem; }
+.p-section .section-intro h2 { font-size: clamp(1.85rem, 3.4vw, 2.75rem); }
+
+.p-workflows { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 2rem clamp(1.5rem, 3vw, 3rem); margin-top: clamp(2rem, 4vw, 3rem); }
+.p-workflows article { padding-top: 1rem; border-top: 2px solid var(--ink); }
+.p-workflows h3 { font-size: 1.125rem; font-weight: 750; line-height: 1.3; letter-spacing: -0.01em; }
+.p-workflows p { margin-top: 0.6rem; color: var(--ink-soft); font-size: 0.9875rem; line-height: 1.65; }
+.p-nuance { max-width: 52rem; margin-top: clamp(2rem, 4vw, 3rem); padding: 1rem 1.25rem 1.1rem; border-left: 3px solid var(--signal); border-radius: 0 0.6rem 0.6rem 0; background: var(--raised); }
+.p-nuance h3 { font-size: 1rem; font-weight: 750; }
+.p-nuance p { margin-top: 0.35rem; color: var(--ink-soft); font-size: 0.9875rem; line-height: 1.65; }
+
+.p-connect { display: grid; grid-template-columns: minmax(0, 1.2fr) minmax(0, 0.8fr); gap: 2rem clamp(2rem, 5vw, 4.5rem); align-items: start; margin-top: clamp(1.5rem, 3vw, 2.25rem); }
+.p-connect .steps { margin-top: 0.5rem; }
+.p-connect .step-text { margin-top: 0.6rem; line-height: 1.6; }
+.p-requirements { padding: clamp(1.25rem, 2.5vw, 1.75rem); border: 1px solid var(--rule); border-radius: 1.1rem; background: var(--raised); }
+.p-requirements h3 { font-size: 1.125rem; font-weight: 750; }
+.p-requirements ul { display: grid; gap: 0.75rem; margin-top: 1rem; padding-left: 1.1rem; color: var(--ink-soft); font-size: 0.9375rem; line-height: 1.6; }
+.p-requirements li::marker { color: var(--signal); }
+.p-links { display: grid; justify-items: start; gap: 0.6rem; margin-top: 1.4rem; font-size: 0.9375rem; }
+.p-fineprint { margin-top: 1.25rem; padding-top: 1rem; border-top: 1px solid var(--rule); color: var(--muted); font-size: 0.8125rem; line-height: 1.6; }
+
+.p-agents { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 1.25rem; margin-top: clamp(1.75rem, 3.5vw, 2.5rem); }
+.p-agent { display: flex; min-width: 0; flex-direction: column; gap: 0.75rem; padding: clamp(1.25rem, 2.5vw, 1.6rem); border: 1px solid var(--rule); border-radius: 1.1rem; background: var(--raised); }
+.p-agent h3 { display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem; font-size: 1.25rem; font-weight: 780; letter-spacing: -0.015em; }
+.p-agent p { color: var(--ink-soft); font-size: 0.9375rem; line-height: 1.6; }
+.p-agent .cmd { margin-top: 0; }
+.p-agent .cmd > code, .p-agent .cmd pre { white-space: pre-wrap; overflow-wrap: anywhere; }
+.p-agent .text-link { margin-top: auto; padding-top: 0.25rem; align-self: flex-start; font-size: 0.9375rem; }
+.p-agent-cloud { border: 1.5px dashed var(--rule-strong); background: transparent; }
+.soon { padding: 0.2rem 0.6rem 0.1rem; border-radius: 999px; background: var(--signal-wash); color: var(--signal-ink); font-size: 0.8125rem; font-weight: 700; letter-spacing: 0; }
+
+/* Full-bleed band: --gutter would resolve against .provider here, so measure from the viewport. */
+.p-safety { display: grid; grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr); gap: 1.5rem clamp(2rem, 6vw, 6rem); margin-inline: calc(50% - 50vw); padding: clamp(3.5rem, 7vw, 5.5rem) max(1.25rem, calc(50vw - var(--max) / 2)); border-block: 1px solid var(--rule); background: var(--raised); }
+.p-safety h2 { max-width: 13em; font-size: clamp(1.85rem, 3.4vw, 2.75rem); font-weight: 800; line-height: 1.04; letter-spacing: -0.035em; text-wrap: balance; }
+.p-safety .text-link { margin-top: 1.25rem; }
+.p-safety p { color: var(--ink-soft); line-height: 1.7; }
+.p-safety p + p { margin-top: 1rem; }
+.p-safety + .p-section { border-top: 0; }
+
+.p-faq-list { max-width: 52rem; margin-top: clamp(1.5rem, 3vw, 2.25rem); border-bottom: 1px solid var(--rule); }
+.p-faq details { border-top: 1px solid var(--rule); }
+.p-faq summary { position: relative; padding: 1.15rem 2.5rem 1.05rem 0; font-size: 1.125rem; font-weight: 700; list-style: none; cursor: pointer; }
+.p-faq summary::-webkit-details-marker { display: none; }
+.p-faq summary::before, .p-faq summary::after { content: ""; position: absolute; right: 0.4rem; top: 50%; width: 0.85rem; height: 2px; background: var(--ink); transition: transform 200ms var(--ease-out); }
+.p-faq summary::after { transform: rotate(90deg); }
+.p-faq details[open] summary::after { transform: rotate(0deg); }
+.p-faq details p { max-width: 44rem; padding-bottom: 1.25rem; color: var(--ink-soft); line-height: 1.7; }
+.p-faq code { font-size: 0.9em; }
+
+.p-related-head { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 1rem 2rem; }
+.p-related-head h2 { font-size: clamp(1.85rem, 3.4vw, 2.75rem); font-weight: 800; line-height: 1.04; letter-spacing: -0.035em; }
+
+/* Directory cards: the home page's platform grid with each platform's one-line pitch. */
+.p-directory { margin-top: clamp(1.75rem, 3.5vw, 2.5rem); }
+.p-directory a { min-height: 10rem; justify-content: flex-start; }
+.p-directory a > svg, .p-directory .request-plus { flex: none; }
+.p-directory .pg-text { padding-top: 1.75rem; }
+.pg-text { display: grid; gap: 0.3rem; }
+.pg-name { font-size: 1.0625rem; font-weight: 750; }
+.pg-label { color: var(--muted); font-size: 0.9375rem; font-weight: 500; line-height: 1.45; }
+.p-directory-all { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+
+.p-directory-hero { padding-block: clamp(2.5rem, 6vw, 4.5rem) clamp(1rem, 2vw, 1.5rem); }
+.p-directory-hero .lede { max-width: 40rem; margin-top: 1.5rem; }
+.p-boundary { display: grid; grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr); gap: 1.5rem clamp(2rem, 6vw, 6rem); margin-top: clamp(3.5rem, 7vw, 5.5rem); }
+.p-boundary p { color: var(--ink-soft); line-height: 1.7; }
+.p-boundary p + p { margin-top: 1rem; }
+
+/* Responsive ----------------------------------------------------------- */
+
+@media (max-width: 64rem) {
+  .p-hero, .p-connect, .p-safety, .p-boundary { grid-template-columns: minmax(0, 1fr); }
+  .p-agents { grid-template-columns: minmax(0, 1fr); }
+  .p-directory-all { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+}
+
+@media (max-width: 52rem) {
+  .p-workflows { grid-template-columns: minmax(0, 1fr); }
+  .p-directory-all { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+
+@media (max-width: 40rem) {
+  .p-directory a { min-height: 8.5rem; }
+  .p-safety { padding-inline: 1rem; }
+  .pg-label { font-size: 0.8125rem; }
+  .p-prompt-list { padding: 1.1rem 1rem 0.25rem; }
+  .p-prompt-note { padding-inline: 1rem; }
+}

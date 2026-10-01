@@ -1,0 +1,62 @@
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Existing release tag to publish
+        required: true
+        type: string
+
+permissions:
+  contents: write
+  id-token: write # npm provenance
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    env:
+      NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
+      RELEASE_TAG: ${{ inputs.tag || github.ref_name }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ env.RELEASE_TAG }}
+      - uses: pnpm/action-setup@v6
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: pnpm
+          registry-url: https://registry.npmjs.org
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm build
+      - run: pnpm typecheck
+      - run: pnpm test
+      - run: pnpm check:public-tree
+      - name: Create GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release view "$RELEASE_TAG" >/dev/null 2>&1 || gh release create "$RELEASE_TAG" --title "$RELEASE_TAG" --generate-notes
+      - name: Publish missing packages to npm
+        if: ${{ env.NPM_TOKEN != '' }}
+        env:
+          NODE_AUTH_TOKEN: ${{ env.NPM_TOKEN }}
+          NPM_CONFIG_PROVENANCE: "true"
+        run: |
+          pnpm -r --workspace-concurrency=1 exec sh -c '
+            if [ "$(node -p "require(\"./package.json\").private === true")" = "true" ]; then
+              echo "Skipping private workspace"
+              exit 0
+            fi
+            package_name=$(node -p "require(\"./package.json\").name")
+            package_version=$(node -p "require(\"./package.json\").version")
+            # Query anonymously: a package-restricted publish token can return 404
+            # for a newly created package even after the public registry exposes it.
+            if npm view "${package_name}@${package_version}" version --userconfig=/dev/null >/dev/null 2>&1; then
+              echo "Skipping ${package_name}@${package_version}: already published"
+            else
+              pnpm publish --access public --no-git-checks
+            fi
+          '

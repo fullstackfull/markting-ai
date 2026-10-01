@@ -1,0 +1,21 @@
+{
+  "name": "adport-monorepo",
+  "private": true,
+  "version": "0.6.1",
+  "description": "adport — the open control plane for paid media (MCP + CLI)",
+  "license": "Apache-2.0",
+  "packageManager": "pnpm@11.8.0",
+  "engines": {
+    "node": ">=22.13"
+  },
+  "scripts": {
+    "build": "turbo run build",
+    "test": "turbo run test",
+    "typecheck": "turbo run typecheck",
+    "check:public-tree": "node scripts/check-public-tree.mjs",
+    "clean": "turbo run clean && rm -rf node_modules/.cache"
+  },
+  "devDependencies": {
+    "turbo": "^2.5.0"
+  }
+}
