@@ -1,0 +1,30 @@
+markting-ai
+Copyright 2026 the markting-ai contributors
+
+This product bundles the following third-party open-source software.
+Each is distributed under the Apache License, Version 2.0; the full license
+text is kept with each imported tree.
+
+--------------------------------------------------------------------------------
+
+adport
+  Location in this repository : /platform
+  Upstream                    : https://github.com/ynnickw/adport
+  Copyright                   : 2026 Yannick Westermann (per /platform/LICENSE)
+  Imported commit             : bde6fedaf380f38fa3aa0df725d6323c15991dd4
+  License                     : Apache License 2.0 (see /platform/LICENSE)
+  Upstream NOTICE file        : none shipped upstream
+
+--------------------------------------------------------------------------------
+
+paid-media-agent
+  Location in this repository : /engine
+  Upstream                    : https://github.com/langchain-ai/paid-media-agent
+  Copyright                   : 2026 Paid Media Agent contributors (per /engine/LICENSE)
+  Imported commit             : 0cc8109a1984377a573ed8d202b3b054db4d7b90
+  License                     : Apache License 2.0 (see /engine/LICENSE)
+  Upstream NOTICE file        : none shipped upstream
+
+--------------------------------------------------------------------------------
+
+See UPSTREAM.md for import dates and the import procedure.
