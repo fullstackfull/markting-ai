@@ -1,0 +1,35 @@
+.DS_Store
+.env
+.env.*
+!.env.example
+.mda/
+.python-version
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.venv/
+__pycache__/
+*.py[cod]
+*.egg-info/
+build/
+dist/
+coverage.xml
+htmlcov/
+.coverage
+workspace/in/
+workspace/out/
+workspace/analysis/
+artifacts/
+# Host-owned local configuration (examples stay tracked)
+config/accounts.toml
+config/write-policy.toml
+channels/slack-icon.png
+workspace/logs/
+workspace/sessions/
+workspace/sources/
+workspace/skills/company-context/
+!workspace/*/.gitkeep
+workspace/KILL_SWITCH
+supabase/
+# The organization's own context; never committed.
+docs/org/

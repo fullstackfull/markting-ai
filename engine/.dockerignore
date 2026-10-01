@@ -1,0 +1,15 @@
+.env
+.env.*
+.venv
+.git
+.mda
+__pycache__
+*.pyc
+node_modules
+workspace/out/*
+workspace/analysis/*
+workspace/sources/
+docs/org/
+tests
+docs/screenshots
+docs/history
