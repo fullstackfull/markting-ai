@@ -51,11 +51,12 @@ const aliases = [
   ['demo-google', 'sandbox', 'fixture-google-0001'],
   ['demo-meta', 'sandbox', 'fixture-meta-0001'],
   ['demo-reddit', 'sandbox', 'fixture-reddit-0001'],
+  ['demo-snap', 'sandbox', 'fixture-snap-0001'],
 ];
 for (const [alias, provider, accountId] of aliases) {
   await sql`
     insert into public.markting_account_aliases (organization_id, alias, provider, account_id, currency)
-    values (${organizationId}, ${alias}, ${provider}, ${accountId}, 'USD')
+    values (${organizationId}, ${alias}, ${provider}, ${accountId}, ${alias === 'demo-snap' ? 'SAR' : 'USD'})
     on conflict (organization_id, alias) do update set provider = excluded.provider, account_id = excluded.account_id
   `;
 }

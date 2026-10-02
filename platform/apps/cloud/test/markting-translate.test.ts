@@ -37,6 +37,11 @@ describe('translateProposal: synthetic engine proposals → adport guarded write
     expect(result).toMatchObject({ status: 'ok', provider: 'sandbox', accountId: 'fixture-google-0001', tool: 'sandbox_set_budget', input: { campaign_id: 'g-103', daily_budget_micros: 240_000_000 } });
   });
 
+  it('maps a snap_ads proposal onto the sandbox Snapchat account in demo mode', () => {
+    const result = translateProposal(syntheticProposal({ platform: 'snap_ads', account_ref: 'demo-snap', tool_name: 'snap_ads__update_campaign_budget', target_ref: 's-401', after: [{ field: 'daily_budget', value: 400 }] }), SANDBOX_ALIASES);
+    expect(result).toMatchObject({ status: 'ok', provider: 'sandbox', accountId: 'fixture-snap-0001', tool: 'sandbox_set_budget', input: { campaign_id: 's-401', daily_budget_micros: 400_000_000 } });
+  });
+
   it.each([
     ['google_ads', 'acme-google', 'google_set_budget', { campaign_id: '99887766', daily_budget_micros: 240_000_000 }],
     ['meta_ads', 'acme-meta', 'meta_set_budget', { object_id: 'g-103', daily_budget_cents: 24_000 }],

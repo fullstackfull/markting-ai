@@ -21,20 +21,21 @@ async function runtime() {
 }
 
 describe('SandboxProvider mirrors the engine fixtures and obeys the write gate', () => {
-  it('exposes the three fixture accounts and eight campaigns with the fixture budgets', async () => {
+  it('exposes the four fixture accounts and ten campaigns with the fixture budgets', async () => {
     const { rt } = await runtime();
     const accounts = await rt.registry.call('accounts_list', {}, rt.ctx) as { accounts: Array<{ id: string; provider: string }> };
     expect(accounts.accounts.map((a) => a.id).sort()).toEqual(SANDBOX_ACCOUNTS.map((a) => a.id).sort());
     const google = await rt.registry.call('sandbox_list_campaigns', { account_id: 'fixture-google-0001' }, rt.ctx) as { campaigns: Array<{ id: string; dailyBudgetMicros: number }> };
     expect(google.campaigns.find((c) => c.id === 'g-103')?.dailyBudgetMicros).toBe(300_000_000);
-    expect(sandboxSeed()).toHaveLength(8);
+    expect(sandboxSeed()).toHaveLength(10);
+    expect(sandboxSeed().filter((c) => c.accountId === 'fixture-snap-0001')).toHaveLength(2);
   });
 
   it('answers the normalized report tool deterministically', async () => {
     const { rt } = await runtime();
     const first = await rt.registry.call('report', { metrics: ['spend', 'clicks', 'conversions', 'roas'], date_range: 'last_7_days' }, rt.ctx) as { rows: Array<{ provider: string; metrics: Record<string, number> }> };
     const second = await rt.registry.call('report', { metrics: ['spend', 'clicks', 'conversions', 'roas'], date_range: 'last_7_days' }, rt.ctx) as { rows: unknown[] };
-    expect(first.rows).toHaveLength(8);
+    expect(first.rows).toHaveLength(10);
     expect(first.rows.every((row) => row.provider === 'sandbox' && (row.metrics.spend ?? 0) > 0)).toBe(true);
     expect(second.rows).toEqual(first.rows);
   });

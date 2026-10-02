@@ -43,6 +43,8 @@ export const SANDBOX_ACCOUNTS: Account[] = [
   { provider: SANDBOX_PROVIDER_ID, id: 'fixture-google-0001', name: 'Demo · Google Ads', currency: 'USD', status: 'ENABLED' },
   { provider: SANDBOX_PROVIDER_ID, id: 'fixture-meta-0001', name: 'Demo · Meta Ads', currency: 'USD', status: 'ENABLED' },
   { provider: SANDBOX_PROVIDER_ID, id: 'fixture-reddit-0001', name: 'Demo · Reddit Ads', currency: 'USD', status: 'ENABLED' },
+  // Snapchat has no engine fixture yet; this account lets the adport side demo Snap previews and reports.
+  { provider: SANDBOX_PROVIDER_ID, id: 'fixture-snap-0001', name: 'Demo · Snapchat Ads', currency: 'SAR', status: 'ENABLED' },
 ];
 
 export function sandboxSeed(): SandboxCampaign[] {
@@ -55,6 +57,8 @@ export function sandboxSeed(): SandboxCampaign[] {
     { id: 'm-203', accountId: 'fixture-meta-0001', name: 'Video Views - Awareness', status: 'PAUSED', dailyBudgetMicros: 90_000_000 },
     { id: 'r-301', accountId: 'fixture-reddit-0001', name: 'Community Targeting - Dev Tools', status: 'ENABLED', dailyBudgetMicros: 75_000_000 },
     { id: 'r-302', accountId: 'fixture-reddit-0001', name: 'Interest - Marketing', status: 'ENABLED', dailyBudgetMicros: 45_000_000 },
+    { id: 's-401', accountId: 'fixture-snap-0001', name: 'Ramadan Awareness - KSA', status: 'ENABLED', dailyBudgetMicros: 500_000_000 },
+    { id: 's-402', accountId: 'fixture-snap-0001', name: 'App Installs - Gulf', status: 'PAUSED', dailyBudgetMicros: 200_000_000 },
   ];
 }
 
@@ -203,4 +207,5 @@ export const SANDBOX_ALIASES = {
   'demo-google': { alias: 'demo-google', provider: SANDBOX_PROVIDER_ID, accountId: 'fixture-google-0001', currency: 'USD' },
   'demo-meta': { alias: 'demo-meta', provider: SANDBOX_PROVIDER_ID, accountId: 'fixture-meta-0001', currency: 'USD' },
   'demo-reddit': { alias: 'demo-reddit', provider: SANDBOX_PROVIDER_ID, accountId: 'fixture-reddit-0001', currency: 'USD' },
+  'demo-snap': { alias: 'demo-snap', provider: SANDBOX_PROVIDER_ID, accountId: 'fixture-snap-0001', currency: 'SAR' },
 } as const;
