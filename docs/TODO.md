@@ -4,7 +4,8 @@ Ordered roughly by what blocks a paying customer first. Each item says what exis
 
 ## 1. Billing and subscriptions
 - adport ships Stripe plumbing: `organization_subscriptions`, plan gating in `apps/cloud/lib/cloud/plans.ts`, a webhook at `/api/billing/webhook` and the Plan page. The free `reader` plan strips `tools:write`, so previews need an `operator`+ plan (the demo seed sets it directly in the database).
-- Missing: Stripe products/prices and `STRIPE_*` env, a checkout flow, Arabic invoices/receipts, VAT handling for Saudi/Gulf customers, and a decision on whether the engine's usage (model tokens, report runs) is metered per organization.
+- Done (see `docs/billing.md`): `infra/scripts/stripe-setup.mjs` provisions products/prices idempotently and fills `STRIPE_*_PRICE_ID`; `make stripe-listen` forwards test webhooks; checkout, portal and webhook were already upstream.
+- Missing: Stripe Tax / 15 % VAT (one-line `automatic_tax` edit in `app/dashboard/billing/actions.ts`, your call), SAR pricing (amounts in `plans.ts` and the script), Arabic invoices/receipts (Stripe invoice locale), and whether engine usage (model tokens, report runs) is metered per organization.
 
 ## 2. WhatsApp approvals
 - Today approvals happen only on the Approvals page (apply = the exact second call through the policy engine) or through REST/MCP.

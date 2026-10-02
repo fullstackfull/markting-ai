@@ -5,6 +5,10 @@
   "description": "Helper scripts for the markting-ai local stack (env fill, Supabase key sync, demo seed).",
   "dependencies": {
     "@supabase/supabase-js": "2.112.3",
-    "postgres": "3.4.9"
+    "postgres": "3.4.9",
+    "stripe": "^22.5.0"
+  },
+  "scripts": {
+    "test": "node --test scripts/stripe-setup.test.mjs"
   }
 }

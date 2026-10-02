@@ -50,10 +50,11 @@ make seed    # ينشئ مساحة عمل تجريبية: demo@markting.local (�
 | `PAID_MEDIA_MODEL`, `ANTHROPIC_API_KEY` / `OPENAI_API_KEY` | النموذج ومفتاحه في وضع `live` فقط. |
 | `SNAPCHAT_CLIENT_ID`, `SNAPCHAT_CLIENT_SECRET`, `SNAPCHAT_OAUTH_ENABLED` | تفعيل مزوّد Snapchat في تطبيق الـ cloud. |
 | `MARKTING_DEMO_EMAIL`, `MARKTING_DEMO_PASSWORD` | حساب العرض التجريبي الذي ينشئه `make seed`. |
+| `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, `STRIPE_*_PRICE_ID` | فوترة Stripe الاختيارية؛ `make stripe-setup` يملأ معرّفات الأسعار. |
 
 ## ما ليس جاهزًا للإنتاج بعد
 
-- لا فوترة أو اشتراكات، ولا موافقات عبر WhatsApp، ولا تكامل مع سلة أو زد. انظر `docs/TODO.md`.
+- الفوترة عبر Stripe تعمل في وضع الاختبار (`docs/billing.md`) لكن بلا ضريبة ولا ريال بعد؛ لا موافقات عبر WhatsApp ولا تكامل مع سلة أو زد. انظر `docs/TODO.md`.
 - بوابات الإنتاج في المشروعين الأصليين (نشر، مفاتيح، مراجعة تطبيقات OAuth لدى كل منصة) لم تُستوفَ؛ راجع `docs/TODO.md` و`platform/docs/deployment-model.md`.
 - المحرك يعمل برمز خدمة واحد؛ عزل المحادثات بين المستأجرين يتم في جداول adport (`markting_threads`)، لا داخل المحرك.
 - تقارير المحرك (HTML/PDF) ما زالت بالإنجليزية ومن اليسار إلى اليمين.
@@ -118,10 +119,11 @@ Everything lives in `.env` (git-ignored). The annotated full list is `.env.examp
 | `PAID_MEDIA_MODEL`, `ANTHROPIC_API_KEY` / `OPENAI_API_KEY` | Model and key, live mode only. |
 | `SNAPCHAT_CLIENT_ID`, `SNAPCHAT_CLIENT_SECRET`, `SNAPCHAT_OAUTH_ENABLED` | Enable the Snapchat provider in the cloud app. |
 | `MARKTING_DEMO_EMAIL`, `MARKTING_DEMO_PASSWORD` | The demo account `make seed` creates. |
+| `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, `STRIPE_*_PRICE_ID` | Optional Stripe billing; `make stripe-setup` fills the price ids. |
 
 ## Not production-ready yet
 
-- No billing/subscriptions, no WhatsApp approvals, no Salla/Zid integration. See `docs/TODO.md`.
+- Stripe billing works in test mode (`docs/billing.md`) but without VAT or SAR pricing yet; no WhatsApp approvals, no Salla/Zid integration. See `docs/TODO.md`.
 - The upstream production gates (deployment, key management, per-platform OAuth app review) are not met; see `docs/TODO.md` and `platform/docs/deployment-model.md`.
 - The engine runs with one service token; tenant isolation of conversations lives in adport's `markting_threads` table, not inside the engine.
 - Engine reports (HTML/PDF) are still English and left-to-right.
