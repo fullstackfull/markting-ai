@@ -7,6 +7,7 @@ import { OAUTH_PROVIDERS } from '@/lib/cloud/types';
 import { ProviderConnections, type OAuthProviderView } from './provider-connections';
 import { isSyntheticReviewer } from '@/lib/cloud/synthetic-reviewer';
 import { SyntheticReviewer } from '@/components/synthetic-reviewer';
+import { getT } from '@/lib/i18n/server';
 
 export const metadata = { title: 'Connections' };
 
@@ -16,14 +17,15 @@ export default async function ConnectionsPage({ searchParams }: { searchParams: 
   const [connections, params] = await Promise.all([listConnections(tenant.organizationId), searchParams]);
   const availability = oauthAvailability(tenant.organizationId);
   const oauthProviders: OAuthProviderView[] = OAUTH_PROVIDERS.map((id) => ({ id, available: availability[id] }));
+  const { t } = await getT();
   return (
     <main className="page">
       <PageHeader
-        title="Connections"
-        description="Connect your ad platforms and manage account access."
+        title={t('connections.title')}
+        description={t('connections.description')}
       />
       <div className="stack" style={{ marginBottom: '0.9rem' }}>
-        {params.connected ? <div className="callout success">{providerLabel(params.connected)} is connected and its accessible ad accounts were verified.</div> : null}
+        {params.connected ? <div className="callout success">{t('connections.connectedNotice', { provider: providerLabel(params.connected) })}</div> : null}
         {params.error ? <div className="error-callout" style={{ marginBottom: 0 }}>{params.error}</div> : null}
       </div>
       <ProviderConnections

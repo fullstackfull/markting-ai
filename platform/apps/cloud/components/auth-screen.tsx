@@ -2,6 +2,8 @@ import Link from 'next/link';
 import { signIn, signInWithSocialProvider, signUp } from '@/app/login/actions';
 import { BrandLockup } from '@/components/logos';
 import { AuthFrame } from '@/components/ui';
+import { LocaleSwitcher } from '@/components/locale-switcher';
+import { getT } from '@/lib/i18n/server';
 
 export interface AuthScreenProps {
   mode: 'signin' | 'signup';
@@ -10,27 +12,26 @@ export interface AuthScreenProps {
   returnTo?: string;
 }
 
-export function AuthScreen({ mode, error, message, returnTo }: AuthScreenProps) {
+export async function AuthScreen({ mode, error, message, returnTo }: AuthScreenProps) {
   const signup = mode === 'signup';
+  const { t } = await getT();
   return (
-    <AuthFrame label={signup ? 'create account' : 'sign in'}>
+    <AuthFrame label={signup ? t('auth.frameSignUp') : t('auth.frameSignIn')}>
       <BrandLockup size="large" />
-      <h1>{signup ? 'Create your workspace.' : 'Operate ads with evidence.'}</h1>
+      <h1>{signup ? t('auth.headlineSignUp') : t('auth.headlineSignIn')}</h1>
       <p>
-        {signup
-          ? 'One account, one organization. Connect ad platforms through their official OAuth consent, then keep every proposed change behind the same policy gate.'
-          : 'Connect accounts, review normalized performance, and keep every proposed change behind the same policy gate.'}
+        {signup ? t('auth.copySignUp') : t('auth.copySignIn')}
       </p>
       {error ? <div className="error-callout" role="alert">{error}</div> : null}
       {message ? <div className="callout success" role="status">{message}</div> : null}
-      <div className="social-auth" aria-label="Social sign in">
+      <div className="social-auth" aria-label={t('auth.socialSignIn')}>
         <form action={signInWithSocialProvider}>
           <input type="hidden" name="provider" value="google" />
           <input type="hidden" name="mode" value={mode} />
           {returnTo ? <input type="hidden" name="return_to" value={returnTo} /> : null}
           <button className="social-auth-button" type="submit">
             <GoogleIcon />
-            Continue with Google
+            {t('auth.continueWithGoogle')}
           </button>
         </form>
         <form action={signInWithSocialProvider}>
@@ -39,39 +40,40 @@ export function AuthScreen({ mode, error, message, returnTo }: AuthScreenProps) 
           {returnTo ? <input type="hidden" name="return_to" value={returnTo} /> : null}
           <button className="social-auth-button" type="submit">
             <GitHubIcon />
-            Continue with GitHub
+            {t('auth.continueWithGitHub')}
           </button>
         </form>
       </div>
-      <div className="auth-divider"><span>or continue with email</span></div>
+      <div className="auth-divider"><span>{t('auth.orEmail')}</span></div>
       <form className="form" action={signup ? signUp : signIn}>
         {returnTo ? <input type="hidden" name="return_to" value={returnTo} /> : null}
         {signup ? (
           <label className="field">
-            <span>Name</span>
-            <input name="display_name" autoComplete="name" placeholder="How your team sees you" />
+            <span>{t('auth.fullName')}</span>
+            <input name="display_name" autoComplete="name" placeholder={t('auth.fullNamePlaceholder')} />
           </label>
         ) : null}
         <label className="field">
-          <span>Email</span>
-          <input name="email" type="email" autoComplete="email" required placeholder="you@company.com" />
+          <span>{t('auth.email')}</span>
+          <input name="email" type="email" autoComplete="email" required placeholder={t('auth.emailPlaceholder')} />
         </label>
         <label className="field">
-          <span>Password</span>
-          <input name="password" type="password" minLength={12} autoComplete={signup ? 'new-password' : 'current-password'} required placeholder="At least 12 characters" />
+          <span>{t('auth.password')}</span>
+          <input name="password" type="password" minLength={12} autoComplete={signup ? 'new-password' : 'current-password'} required placeholder={t('auth.passwordPlaceholder')} />
         </label>
-        <button className="button full" type="submit">{signup ? 'Create account' : 'Sign in'}</button>
+        <button className="button full" type="submit">{signup ? t('auth.createAccount') : t('auth.signIn')}</button>
       </form>
       <p className="auth-switch">
         {signup
-          ? <>Already have an account? <Link href={returnTo ? `/login?return_to=${encodeURIComponent(returnTo)}` : '/'}>Sign in</Link></>
-          : <>New to Adport? <Link href={returnTo ? `/login?mode=signup&return_to=${encodeURIComponent(returnTo)}` : '/?mode=signup'}>Create an account</Link></>}
+          ? <>{t('auth.haveAccount')} <Link href={returnTo ? `/login?return_to=${encodeURIComponent(returnTo)}` : '/'}>{t('auth.signInLink')}</Link></>
+          : <>{t('auth.newHere')} <Link href={returnTo ? `/login?mode=signup&return_to=${encodeURIComponent(returnTo)}` : '/?mode=signup'}>{t('auth.createLink')}</Link></>}
       </p>
       <div className="auth-foot">
-        <a href="https://adport.dev">adport.dev</a>
-        <a href="https://adport.dev/privacy">privacy</a>
-        <a href="https://adport.dev/terms">terms</a>
-        <a href="https://github.com/ynnickw/adport">source</a>
+        <a href="https://adport.dev">{t('common.adportDomain')}</a>
+        <a href="https://adport.dev/privacy">{t('common.privacy')}</a>
+        <a href="https://adport.dev/terms">{t('common.terms')}</a>
+        <a href="https://github.com/ynnickw/adport">{t('common.source')}</a>
+        <LocaleSwitcher compact />
       </div>
     </AuthFrame>
   );

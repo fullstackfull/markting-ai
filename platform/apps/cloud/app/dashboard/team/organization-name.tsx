@@ -2,6 +2,7 @@
 
 import { useRouter } from 'next/navigation';
 import { useState, type FormEvent } from 'react';
+import { useI18n } from '@/components/i18n-provider';
 
 export function OrganizationName({ organizationId, name, canManage }: {
   organizationId: string;
@@ -9,6 +10,7 @@ export function OrganizationName({ organizationId, name, canManage }: {
   canManage: boolean;
 }) {
   const router = useRouter();
+  const { t } = useI18n();
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<{ error?: string; success?: string }>({});
 
@@ -23,14 +25,14 @@ export function OrganizationName({ organizationId, name, canManage }: {
       body: JSON.stringify({ organizationId, organizationName: value }),
     });
     const result = await response.json().catch(() => ({})) as { error?: string };
-    if (!response.ok) setMessage({ error: result.error ?? 'Unable to rename the organization.' });
-    else { setMessage({ success: 'Organization renamed.' }); router.refresh(); }
+    if (!response.ok) setMessage({ error: result.error ?? t('team.renameFailed') });
+    else { setMessage({ success: t('team.renamed') }); router.refresh(); }
     setBusy(false);
   }
 
   return (
     <section className="card">
-      <div className="card-head"><h2>Organization</h2></div>
+      <div className="card-head"><h2>{t('team.organization')}</h2></div>
       <div className="card-body stack" style={{ gap: '0.8rem' }}>
         {message.error ? <div className="error-callout" style={{ marginBottom: 0 }}>{message.error}</div> : null}
         {message.success ? <div className="callout success">{message.success}</div> : null}
@@ -38,15 +40,15 @@ export function OrganizationName({ organizationId, name, canManage }: {
           <input
             name="name"
             defaultValue={name}
-            aria-label="Organization name"
+            aria-label={t('team.organizationName')}
             maxLength={120}
             required
             disabled={!canManage}
             style={{ flex: 1, minWidth: '14rem', width: 'auto' }}
           />
-          {canManage ? <button className="button secondary" disabled={busy}>{busy ? 'Renaming…' : 'Rename'}</button> : null}
+          {canManage ? <button className="button secondary" disabled={busy}>{busy ? t('team.renaming') : t('team.rename')}</button> : null}
         </form>
-        {canManage ? null : <p className="inline-note">Owners and admins can rename the organization.</p>}
+        {canManage ? null : <p className="inline-note">{t('team.adminsRename')}</p>}
       </div>
     </section>
   );

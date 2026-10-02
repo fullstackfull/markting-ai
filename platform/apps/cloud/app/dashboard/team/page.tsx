@@ -4,19 +4,21 @@ import { listOrganizationMembers } from '@/lib/cloud/tenant-admin';
 import { DangerZone } from './danger-zone';
 import { OrganizationName } from './organization-name';
 import { TeamMembers } from './team-members';
+import { getT } from '@/lib/i18n/server';
 
 export const metadata = { title: 'Team' };
 
 export default async function TeamPage() {
   const tenant = await requireDashboardTenant();
   const members = await listOrganizationMembers(tenant.organizationId);
+  const { t, tn } = await getT();
   return (
     <main className="page">
-      <PageHeader title="Team" description="Owners and admins manage connections, policy, keys, and members; members can read, preview, and apply; viewers read only." />
+      <PageHeader title={t('team.title')} description={t('team.description')} />
       <div className="stack" style={{ maxWidth: '46rem' }}>
         <OrganizationName organizationId={tenant.organizationId} name={tenant.organizationName} canManage={['owner', 'admin'].includes(tenant.role)} />
         <section className="card">
-          <div className="card-head"><h2>Members</h2><span className="card-note">{members.length} {members.length === 1 ? 'member' : 'members'}</span></div>
+          <div className="card-head"><h2>{t('team.members')}</h2><span className="card-note">{tn('team.memberCount', members.length)}</span></div>
           <TeamMembers organizationId={tenant.organizationId} currentUserId={tenant.userId} currentRole={tenant.role} members={members} />
         </section>
         {tenant.role === 'owner' ? <DangerZone organizationId={tenant.organizationId} /> : null}

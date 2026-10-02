@@ -6,6 +6,7 @@ import { sessionPrincipal } from '@/lib/cloud/auth';
 import { db } from '@/lib/db';
 import { validateAuthorizationRequest } from '@/lib/mcp-oauth';
 import { createClient } from '@/lib/supabase/server';
+import { getT } from '@/lib/i18n/server';
 
 export const dynamic = 'force-dynamic';
 
@@ -17,6 +18,7 @@ export default async function AuthorizePage({ searchParams }: {
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
   const raw = await searchParams;
+  const { t } = await getT();
   const params = new URLSearchParams();
   for (const [key, value] of Object.entries(raw)) {
     const item = first(value);
@@ -24,12 +26,12 @@ export default async function AuthorizePage({ searchParams }: {
   }
   const clientId = params.get('client_id') ?? '';
   const client = await getMcpOAuthClient(clientId);
-  if (!client) return <AuthorizationError message="This MCP client is not registered with Adport." />;
+  if (!client) return <AuthorizationError message={t('misc.clientNotRegistered')} />;
   let authorization;
   try {
     authorization = validateAuthorizationRequest(params, client);
   } catch (error) {
-    return <AuthorizationError message={error instanceof Error ? error.message : 'Invalid authorization request.'} />;
+    return <AuthorizationError message={error instanceof Error ? error.message : t('misc.invalidRequest')} />;
   }
 
   const supabase = await createClient();
@@ -44,45 +46,46 @@ export default async function AuthorizePage({ searchParams }: {
   const redirectHost = new URL(authorization.redirectUri).host;
 
   return (
-    <AuthFrame label="authorize MCP client">
+    <AuthFrame label={t('misc.frameAuthorize')}>
       <BrandLockup size="large" />
-      <h1>Connect {authorization.clientName}.</h1>
+      <h1>{t('misc.connectTitle', { client: authorization.clientName })}</h1>
       <p>
-        This gives <strong>{authorization.clientName}</strong> access to the Adport workspace
-        {' '}<strong>{organization[0]?.name ?? 'Workspace'}</strong>. Tokens work only with Adport&apos;s hosted MCP.
+        {t('misc.grantBefore')} <strong>{authorization.clientName}</strong> {t('misc.grantMiddle')}
+        {' '}<strong>{organization[0]?.name ?? t('misc.workspaceFallback')}</strong>. {t('misc.grantAfter')}
       </p>
       <div className="callout">
-        Return destination: <strong>{redirectHost}</strong>. Only continue if you started this connection there.
+        {t('misc.returnDestination')} <strong>{redirectHost}</strong>. {t('misc.returnWarning')}
       </div>
       <dl className="connection-meta oauth-consent-scopes">
-        {grantedScopes.includes('tools:read') ? <><dt>Read</dt><dd>Active ad accounts, campaigns, reports, findings, and audit evidence.</dd></> : null}
-        {grantedScopes.includes('tools:write') ? <><dt>Propose changes</dt><dd>Create previews and apply only operations that pass Adport&apos;s two-step policy gate.</dd></> : null}
+        {grantedScopes.includes('tools:read') ? <><dt>{t('misc.scopeRead')}</dt><dd>{t('misc.scopeReadCopy')}</dd></> : null}
+        {grantedScopes.includes('tools:write') ? <><dt>{t('misc.scopeWrite')}</dt><dd>{t('misc.scopeWriteCopy')}</dd></> : null}
         {authorization.scopes.includes('tools:write') && principal.entitlement && !principal.entitlement.writeAccess
-          ? <><dt>Current plan</dt><dd>Write tools are authorized but remain blocked until this workspace upgrades to Operator or higher.</dd></>
+          ? <><dt>{t('misc.currentPlan')}</dt><dd>{t('misc.planBlocked')}</dd></>
           : null}
         {authorization.scopes.includes('tools:write') && principal.role === 'viewer'
-          ? <><dt>Current role</dt><dd>Viewer access cannot use write tools. Ask a workspace admin to change your role.</dd></>
+          ? <><dt>{t('misc.currentRole')}</dt><dd>{t('misc.viewerBlocked')}</dd></>
           : null}
       </dl>
       <form className="form" method="post" action="/oauth/authorize/consent">
         {Array.from(params.entries()).map(([name, value]) => <input key={name} type="hidden" name={name} value={value} />)}
         <div className="form-actions">
-          <button className="button" type="submit" name="decision" value="allow">Authorize</button>
-          <button className="button secondary" type="submit" name="decision" value="deny">Cancel</button>
+          <button className="button" type="submit" name="decision" value="allow">{t('misc.authorize')}</button>
+          <button className="button secondary" type="submit" name="decision" value="deny">{t('misc.cancel')}</button>
         </div>
       </form>
-      <p className="auth-switch">You can revoke the connection from your MCP client at any time.</p>
+      <p className="auth-switch">{t('misc.revokeNote')}</p>
     </AuthFrame>
   );
 }
 
-function AuthorizationError({ message }: { message: string }) {
+async function AuthorizationError({ message }: { message: string }) {
+  const { t } = await getT();
   return (
-    <AuthFrame label="authorization error">
+    <AuthFrame label={t('misc.frameError')}>
       <BrandLockup size="large" />
-      <h1>Connection could not start.</h1>
+      <h1>{t('misc.authErrorTitle')}</h1>
       <div className="error-callout" role="alert">{message}</div>
-      <p>Return to your MCP client and try connecting again.</p>
+      <p>{t('misc.authErrorCopy')}</p>
     </AuthFrame>
   );
 }

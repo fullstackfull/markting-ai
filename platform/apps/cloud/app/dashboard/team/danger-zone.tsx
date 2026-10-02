@@ -1,15 +1,17 @@
 'use client';
 
 import { useState } from 'react';
+import { useI18n } from '@/components/i18n-provider';
 
 export function DangerZone({ organizationId }: { organizationId: string }) {
+  const { t } = useI18n();
   const [confirmation, setConfirmation] = useState('');
   const [error, setError] = useState<string>();
   const [busy, setBusy] = useState(false);
 
   async function deleteOrganization() {
     if (confirmation !== 'DELETE') return;
-    if (!window.confirm('Permanently delete this organization and all Adport Cloud data? This cannot be undone.')) return;
+    if (!window.confirm(t('team.confirmDelete'))) return;
     setBusy(true);
     setError(undefined);
     const response = await fetch('/api/deletion', {
@@ -19,7 +21,7 @@ export function DangerZone({ organizationId }: { organizationId: string }) {
     });
     const result = await response.json().catch(() => ({})) as { error?: string };
     if (!response.ok) {
-      setError(result.error ?? 'Unable to delete organization.');
+      setError(result.error ?? t('team.deleteFailed'));
       setBusy(false);
       return;
     }
@@ -28,13 +30,13 @@ export function DangerZone({ organizationId }: { organizationId: string }) {
 
   return (
     <section className="card danger">
-      <div className="card-head"><h2>Delete organization</h2><span className="status critical">Irreversible</span></div>
+      <div className="card-head"><h2>{t('team.deleteOrganization')}</h2><span className="status critical">{t('team.irreversible')}</span></div>
       <div className="card-body stack">
-        <p className="subhead">Revokes OAuth grants where the provider allows it, then deletes this organization&apos;s encrypted credentials, memberships, API keys, pending approvals, and audit events. Apple and Microsoft access must also be removed in those platforms.</p>
+        <p className="subhead">{t('team.deleteCopy')}</p>
         {error ? <div className="error-callout" style={{ marginBottom: 0 }}>{error}</div> : null}
         <div className="form-row">
-          <input value={confirmation} onChange={(event) => setConfirmation(event.target.value)} placeholder="Type DELETE to confirm" aria-label="Type DELETE to confirm" style={{ maxWidth: '16rem' }} />
-          <button className="button danger" disabled={busy || confirmation !== 'DELETE'} onClick={() => void deleteOrganization()}>{busy ? 'Deleting…' : 'Delete organization'}</button>
+          <input value={confirmation} onChange={(event) => setConfirmation(event.target.value)} placeholder={t('team.typeDelete')} aria-label={t('team.typeDelete')} style={{ maxWidth: '16rem' }} />
+          <button className="button danger" disabled={busy || confirmation !== 'DELETE'} onClick={() => void deleteOrganization()}>{busy ? t('team.deleting') : t('team.deleteOrganization')}</button>
         </div>
       </div>
     </section>

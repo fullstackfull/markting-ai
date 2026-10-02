@@ -3,11 +3,13 @@
 import { useEffect, useRef, useState, type MouseEvent, type ReactNode } from 'react';
 import { useRouter } from 'next/navigation';
 import { openProviderPopup } from '@/lib/oauth-popup';
+import { useI18n } from '@/components/i18n-provider';
 
 export function OAuthPopupLink({ href, label, className, children }: {
   href: string; label: string; className: string; children: ReactNode;
 }) {
   const router = useRouter();
+  const { t } = useI18n();
   const cleanup = useRef<(() => void) | undefined>(undefined);
   const [waiting, setWaiting] = useState(false);
   const [timedOut, setTimedOut] = useState(false);
@@ -30,7 +32,7 @@ export function OAuthPopupLink({ href, label, className, children }: {
 
   return <span className="oauth-popup-action">
     <a href={href} aria-label={label} className={className} onClick={open}>{children}</a>
-    {waiting ? <span className="inline-note" role="status">Complete authorization in the popup. Closed it? <a href={href} onClick={() => cleanup.current?.()}>Continue in this tab</a></span> : null}
-    {timedOut ? <span className="inline-note" role="status">Authorization timed out. Try again.</span> : null}
+    {waiting ? <span className="inline-note" role="status">{t('support.popupWaiting')} <a href={href} onClick={() => cleanup.current?.()}>{t('support.continueInTab')}</a></span> : null}
+    {timedOut ? <span className="inline-note" role="status">{t('support.popupTimedOut')}</span> : null}
   </span>;
 }

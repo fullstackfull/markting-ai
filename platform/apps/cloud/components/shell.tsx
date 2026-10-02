@@ -3,6 +3,8 @@ import { signOut } from '@/app/dashboard/actions';
 import { BrandLockup } from '@/components/logos';
 import { Nav, UtilityNav } from '@/components/nav';
 import { SupportWidget } from '@/components/support-widget';
+import { LocaleSwitcher } from '@/components/locale-switcher';
+import { getT } from '@/lib/i18n/server';
 
 export interface ShellTenant {
   organizationName: string;
@@ -11,12 +13,14 @@ export interface ShellTenant {
   role: string;
 }
 
-export function Shell({ tenant, children }: { tenant: ShellTenant; children: React.ReactNode }) {
+export async function Shell({ tenant, children }: { tenant: ShellTenant; children: React.ReactNode }) {
+  const { t } = await getT();
+  const roleKey = `common.role_${tenant.role}`;
   return (
     <div className="app-shell">
       <aside className="sidebar">
         <div className="sidebar-head">
-          <Link className="brand-lockup" href="/dashboard" prefetch={false} aria-label="Adport overview">
+          <Link className="brand-lockup" href="/dashboard" prefetch={false} aria-label={t('nav.overviewLink')}>
             <BrandLockup />
           </Link>
           <div className="workspace">
@@ -30,12 +34,15 @@ export function Shell({ tenant, children }: { tenant: ShellTenant; children: Rea
             <span className="avatar" aria-hidden="true">{tenant.userName.slice(0, 1).toUpperCase()}</span>
             <span className="user-text">
               <span className="user-name">{tenant.userName}</span>
-              <span className="user-sub">{tenant.role} · {tenant.email}</span>
+              <span className="user-sub">{t(roleKey)} · {tenant.email}</span>
             </span>
           </div>
-          <form action={signOut}>
-            <button className="link-button" type="submit">Sign out</button>
-          </form>
+          <div className="sidebar-foot-actions">
+            <form action={signOut}>
+              <button className="link-button" type="submit">{t('common.signOut')}</button>
+            </form>
+            <LocaleSwitcher compact />
+          </div>
         </div>
       </aside>
       <div className="main">{children}</div>

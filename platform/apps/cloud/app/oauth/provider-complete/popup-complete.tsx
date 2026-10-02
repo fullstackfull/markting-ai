@@ -3,8 +3,10 @@
 import { useEffect, useState } from 'react';
 import { BrandLockup } from '@/components/logos';
 import { popupChannelName } from '@/lib/oauth-popup';
+import { useI18n } from '@/components/i18n-provider';
 
 export function PopupComplete({ popupId, next }: { popupId?: string; next: string }) {
+  const { t } = useI18n();
   const [received, setReceived] = useState(false);
   useEffect(() => {
     if (!popupId || typeof window.BroadcastChannel !== 'function') return;
@@ -22,9 +24,9 @@ export function PopupComplete({ popupId, next }: { popupId?: string; next: strin
   return <main className="onboarding-page">
     <header className="onboarding-head"><BrandLockup /></header>
     <section className="card oauth-popup-complete">
-      <h1>{failed ? 'Authorization needs attention' : 'Return to Adport'}</h1>
-      <p>{received ? 'Your main window is ready. You can close this popup.' : 'Returning you to the main window. If it is no longer open, continue here.'}</p>
-      <a className="button" href={next}>Continue in this window</a>
+      <h1>{failed ? t('misc.popupAttentionTitle') : t('misc.popupReturnTitle')}</h1>
+      <p>{received ? t('misc.popupReadyCopy') : t('misc.popupReturningCopy')}</p>
+      <a className="button" href={next}>{t('misc.continueInWindow')}</a>
     </section>
   </main>;
 }

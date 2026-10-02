@@ -3,6 +3,7 @@
 import { useRouter } from 'next/navigation';
 import { useState, type FormEvent } from 'react';
 import { PlanLimitModal } from '@/components/plan-limit-modal';
+import { useI18n } from '@/components/i18n-provider';
 import { planLimitFromResponse, type PlanLimitDetails } from '@/lib/cloud/plan-limit';
 
 interface Member { userId: string; email: string; displayName: string; role: string; }
@@ -14,6 +15,7 @@ export function TeamMembers({ organizationId, currentUserId, currentRole, member
   members: Member[];
 }) {
   const router = useRouter();
+  const { t } = useI18n();
   const [message, setMessage] = useState<{ error?: string; success?: string }>({});
   const [busy, setBusy] = useState(false);
   const [planLimit, setPlanLimit] = useState<PlanLimitDetails>();
@@ -26,7 +28,7 @@ export function TeamMembers({ organizationId, currentUserId, currentRole, member
     const result = await response.json().catch(() => ({})) as { error?: string };
     const limit = planLimitFromResponse(result);
     if (limit) setPlanLimit(limit);
-    else if (!response.ok) setMessage({ error: result.error ?? 'The request failed.' });
+    else if (!response.ok) setMessage({ error: result.error ?? t('team.requestFailed') });
     else { setMessage({ success }); router.refresh(); }
     setBusy(false);
     return response.ok;
@@ -36,7 +38,7 @@ export function TeamMembers({ organizationId, currentUserId, currentRole, member
     event.preventDefault();
     const form = event.currentTarget;
     const data = Object.fromEntries(new FormData(form).entries());
-    if (await call('POST', { email: data.email, role: data.role }, 'Member added or invited.')) form.reset();
+    if (await call('POST', { email: data.email, role: data.role }, t('team.memberAdded'))) form.reset();
   }
 
   return (
@@ -48,19 +50,19 @@ export function TeamMembers({ organizationId, currentUserId, currentRole, member
         {members.map((member) => (
           <div className="row-item" key={member.userId}>
             <div>
-              <strong>{member.displayName}{member.userId === currentUserId ? <span className="text-muted"> · you</span> : null}</strong>
+              <strong>{member.displayName}{member.userId === currentUserId ? <span className="text-muted">{t('team.you')}</span> : null}</strong>
               <div className="cell-sub">{member.email}</div>
             </div>
             <div className="row-actions">
               {canAdminister && member.role !== 'owner'
-                ? <select aria-label={`Role for ${member.email}`} value={member.role} disabled={busy} onChange={(event) => void call('PATCH', { userId: member.userId, role: event.target.value }, 'Member role updated.')}>
-                    {currentRole === 'owner' ? <option value="admin">Admin</option> : null}
-                    <option value="member">Member</option>
-                    <option value="viewer">Viewer</option>
+                ? <select aria-label={t('team.roleFor', { email: member.email })} value={member.role} disabled={busy} onChange={(event) => void call('PATCH', { userId: member.userId, role: event.target.value }, t('team.roleUpdated'))}>
+                    {currentRole === 'owner' ? <option value="admin">{t('team.roleAdmin')}</option> : null}
+                    <option value="member">{t('team.roleMember')}</option>
+                    <option value="viewer">{t('team.roleViewer')}</option>
                   </select>
-                : <span className="status neutral">{member.role}</span>}
+                : <span className="status neutral">{t(`common.role_${member.role}`)}</span>}
               {canAdminister && member.userId !== currentUserId && member.role !== 'owner'
-                ? <button className="button danger small" disabled={busy} onClick={() => { if (window.confirm(`Remove ${member.email} from this organization?`)) void call('DELETE', { userId: member.userId }, 'Member removed.'); }}>Remove</button>
+                ? <button className="button danger small" disabled={busy} onClick={() => { if (window.confirm(t('team.confirmRemove', { email: member.email }))) void call('DELETE', { userId: member.userId }, t('team.memberRemoved')); }}>{t('team.remove')}</button>
                 : null}
             </div>
           </div>
@@ -69,13 +71,13 @@ export function TeamMembers({ organizationId, currentUserId, currentRole, member
       {canAdminister ? (
         <div className="card-body" style={{ borderTop: '1px solid var(--line-soft)' }}>
           <form className="form-row" onSubmit={(event) => void invite(event)}>
-            <input name="email" type="email" required placeholder="colleague@company.com" style={{ flex: 1, minWidth: '14rem' }} aria-label="Email" />
-            <select name="role" defaultValue="member" aria-label="Role">
-              {currentRole === 'owner' ? <option value="admin">Admin</option> : null}
-              <option value="member">Member</option>
-              <option value="viewer">Viewer</option>
+            <input name="email" type="email" required placeholder={t('team.emailPlaceholder')} style={{ flex: 1, minWidth: '14rem' }} aria-label={t('team.email')} />
+            <select name="role" defaultValue="member" aria-label={t('team.role')}>
+              {currentRole === 'owner' ? <option value="admin">{t('team.roleAdmin')}</option> : null}
+              <option value="member">{t('team.roleMember')}</option>
+              <option value="viewer">{t('team.roleViewer')}</option>
             </select>
-            <button className="button secondary" disabled={busy}>Invite</button>
+            <button className="button secondary" disabled={busy}>{t('team.invite')}</button>
           </form>
         </div>
       ) : null}

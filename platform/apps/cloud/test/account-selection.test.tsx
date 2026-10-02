@@ -11,6 +11,7 @@ vi.mock('@/lib/cloud/account-selection', () => ({ getAccountSelection: mocks.get
 vi.mock('@/lib/cloud/repository', () => ({ listOrganizationAdAccounts: mocks.inventory }));
 vi.mock('@/lib/cloud/auth', () => ({ sessionPrincipal: mocks.session }));
 vi.mock('@/lib/cloud/dashboard', () => ({ requireDashboardTenant: mocks.tenant, canAdminister: (tenant: { role: string }) => ['owner', 'admin'].includes(tenant.role) }));
+vi.mock('@/lib/i18n/server', async () => { const { makeTranslators } = await import('@/lib/i18n'); return { getT: async () => ({ locale: 'en', dir: 'ltr', ...makeTranslators('en') }), getLocale: async () => 'en' }; });
 
 const organizationId = '00000000-0000-4000-8000-000000000001';
 const selectionId = '00000000-0000-4000-8000-000000000002';

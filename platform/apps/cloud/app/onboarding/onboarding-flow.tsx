@@ -4,16 +4,14 @@ import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { isOAuthProvider, type OAuthProvider } from '@/lib/cloud/types';
 import { providerLabel } from '@/lib/cloud/providers';
+import { useI18n } from '@/components/i18n-provider';
 import { AccountAccessManager, type AccountAccessItem } from '../dashboard/accounts/account-access-manager';
 import { AgentSetupGuide } from '../dashboard/agents/agent-setup-guide';
 import { ProviderConnections, type ConnectionView, type OAuthProviderView } from '../dashboard/connections/provider-connections';
 
 type Step = 'welcome' | 'connect' | 'accounts' | 'agent' | 'complete';
 
-const STEPS: Array<{ id: Step; label: string }> = [
-  { id: 'welcome', label: 'Welcome' }, { id: 'connect', label: 'Platforms' },
-  { id: 'accounts', label: 'Accounts' }, { id: 'agent', label: 'Agent' },
-];
+const STEPS: Step[] = ['welcome', 'connect', 'accounts', 'agent'];
 
 export function OnboardingFlow({ organizationId, canManage, initialStep, initialAgent, baseUrl, connectedProvider, oauthError, providers, connections, accounts, maxActiveAccounts }: {
   organizationId: string;
@@ -29,6 +27,7 @@ export function OnboardingFlow({ organizationId, canManage, initialStep, initial
   maxActiveAccounts: number | null;
 }) {
   const router = useRouter();
+  const { t } = useI18n();
   const [step, setStep] = useState<Step>(connectedProvider ? 'accounts' : initialStep === 'complete' ? 'welcome' : initialStep);
   const [agent, setAgent] = useState(initialAgent ?? 'chatgpt');
   const [busy, setBusy] = useState(false);
@@ -43,7 +42,7 @@ export function OnboardingFlow({ organizationId, canManage, initialStep, initial
       body: JSON.stringify({ currentStep: next, selectedAgent: next === 'complete' || next === 'agent' ? agent : undefined, complete }),
     });
     const result = await response.json().catch(() => ({})) as { error?: string };
-    if (!response.ok) setError(result.error ?? 'Setup could not be saved.');
+    if (!response.ok) setError(result.error ?? t('onboarding.saveFailed'));
     else if (complete) { router.push('/dashboard'); router.refresh(); }
     else {
       if (step === 'accounts' && next !== 'accounts') setProviderFilter(undefined);
@@ -52,40 +51,40 @@ export function OnboardingFlow({ organizationId, canManage, initialStep, initial
     setBusy(false);
   }
 
-  const activeIndex = Math.max(0, STEPS.findIndex((item) => item.id === step));
+  const activeIndex = Math.max(0, STEPS.indexOf(step));
   return (
     <div className="onboarding-shell">
-      <ol className="onboarding-progress" aria-label="Setup progress">
-        {STEPS.map((item, index) => <li key={item.id} data-active={item.id === step} data-complete={index < activeIndex}><span>{index + 1}</span>{item.label}</li>)}
+      <ol className="onboarding-progress" aria-label={t('onboarding.progressLabel')}>
+        {STEPS.map((item, index) => <li key={item} data-active={item === step} data-complete={index < activeIndex}><span>{index + 1}</span>{t(`onboarding.step_${item}`)}</li>)}
       </ol>
       {error ? <div className="error-callout" role="alert">{error}</div> : null}
       {oauthError ? <div className="error-callout" role="alert">{oauthError}</div> : null}
 
       {step === 'welcome' ? <section className="onboarding-hero">
-        <span className="plan-kicker">About four minutes</span>
-        <h1>Bring your ad accounts into one safe agent workspace.</h1>
-        <p>Connect providers, choose exactly which accounts an agent may access, then add Adport to ChatGPT, Codex, Claude, Cursor, or VS Code.</p>
-        <div className="onboarding-points"><span>OAuth credentials stay encrypted</span><span>Every write requires an exact preview</span><span>New campaigns start paused</span></div>
-        <button className="button" disabled={busy} onClick={() => void advance('connect')}>Start setup</button>
+        <span className="plan-kicker">{t('onboarding.aboutTime')}</span>
+        <h1>{t('onboarding.heroTitle')}</h1>
+        <p>{t('onboarding.heroCopy')}</p>
+        <div className="onboarding-points"><span>{t('onboarding.pointEncrypted')}</span><span>{t('onboarding.pointPreview')}</span><span>{t('onboarding.pointPaused')}</span></div>
+        <button className="button" disabled={busy} onClick={() => void advance('connect')}>{t('onboarding.startSetup')}</button>
       </section> : null}
 
       {step === 'connect' ? <section className="onboarding-stage">
-        <div className="onboarding-title"><span className="plan-kicker">Step 2</span><h1>Connect an ad platform</h1><p>Start with one provider. You can add the rest later from Connections.</p></div>
+        <div className="onboarding-title"><span className="plan-kicker">{t('onboarding.stepLabel', { step: 2 })}</span><h1>{t('onboarding.connectTitle')}</h1><p>{t('onboarding.connectCopy')}</p></div>
         <ProviderConnections organizationId={organizationId} canManage={canManage} connections={connections} oauthProviders={providers} returnTo="/onboarding" />
-        <div className="onboarding-actions"><button className="button" disabled={busy} onClick={() => void advance('accounts')}>{connections.length ? 'Choose accounts' : 'Continue without a provider'}</button><button className="button secondary" onClick={() => void advance('welcome')}>Back</button></div>
+        <div className="onboarding-actions"><button className="button" disabled={busy} onClick={() => void advance('accounts')}>{connections.length ? t('onboarding.chooseAccounts') : t('onboarding.continueWithout')}</button><button className="button secondary" onClick={() => void advance('welcome')}>{t('onboarding.back')}</button></div>
       </section> : null}
 
       {step === 'accounts' ? <section className="onboarding-stage">
-        <div className="onboarding-title"><span className="plan-kicker">Step 3</span><h1>{providerFilter ? `Choose ${providerLabel(providerFilter)} accounts` : 'Choose the accounts your agents can use'}</h1><p>Nothing is enabled automatically. Read access and guarded writes only apply to the accounts you activate here.</p></div>
-        {providerFilter ? <button className="button secondary small" onClick={() => setProviderFilter(undefined)}>View all providers’ accounts</button> : null}
-        {accounts.length || providerFilter ? <AccountAccessManager organizationId={organizationId} accounts={accounts} canManage={canManage} maxActiveAccounts={maxActiveAccounts} providerFilter={providerFilter} /> : <div className="card"><div className="empty"><h2>No accounts discovered yet</h2><p>Connect a provider first, or continue and add one from the dashboard later.</p></div></div>}
-        <div className="onboarding-actions"><button className="button" disabled={busy} onClick={() => void advance('agent')}>Connect an agent</button><button className="button secondary" onClick={() => void advance('connect')}>Back</button></div>
+        <div className="onboarding-title"><span className="plan-kicker">{t('onboarding.stepLabel', { step: 3 })}</span><h1>{providerFilter ? t('onboarding.chooseProviderAccounts', { provider: providerLabel(providerFilter) }) : t('onboarding.accountsTitle')}</h1><p>{t('onboarding.accountsCopy')}</p></div>
+        {providerFilter ? <button className="button secondary small" onClick={() => setProviderFilter(undefined)}>{t('onboarding.viewAllProviders')}</button> : null}
+        {accounts.length || providerFilter ? <AccountAccessManager organizationId={organizationId} accounts={accounts} canManage={canManage} maxActiveAccounts={maxActiveAccounts} providerFilter={providerFilter} /> : <div className="card"><div className="empty"><h2>{t('onboarding.noAccountsTitle')}</h2><p>{t('onboarding.noAccountsCopy')}</p></div></div>}
+        <div className="onboarding-actions"><button className="button" disabled={busy} onClick={() => void advance('agent')}>{t('onboarding.connectAgent')}</button><button className="button secondary" onClick={() => void advance('connect')}>{t('onboarding.back')}</button></div>
       </section> : null}
 
       {step === 'agent' ? <section className="onboarding-stage">
-        <div className="onboarding-title"><span className="plan-kicker">Step 4</span><h1>Add Adport to your agent</h1><p>Choose your client, copy its setup, and finish the secure workspace authorization in your browser.</p></div>
+        <div className="onboarding-title"><span className="plan-kicker">{t('onboarding.stepLabel', { step: 4 })}</span><h1>{t('onboarding.agentTitle')}</h1><p>{t('onboarding.agentCopy')}</p></div>
         <AgentSetupGuide baseUrl={baseUrl} initialSelectedId={agent} onSelectionChange={setAgent} />
-        <div className="onboarding-actions"><button className="button" disabled={busy} onClick={() => void advance('complete', true)}>{busy ? 'Finishing…' : 'Finish setup'}</button><button className="button secondary" onClick={() => void advance('accounts')}>Back</button></div>
+        <div className="onboarding-actions"><button className="button" disabled={busy} onClick={() => void advance('complete', true)}>{busy ? t('onboarding.finishing') : t('onboarding.finishSetup')}</button><button className="button secondary" onClick={() => void advance('accounts')}>{t('onboarding.back')}</button></div>
       </section> : null}
     </div>
   );

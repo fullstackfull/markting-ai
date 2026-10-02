@@ -8,6 +8,7 @@ import { isOAuthProvider } from '@/lib/cloud/types';
 import { AccountAccessManager } from './account-access-manager';
 import { isSyntheticReviewer } from '@/lib/cloud/synthetic-reviewer';
 import { SyntheticReviewer } from '@/components/synthetic-reviewer';
+import { getT } from '@/lib/i18n/server';
 
 export const metadata = { title: 'Accounts' };
 
@@ -22,20 +23,21 @@ export default async function AccountsPage({ searchParams }: { searchParams: Pro
   ]);
   const requestedProvider = params.select_provider ?? params.connected;
   const providerFilter = requestedProvider && isOAuthProvider(requestedProvider) ? requestedProvider : undefined;
+  const { t } = await getT();
   const pendingConnections = connections.filter(connection => connection.accountSelectionId && connection.status === 'connected' && (!providerFilter || connection.provider === providerFilter));
   return (
     <main className="page">
-      <PageHeader title={providerFilter ? `${providerLabel(providerFilter)} accounts` : 'Accounts'} description="Only accounts you added appear here. Enable agent access when ready. To add other accounts, re-authorize their provider in Connections." />
-      {providerFilter ? <Link className="button secondary small" href="/dashboard/accounts" style={{ marginBottom: '1rem' }}>View all providers’ accounts</Link> : null}
-      {params.connected ? <div className="callout success" style={{ marginBottom: '1rem' }}>{providerLabel(params.connected)} is connected. Select the specific accounts agents may access below.</div> : null}
-      {params.accounts_saved ? <div className="callout success" role="status" style={{ marginBottom: '1rem' }}>Account selection saved. Unselected accounts are no longer listed or available to Adport. Enable newly added accounts below when ready.</div> : null}
+      <PageHeader title={providerFilter ? t('accounts.providerAccountsTitle', { provider: providerLabel(providerFilter) }) : t('accounts.title')} description={t('accounts.description')} />
+      {providerFilter ? <Link className="button secondary small" href="/dashboard/accounts" style={{ marginBottom: '1rem' }}>{t('accounts.viewAllProviders')}</Link> : null}
+      {params.connected ? <div className="callout success" style={{ marginBottom: '1rem' }}>{t('accounts.connectedNotice', { provider: providerLabel(params.connected) })}</div> : null}
+      {params.accounts_saved ? <div className="callout success" role="status" style={{ marginBottom: '1rem' }}>{t('accounts.savedNotice')}</div> : null}
       {params.error ? <div className="error-callout" role="alert">{params.error}</div> : null}
       {inventory.length === 0 && !providerFilter ? <section className="card">
         <Empty
-          title="No accounts added yet"
-          copy="Connect or re-authorize a provider, then save the accounts you want to add."
+          title={t('accounts.emptyTitle')}
+          copy={t('accounts.emptyCopy')}
           href="/dashboard/connections"
-          action="Open connections"
+          action={t('accounts.openConnections')}
         />
       </section> : (
         <AccountAccessManager
@@ -48,15 +50,15 @@ export default async function AccountsPage({ searchParams }: { searchParams: Pro
       )}
       {pendingConnections.length > 0 ? (
         <section className="card" style={{ marginTop: '0.9rem' }}>
-          <div className="card-head"><h2>Finish account selection</h2><span className="card-note">agent access paused</span></div>
+          <div className="card-head"><h2>{t('accounts.finishSelectionTitle')}</h2><span className="card-note">{t('accounts.agentAccessPaused')}</span></div>
           <div className="row-list">
             {pendingConnections.map((connection) => (
               <div className="row-item" key={connection.provider}>
                 <div>
                   <Provider name={connection.provider} />
-                  <div className="cell-sub">Save your account selection to finish this authorization.</div>
+                  <div className="cell-sub">{t('accounts.finishSelectionCopy')}</div>
                 </div>
-                <Link className="button secondary small" href={`/account-selection?selection_id=${connection.accountSelectionId}`}>Choose accounts</Link>
+                <Link className="button secondary small" href={`/account-selection?selection_id=${connection.accountSelectionId}`}>{t('accounts.chooseAccounts')}</Link>
               </div>
             ))}
           </div>

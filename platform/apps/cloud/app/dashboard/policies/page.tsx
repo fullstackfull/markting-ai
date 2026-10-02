@@ -6,6 +6,7 @@ import { getOrganizationEntitlement } from '@/lib/cloud/plans';
 import { listOrganizationAdAccounts } from '@/lib/cloud/repository';
 import { db } from '@/lib/db';
 import { PolicyForm } from './policy-form';
+import { getT } from '@/lib/i18n/server';
 
 export const metadata = { title: 'Policies' };
 
@@ -20,17 +21,18 @@ export default async function PoliciesPage() {
   ]);
   const policy = policySchema.parse(settings[0]?.policy ?? {});
   const dataRetentionDays = settings[0]?.dataRetentionDays ?? 90;
+  const { t, tn } = await getT();
   return (
     <main className="page policy-page">
-      <PageHeader title="Policies" description="Set the boundaries every dashboard, REST, and MCP write must satisfy before it can reach an ad platform."
-        action={<Link className="button secondary" href="/dashboard/accounts" prefetch={false}>Manage accounts</Link>} />
-      <section className="policy-overview" aria-label="Policy coverage">
-        <div><span>Enforcement</span><strong><i className="policy-dot" />Always on</strong><small>Preview + exact approval</small></div>
-        <div><span>Account scope</span><strong>{accounts.filter((account) => account.enabled).length} active</strong><small>{accounts.length} discovered across providers</small></div>
-        <div><span>Current plan</span><strong>{entitlement.plan.name}</strong><small>{entitlement.plan.writeAccess ? 'Guarded read and write' : 'Read-only agent access'}</small></div>
+      <PageHeader title={t('policies.title')} description={t('policies.description')}
+        action={<Link className="button secondary" href="/dashboard/accounts" prefetch={false}>{t('policies.manageAccounts')}</Link>} />
+      <section className="policy-overview" aria-label={t('policies.coverage')}>
+        <div><span>{t('policies.enforcement')}</span><strong><i className="policy-dot" />{t('policies.alwaysOn')}</strong><small>{t('policies.previewPlusApproval')}</small></div>
+        <div><span>{t('policies.accountScope')}</span><strong>{tn('policies.active', accounts.filter((account) => account.enabled).length)}</strong><small>{tn('policies.discovered', accounts.length)}</small></div>
+        <div><span>{t('policies.currentPlan')}</span><strong>{entitlement.plan.name}</strong><small>{entitlement.plan.writeAccess ? t('policies.guardedReadWrite') : t('policies.readOnlyAgentAccess')}</small></div>
       </section>
       <section className="card policy-card">
-        <div className="card-head"><div><h2>Workspace safety policy</h2><p className="card-kicker">Changes apply immediately to every agent client.</p></div><span className="status">Enforced</span></div>
+        <div className="card-head"><div><h2>{t('policies.workspacePolicy')}</h2><p className="card-kicker">{t('policies.changesApplyImmediately')}</p></div><span className="status">{t('policies.enforced')}</span></div>
         <div className="card-body">
           <PolicyForm
             organizationId={tenant.organizationId}

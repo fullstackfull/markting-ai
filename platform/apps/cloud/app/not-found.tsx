@@ -1,14 +1,16 @@
 import Link from 'next/link';
 import { BrandLockup } from '@/components/logos';
 import { AuthFrame } from '@/components/ui';
+import { getT } from '@/lib/i18n/server';
 
-export default function NotFound() {
+export default async function NotFound() {
+  const { t } = await getT();
   return (
     <AuthFrame label="404">
       <BrandLockup size="large" />
-      <h1>Page not found</h1>
-      <p>The route you requested does not exist. It may have moved, or the link may be out of date.</p>
-      <Link className="button full" href="/dashboard">Return to overview</Link>
+      <h1>{t('misc.notFoundTitle')}</h1>
+      <p>{t('misc.notFoundCopy')}</p>
+      <Link className="button full" href="/dashboard">{t('misc.returnOverview')}</Link>
     </AuthFrame>
   );
 }

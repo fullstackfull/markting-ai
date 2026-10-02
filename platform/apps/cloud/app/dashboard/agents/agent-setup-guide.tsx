@@ -3,11 +3,13 @@
 import { useState } from 'react';
 import { SiAnthropic, SiCursor } from 'react-icons/si';
 import { VscVscode } from 'react-icons/vsc';
+import { useI18n } from '@/components/i18n-provider';
 
 type Setup = {
   id: string;
   name: string;
   provider: 'openai' | 'anthropic' | 'cursor' | 'vscode';
+  /** Message keys in the `agents` area (resolved with `t()` at render time). */
   label: string;
   instructions: string;
   nextStep: string;
@@ -16,39 +18,39 @@ type Setup = {
 
 export const AGENT_SETUPS: Setup[] = [
   {
-    id: 'chatgpt', name: 'ChatGPT', provider: 'openai', label: 'Custom app',
-    instructions: 'Enable developer mode, then open Settings → Apps → Create. Choose OAuth and use the endpoint below.',
-    nextStep: 'Scan the tools, finish Adport authorization, and enable the new app in your chat.',
+    id: 'chatgpt', name: 'ChatGPT', provider: 'openai', label: 'agents.setup_chatgpt_label',
+    instructions: 'agents.setup_chatgpt_instructions',
+    nextStep: 'agents.setup_chatgpt_nextStep',
     command: (baseUrl) => `${baseUrl}/mcp`,
   },
   {
-    id: 'codex', name: 'Codex', provider: 'openai', label: 'CLI',
-    instructions: 'Run this command once and complete the browser authorization. Codex stores the MCP configuration and starts OAuth automatically.',
-    nextStep: 'Only if authorization did not start or you need to sign in again, run “codex mcp login adport”. Otherwise, check “codex mcp list” and ask Codex to list your ad accounts.',
+    id: 'codex', name: 'Codex', provider: 'openai', label: 'agents.setup_codex_label',
+    instructions: 'agents.setup_codex_instructions',
+    nextStep: 'agents.setup_codex_nextStep',
     command: (baseUrl) => `codex mcp add adport --url ${baseUrl}/mcp`,
   },
   {
-    id: 'claude-code', name: 'Claude Code', provider: 'anthropic', label: 'CLI',
-    instructions: 'Add Adport at user scope so it is available across your local projects.',
-    nextStep: 'Run /mcp inside Claude Code if the browser authorization does not open automatically.',
+    id: 'claude-code', name: 'Claude Code', provider: 'anthropic', label: 'agents.setup_claudeCode_label',
+    instructions: 'agents.setup_claudeCode_instructions',
+    nextStep: 'agents.setup_claudeCode_nextStep',
     command: (baseUrl) => `claude mcp add --transport http --scope user adport ${baseUrl}/mcp`,
   },
   {
-    id: 'claude', name: 'Claude', provider: 'anthropic', label: 'Web & Desktop',
-    instructions: 'Open Customize → Connectors → Add custom connector. Name it Adport and use the endpoint below.',
-    nextStep: 'Select Connect, approve the workspace, then enable Adport from the + menu in a conversation.',
+    id: 'claude', name: 'Claude', provider: 'anthropic', label: 'agents.setup_claude_label',
+    instructions: 'agents.setup_claude_instructions',
+    nextStep: 'agents.setup_claude_nextStep',
     command: (baseUrl) => `${baseUrl}/mcp`,
   },
   {
-    id: 'cursor', name: 'Cursor', provider: 'cursor', label: 'Global MCP',
-    instructions: 'Add this server to ~/.cursor/mcp.json, then restart Cursor.',
-    nextStep: 'Approve the browser sign-in when prompted. Cursor will keep the OAuth session refreshed.',
+    id: 'cursor', name: 'Cursor', provider: 'cursor', label: 'agents.setup_cursor_label',
+    instructions: 'agents.setup_cursor_instructions',
+    nextStep: 'agents.setup_cursor_nextStep',
     command: (baseUrl) => JSON.stringify({ mcpServers: { adport: { url: `${baseUrl}/mcp` } } }, null, 2),
   },
   {
-    id: 'vscode', name: 'VS Code', provider: 'vscode', label: 'User MCP',
-    instructions: 'Open the Command Palette and choose “MCP: Open User Configuration”, then add this server.',
-    nextStep: 'Start the Adport server from VS Code and complete the browser authorization.',
+    id: 'vscode', name: 'VS Code', provider: 'vscode', label: 'agents.setup_vscode_label',
+    instructions: 'agents.setup_vscode_instructions',
+    nextStep: 'agents.setup_vscode_nextStep',
     command: (baseUrl) => JSON.stringify({ servers: { adport: { type: 'http', url: `${baseUrl}/mcp` } } }, null, 2),
   },
 ];
@@ -69,6 +71,7 @@ function AgentLogo({ provider }: { provider: Setup['provider'] }) {
 }
 
 function CopyButton({ value, label }: { value: string; label: string }) {
+  const { t } = useI18n();
   const [copied, setCopied] = useState(false);
 
   async function copy() {
@@ -78,13 +81,14 @@ function CopyButton({ value, label }: { value: string; label: string }) {
   }
 
   return (
-    <button className="setup-copy" type="button" onClick={copy} aria-label={`Copy ${label} setup`}>
-      {copied ? 'Copied' : 'Copy setup'}
+    <button className="setup-copy" type="button" onClick={copy} aria-label={t('agents.copySetupAria', { name: label })}>
+      {copied ? t('agents.copied') : t('agents.copySetup')}
     </button>
   );
 }
 
 export function AgentSetupGuide({ baseUrl, initialSelectedId, onSelectionChange }: { baseUrl: string; initialSelectedId?: string; onSelectionChange?: (id: string) => void }) {
+  const { t } = useI18n();
   const [selectedId, setSelectedId] = useState(initialSelectedId ?? AGENT_SETUPS[0]!.id);
   const selected = AGENT_SETUPS.find((setup) => setup.id === selectedId) ?? AGENT_SETUPS[0]!;
   const command = selected.command(baseUrl);
@@ -93,13 +97,13 @@ export function AgentSetupGuide({ baseUrl, initialSelectedId, onSelectionChange 
     <section className="card agent-setup-card">
       <div className="card-head">
         <div>
-          <h2>Connect your agent</h2>
-          <p className="card-kicker">Choose a client. Only its recommended setup is shown.</p>
+          <h2>{t('agents.connectYourAgent')}</h2>
+          <p className="card-kicker">{t('agents.chooseClient')}</p>
         </div>
-        <span className="status">OAuth recommended</span>
+        <span className="status">{t('agents.oauthRecommended')}</span>
       </div>
 
-      <div className="agent-tabs" aria-label="Choose an agent">
+      <div className="agent-tabs" aria-label={t('agents.chooseAgent')}>
         {AGENT_SETUPS.map((setup) => (
           <button className="agent-tab" data-active={setup.id === selected.id} key={setup.id} type="button" onClick={() => { setSelectedId(setup.id); onSelectionChange?.(setup.id); }} aria-pressed={setup.id === selected.id}>
             <span className={`agent-logo ${setup.provider}`}><AgentLogo provider={setup.provider} /></span>
@@ -113,10 +117,10 @@ export function AgentSetupGuide({ baseUrl, initialSelectedId, onSelectionChange 
           <div className="agent-panel-copy">
             <div className="agent-panel-title">
               <span className={`agent-logo large ${selected.provider}`}><AgentLogo provider={selected.provider} /></span>
-              <div><h3>{selected.name}</h3><p>{selected.label}</p></div>
+              <div><h3>{selected.name}</h3><p>{t(selected.label)}</p></div>
             </div>
-            <p className="agent-instruction">{selected.instructions}</p>
-            <p className="agent-next"><strong>Then:</strong> {selected.nextStep}</p>
+            <p className="agent-instruction">{t(selected.instructions)}</p>
+            <p className="agent-next"><strong>{t('agents.then')}</strong> {t(selected.nextStep)}</p>
           </div>
           <div className="setup-code-wrap">
             <pre className="setup-code"><code>{command}</code></pre>
@@ -125,11 +129,11 @@ export function AgentSetupGuide({ baseUrl, initialSelectedId, onSelectionChange 
         </article>
 
         <aside className="setup-practice">
-          <div><strong>Safe first prompt</strong><p>“List my accessible ad accounts and summarize the last 7 days. Do not make any changes.”</p></div>
+          <div><strong>{t('agents.safeFirstPrompt')}</strong><p>{t('agents.safePromptText')}</p></div>
           <ul>
-            <li>Prefer OAuth MCP; never paste platform secrets into a chat.</li>
-            <li>Review the exact preview before applying any write.</li>
-            <li>New campaigns remain paused by policy.</li>
+            <li>{t('agents.tipOauth')}</li>
+            <li>{t('agents.tipPreview')}</li>
+            <li>{t('agents.tipPaused')}</li>
           </ul>
         </aside>
       </div>

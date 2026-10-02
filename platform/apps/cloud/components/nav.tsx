@@ -3,6 +3,7 @@
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { SUPPORT_OPEN_EVENT } from './support-widget';
+import { useI18n } from './i18n-provider';
 
 type NavItem = { label: string; href: string; icon: React.ReactNode; exact?: boolean };
 
@@ -23,39 +24,42 @@ const icon = {
 };
 
 const PRIMARY_ITEMS: NavItem[] = [
-  { label: 'Overview', href: '/dashboard', icon: icon.overview, exact: true },
-  { label: 'Assistant', href: '/dashboard/assistant', icon: icon.assistant },
-  { label: 'Connections', href: '/dashboard/connections', icon: icon.connections },
-  { label: 'Accounts', href: '/dashboard/accounts', icon: icon.accounts },
-  { label: 'Reports', href: '/dashboard/reports', icon: icon.reports },
-  { label: 'Findings', href: '/dashboard/findings', icon: icon.findings },
-  { label: 'Approvals', href: '/dashboard/approvals', icon: icon.approvals },
-  { label: 'Audit log', href: '/dashboard/audit', icon: icon.audit },
+  { label: 'nav.overview', href: '/dashboard', icon: icon.overview, exact: true },
+  { label: 'nav.assistant', href: '/dashboard/assistant', icon: icon.assistant },
+  { label: 'nav.connections', href: '/dashboard/connections', icon: icon.connections },
+  { label: 'nav.accounts', href: '/dashboard/accounts', icon: icon.accounts },
+  { label: 'nav.reports', href: '/dashboard/reports', icon: icon.reports },
+  { label: 'nav.findings', href: '/dashboard/findings', icon: icon.findings },
+  { label: 'nav.approvals', href: '/dashboard/approvals', icon: icon.approvals },
+  { label: 'nav.audit', href: '/dashboard/audit', icon: icon.audit },
 ];
 
 const UTILITY_ITEMS: NavItem[] = [
-  { label: 'Agent access', href: '/dashboard/agents', icon: icon.agents },
-  { label: 'Policies', href: '/dashboard/policies', icon: icon.policies },
-  { label: 'Team', href: '/dashboard/team', icon: icon.team },
-  { label: 'Plan', href: '/dashboard/billing', icon: icon.billing },
+  { label: 'nav.agents', href: '/dashboard/agents', icon: icon.agents },
+  { label: 'nav.policies', href: '/dashboard/policies', icon: icon.policies },
+  { label: 'nav.team', href: '/dashboard/team', icon: icon.team },
+  { label: 'nav.plan', href: '/dashboard/billing', icon: icon.billing },
 ];
 
 function NavLinks({ items }: { items: NavItem[] }) {
   const pathname = usePathname();
+  const { t } = useI18n();
   return items.map((item) => {
     const active = item.exact ? pathname === item.href : pathname.startsWith(item.href);
-    return <Link key={item.href} href={item.href} prefetch={false} aria-current={active ? 'page' : undefined}>{item.icon}{item.label}</Link>;
+    return <Link key={item.href} href={item.href} prefetch={false} aria-current={active ? 'page' : undefined}>{item.icon}{t(item.label)}</Link>;
   });
 }
 
 export function Nav() {
-  return <nav className="nav" aria-label="Cloud navigation"><NavLinks items={PRIMARY_ITEMS} /></nav>;
+  const { t } = useI18n();
+  return <nav className="nav" aria-label={t('nav.cloudNavigation')}><NavLinks items={PRIMARY_ITEMS} /></nav>;
 }
 
 export function UtilityNav() {
+  const { t } = useI18n();
   return (
-    <nav className="nav utility-nav" aria-label="Workspace and help">
-      <button type="button" onClick={() => window.dispatchEvent(new Event(SUPPORT_OPEN_EVENT))}>{icon.support}Support</button>
+    <nav className="nav utility-nav" aria-label={t('nav.workspaceAndHelp')}>
+      <button type="button" onClick={() => window.dispatchEvent(new Event(SUPPORT_OPEN_EVENT))}>{icon.support}{t('nav.support')}</button>
       <NavLinks items={UTILITY_ITEMS} />
     </nav>
   );

@@ -1,5 +1,6 @@
 import Link from 'next/link';
 import { ProviderLogo, providerLabel } from '@/components/logos';
+import { intlTag, type Locale } from '@/lib/i18n/config';
 
 export function PageHeader({ title, description, action }: { title: string; description: string; action?: React.ReactNode }) {
   return (
@@ -42,9 +43,9 @@ export function Provider({ name }: { name: string }) {
   );
 }
 
-export function StatusPill({ status }: { status: string }) {
+export function StatusPill({ status, label }: { status: string; label?: string }) {
   const tone = status === 'connected' ? '' : status === 'error' ? 'critical' : status === 'revoked' ? 'neutral' : 'warn';
-  return <span className={`status ${tone}`}>{status}</span>;
+  return <span className={`status ${tone}`}>{label ?? status}</span>;
 }
 
 export function AuthFrame({ label, children }: { label: string; children: React.ReactNode }) {
@@ -61,12 +62,13 @@ export function AuthFrame({ label, children }: { label: string; children: React.
   );
 }
 
-export function formatNumber(value = 0): string { return new Intl.NumberFormat('en', { maximumFractionDigits: 1 }).format(value); }
-export function formatMoney(value = 0, currency = 'EUR'): string {
-  try { return new Intl.NumberFormat('en', { style: 'currency', currency, maximumFractionDigits: 2 }).format(value); }
-  catch { return `${formatNumber(value)} ${currency}`; }
+// Formatters take the UI locale; Arabic keeps Latin digits (see intlTag) so metrics stay comparable.
+export function formatNumber(value = 0, locale: Locale = 'en'): string { return new Intl.NumberFormat(intlTag(locale), { maximumFractionDigits: 1 }).format(value); }
+export function formatMoney(value = 0, currency = 'EUR', locale: Locale = 'en'): string {
+  try { return new Intl.NumberFormat(intlTag(locale), { style: 'currency', currency, maximumFractionDigits: 2 }).format(value); }
+  catch { return `${formatNumber(value, locale)} ${currency}`; }
 }
-export function formatDate(value: string | Date | null | undefined): string {
+export function formatDate(value: string | Date | null | undefined, locale: Locale = 'en'): string {
   if (!value) return '—';
-  return new Intl.DateTimeFormat('en', { dateStyle: 'medium', timeStyle: 'short', timeZone: 'UTC' }).format(new Date(value)) + ' UTC';
+  return new Intl.DateTimeFormat(intlTag(locale), { dateStyle: 'medium', timeStyle: 'short', timeZone: 'UTC' }).format(new Date(value)) + ' UTC';
 }

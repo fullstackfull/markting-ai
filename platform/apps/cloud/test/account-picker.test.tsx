@@ -11,6 +11,7 @@ vi.mock('@/lib/cloud/dashboard', () => ({ requireDashboardTenant: async () => ({
 vi.mock('@/lib/cloud/repository', () => ({ listOrganizationAdAccounts: mocks.inventory, listConnections: mocks.connections }));
 vi.mock('@/lib/cloud/plans', () => ({ getOrganizationEntitlement: async () => ({ plan: { maxActiveAccounts: 3 } }) }));
 vi.mock('@/app/dashboard/agents/agent-setup-guide', () => ({ AgentSetupGuide: () => null }));
+vi.mock('@/lib/i18n/server', async () => { const { makeTranslators } = await import('@/lib/i18n'); return { getT: async () => ({ locale: 'en', dir: 'ltr', ...makeTranslators('en') }), getLocale: async () => 'en' }; });
 
 const accounts: AccountAccessItem[] = OAUTH_PROVIDERS.map((provider, index) => ({
   provider, accountId: `${provider}-id`, name: `${provider} unique account`, currency: 'EUR', status: 'available', enabled: index < 2,

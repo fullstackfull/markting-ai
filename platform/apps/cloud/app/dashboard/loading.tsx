@@ -1,6 +1,9 @@
-export default function Loading() {
+import { getT } from '@/lib/i18n/server';
+
+export default async function Loading() {
+  const { t } = await getT();
   return (
-    <main className="page" aria-busy="true" aria-label="Loading workspace">
+    <main className="page" aria-busy="true" aria-label={t('misc.loadingWorkspace')}>
       <div className="page-head">
         <div style={{ flex: 1 }}>
           <div className="skeleton-line" style={{ width: '14rem', height: '1.7rem', marginBottom: '0.8rem' }} />
