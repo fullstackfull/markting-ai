@@ -691,3 +691,20 @@ details.connection-form[open] summary { margin-bottom: 0.8rem; }
 .oauth-popup-action .inline-note { max-width: 15rem; font-size: .75rem; }
 .oauth-popup-complete { width: min(28rem, 100%); margin: 3rem auto; padding: 2rem; }
 .oauth-popup-complete p { margin: 1rem 0 1.5rem; }
+
+/* ── markting-ai: Assistant chat ───────────────────────────────────────── */
+.assistant { display: flex; flex-direction: column; gap: 12px; min-height: 420px; }
+.assistant-thread { display: flex; flex-direction: column; gap: 14px; flex: 1; }
+.assistant-empty { display: grid; gap: 12px; color: var(--muted, #6b7280); }
+.assistant-suggestions { display: flex; flex-wrap: wrap; gap: 8px; }
+.assistant-message { display: grid; gap: 4px; max-inline-size: 100%; }
+.assistant-message.user .assistant-text { background: var(--surface-2, #f3f4f6); }
+.assistant-message.error .assistant-text { border-color: var(--danger, #b42318); }
+.assistant-role { font-size: 0.75rem; letter-spacing: 0.04em; text-transform: uppercase; color: var(--muted, #6b7280); }
+.assistant-text { margin: 0; white-space: pre-wrap; word-break: break-word; font: inherit; line-height: 1.5; padding: 10px 12px; border: 1px solid var(--border, #e5e7eb); border-radius: 10px; background: var(--surface, #fff); }
+.assistant-bridge { margin-block-start: 6px; display: grid; gap: 6px; }
+.assistant-bridge ul { margin: 0; padding-inline-start: 18px; }
+.assistant-composer { display: flex; gap: 8px; align-items: flex-end; }
+.assistant-composer textarea { flex: 1; resize: vertical; min-block-size: 48px; padding: 10px 12px; border: 1px solid var(--border, #e5e7eb); border-radius: 10px; font: inherit; }
+.assistant-thread-id { text-align: end; }
+.assistant-bridge .button { justify-self: start; }

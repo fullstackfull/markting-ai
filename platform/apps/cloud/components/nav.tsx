@@ -18,11 +18,13 @@ const icon = {
   team: <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="9" cy="8.5" r="3.2" /><path d="M3.5 19.5c.4-3.1 2.7-5 5.5-5s5.1 1.9 5.5 5" /><circle cx="16.5" cy="9.5" r="2.4" /><path d="M15.2 14.6c2.6.1 4.6 1.8 5.1 4.6" /></svg>,
   agents: <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8.5 9.5 5 12l3.5 2.5" /><path d="m15.5 9.5 3.5 2.5-3.5 2.5" /><path d="m13.2 6.5-2.4 11" /></svg>,
   billing: <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3.5" y="5.5" width="17" height="13" rx="2" /><path d="M3.5 9.5h17" /><path d="M7.5 14.5h3" /></svg>,
+  assistant: <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4.5 6.5A2 2 0 0 1 6.5 4.5h11a2 2 0 0 1 2 2v7a2 2 0 0 1-2 2H10l-4.5 3.5v-3.5h-1a2 2 0 0 1-2-2v-7Z" /><path d="M8.5 9h7" /><path d="M8.5 12h4" /></svg>,
   support: <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8.5" /><path d="M8.2 8.2 6 6" /><path d="m15.8 8.2 2.2-2.2" /><path d="m8.2 15.8-2.2 2.2" /><path d="m15.8 15.8 2.2 2.2" /><circle cx="12" cy="12" r="3.4" /></svg>,
 };
 
 const PRIMARY_ITEMS: NavItem[] = [
   { label: 'Overview', href: '/dashboard', icon: icon.overview, exact: true },
+  { label: 'Assistant', href: '/dashboard/assistant', icon: icon.assistant },
   { label: 'Connections', href: '/dashboard/connections', icon: icon.connections },
   { label: 'Accounts', href: '/dashboard/accounts', icon: icon.accounts },
   { label: 'Reports', href: '/dashboard/reports', icon: icon.reports },

@@ -1,6 +1,7 @@
 import { Empty, PageHeader, Provider, formatNumber } from '@/components/ui';
 import { requireDashboardTenant } from '@/lib/cloud/dashboard';
 import { readReport } from '@/lib/cloud/reads';
+import { EngineReports } from './engine-reports';
 
 export const metadata = { title: 'Reports' };
 
@@ -13,6 +14,7 @@ export default async function ReportsPage() {
       <PageHeader title="Campaign report" description="Thirty days, queried through the same cross-platform report tool the REST API and remote MCP endpoint use. Currencies stay provider-specific." />
       {!result.ok ? <div className="error-callout">Provider read failed: {result.error}</div> : null}
       {result.warnings.map((warning) => <div className="error-callout" key={`${warning.provider}:${warning.message}`}>Partial provider read: {warning.message}</div>)}
+      <EngineReports organizationId={tenant.organizationId} canRun={tenant.role !== 'viewer'} />
       <section className="card">
         {rows.length === 0 ? (
           <Empty
