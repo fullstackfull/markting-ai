@@ -34,3 +34,29 @@ file. See the root [`NOTICE`](./NOTICE) for attribution.
 
 To pull a newer upstream, re-run the import for that directory, update the SHA and date in
 the table above, and record any local modifications that had to be re-applied.
+
+## Local modifications to the imported trees
+
+Keep this list current so a future upstream sync knows what to re-apply. Everything else that
+markting-ai adds lives outside `platform/` and `engine/` (root `docker-compose.yml`, `infra/`,
+`services/`, `docs/`), or as **new files** inside `platform/apps/cloud` that upstream does not have.
+
+### `platform/` (adport) — edited upstream files
+| File | Change | Phase |
+| --- | --- | --- |
+| `apps/cloud/components/nav.tsx` | added the **Assistant** item and its icon to `PRIMARY_ITEMS` | 1 |
+| `apps/cloud/app/dashboard/approvals/page.tsx` | added **Source** (engine provenance) and **Actions** (apply / reject) columns | 1 |
+| `apps/cloud/app/dashboard/reports/page.tsx` | added the **AI analysis reports** card above the upstream campaign table | 1 |
+| `apps/cloud/app/globals.css` | appended Assistant chat styles (additive block at the end of the file) | 1 |
+| `apps/cloud/.env.example` | appended the `MARKTING_*` bridge variables | 1 |
+
+### `platform/` — new files (no upstream counterpart)
+`apps/cloud/lib/markting/**`, `apps/cloud/app/api/assistant/**`, `apps/cloud/app/api/approvals/**`,
+`apps/cloud/app/api/reports/engine/**`, `apps/cloud/app/dashboard/assistant/**`,
+`apps/cloud/app/dashboard/approvals/approval-actions.tsx`, `apps/cloud/app/dashboard/reports/engine-reports.tsx`,
+`apps/cloud/test/markting-*.test.ts`, `apps/cloud/test/fixtures/engine-proposal.ts`,
+`supabase/migrations/20261002000000_markting_bridge.sql`.
+
+### `engine/` (paid-media-agent)
+No file modified. The engine is hosted by `services/engine-demo/serve_demo.py`, which imports the
+package and replaces its write provider at boot; configuration comes from the compose environment.
