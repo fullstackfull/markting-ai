@@ -49,13 +49,19 @@ markting-ai adds lives outside `platform/` and `engine/` (root `docker-compose.y
 | `apps/cloud/app/dashboard/reports/page.tsx` | added the **AI analysis reports** card above the upstream campaign table | 1 |
 | `apps/cloud/app/globals.css` | appended Assistant chat styles (additive block at the end of the file) | 1 |
 | `apps/cloud/.env.example` | appended the `MARKTING_*` bridge variables | 1 |
+| `apps/cloud/app/layout.tsx` | `lang`/`dir` from the locale cookie, Arabic font imports, `I18nProvider` | 2 |
+| `apps/cloud/app/globals.css` | physical direction properties → logical; Arabic-first font stack; RTL/bidi rules appended | 2 |
+| `apps/cloud/components/ui.tsx` | formatters take a locale; `StatusPill` accepts a translated label | 2 |
+| `apps/cloud/components/{nav,shell,auth-screen}.tsx` and every page/component under `apps/cloud/app` and `apps/cloud/components` that held UI copy | inline English replaced by `t()` lookups (dictionaries in `lib/i18n/messages/`) | 2 |
+| `apps/cloud/package.json`, `pnpm-lock.yaml` | added `@fontsource/ibm-plex-sans-arabic` (OFL-1.1) | 2 |
+| `apps/cloud/test/account-picker.test.tsx`, `test/account-selection.test.tsx` | mock `@/lib/i18n/server` so English assertions keep running | 2 |
 
 ### `platform/` — new files (no upstream counterpart)
 `apps/cloud/lib/markting/**`, `apps/cloud/app/api/assistant/**`, `apps/cloud/app/api/approvals/**`,
 `apps/cloud/app/api/reports/engine/**`, `apps/cloud/app/dashboard/assistant/**`,
 `apps/cloud/app/dashboard/approvals/approval-actions.tsx`, `apps/cloud/app/dashboard/reports/engine-reports.tsx`,
 `apps/cloud/test/markting-*.test.ts`, `apps/cloud/test/fixtures/engine-proposal.ts`,
-`supabase/migrations/20261002000000_markting_bridge.sql`.
+`supabase/migrations/20261002000000_markting_bridge.sql`, `apps/cloud/lib/i18n/**`, `apps/cloud/components/{i18n-provider,locale-switcher}.tsx`, `apps/cloud/app/api/locale/route.ts`, `apps/cloud/test/i18n.test.ts`.
 
 ### `engine/` (paid-media-agent)
 No file modified. The engine is hosted by `services/engine-demo/serve_demo.py`, which imports the
