@@ -1,0 +1,2241 @@
+{
+ "J1": {
+  "agent_id": "J1",
+  "role": "Independent architecture skeptic",
+  "report_path": "docs/audit/agents/J1.md",
+  "scope": "Code-first red-team review of the cloud↔engine glue (platform/apps/cloud/lib/markting/*, the assistant/approvals/reports routes and pages, the bridge migration and seed), services/engine-demo/serve_demo.py and its tests, docker-compose.yml/Makefile/.env.example, platform/packages/core/src/policy/* and tools/write.ts, and engine/src/paid_media_agent/{assembly,runtime,tools,surfaces,testing,domain,persistence}; docs read last and checked against code.",
+  "files_inspected": [
+   "platform/apps/cloud/lib/markting/assistant.ts",
+   "platform/apps/cloud/lib/markting/bridge.ts",
+   "platform/apps/cloud/lib/markting/engine-client.ts",
+   "platform/apps/cloud/lib/markting/env.ts",
+   "platform/apps/cloud/lib/markting/repository.ts",
+   "platform/apps/cloud/lib/markting/runtime.ts",
+   "platform/apps/cloud/lib/markting/sandbox-provider.ts",
+   "platform/apps/cloud/lib/markting/translate.ts",
+   "platform/apps/cloud/app/api/assistant/messages/route.ts",
+   "platform/apps/cloud/app/api/approvals/[id]/apply/route.ts",
+   "platform/apps/cloud/app/api/approvals/[id]/reject/route.ts",
+   "platform/apps/cloud/app/api/reports/engine/route.ts",
+   "platform/apps/cloud/app/api/reports/engine/[name]/route.ts",
+   "platform/apps/cloud/app/dashboard/assistant/page.tsx",
+   "platform/apps/cloud/app/dashboard/assistant/assistant-chat.tsx",
+   "platform/apps/cloud/app/dashboard/approvals/page.tsx",
+   "platform/apps/cloud/app/dashboard/approvals/approval-actions.tsx",
+   "platform/apps/cloud/app/dashboard/reports/engine-reports.tsx",
+   "platform/apps/cloud/lib/i18n/messages/assistant.ts",
+   "platform/apps/cloud/lib/i18n/messages/reports.ts",
+   "platform/apps/cloud/lib/i18n/messages/approvals.ts",
+   "platform/apps/cloud/lib/cloud/runtime.ts",
+   "platform/apps/cloud/lib/cloud/account-scope.ts",
+   "platform/apps/cloud/lib/cloud/repository.ts",
+   "platform/apps/cloud/lib/cloud/auth.ts",
+   "platform/apps/cloud/lib/http.ts",
+   "platform/apps/cloud/test/markting-bridge.test.ts",
+   "platform/apps/cloud/test/markting-sandbox.test.ts",
+   "platform/apps/cloud/test/markting-snapchat-wire.test.ts",
+   "platform/apps/cloud/test/markting-repository.database.test.ts",
+   "platform/apps/cloud/test/fixtures/engine-proposal.ts",
+   "platform/packages/core/src/policy/engine.ts",
+   "platform/packages/core/src/policy/policy.ts",
+   "platform/packages/core/src/policy/pending.ts",
+   "platform/packages/core/src/policy/audit.ts",
+   "platform/packages/core/src/tools/write.ts",
+   "platform/packages/core/src/tools/registry.ts",
+   "platform/supabase/migrations/20261002000000_markting_bridge.sql",
+   "services/engine-demo/serve_demo.py",
+   "services/engine-demo/tests/test_demo_api.py",
+   "docker-compose.yml",
+   "Makefile",
+   ".env.example",
+   "infra/cloud.Dockerfile",
+   "infra/seed/seed-demo.mjs",
+   "engine/Dockerfile",
+   "engine/config/accounts.example.toml",
+   "engine/instructions.md",
+   "engine/src/paid_media_agent/assembly.py",
+   "engine/src/paid_media_agent/runtime/self_hosted.py",
+   "engine/src/paid_media_agent/runtime/local.py",
+   "engine/src/paid_media_agent/runtime/mda.py",
+   "engine/src/paid_media_agent/runtime/profiles.py",
+   "engine/src/paid_media_agent/runtime/catalog.py",
+   "engine/src/paid_media_agent/tools/writes.py",
+   "engine/src/paid_media_agent/tools/write_tools.py",
+   "engine/src/paid_media_agent/tools/write_policy.py",
+   "engine/src/paid_media_agent/tools/providers.py",
+   "engine/src/paid_media_agent/tools/fixtures.py",
+   "engine/src/paid_media_agent/surfaces/runner.py",
+   "engine/src/paid_media_agent/surfaces/api/app.py",
+   "engine/src/paid_media_agent/testing/demo_script.py",
+   "engine/src/paid_media_agent/testing/scripted_model.py",
+   "engine/src/paid_media_agent/domain/proposals.py",
+   "engine/src/paid_media_agent/domain/presentation.py",
+   "engine/src/paid_media_agent/domain/common.py",
+   "engine/src/paid_media_agent/persistence/postgres.py",
+   "engine/src/paid_media_agent/persistence/memory.py",
+   "engine/src/paid_media_agent/config.py",
+   "engine/.venv/lib/python3.11/site-packages/langchain_core/language_models/chat_models.py",
+   "README.md",
+   "UPSTREAM.md",
+   "docs/ARCHITECTURE.md",
+   "docs/PHASE0-REPORT.md",
+   "docs/PHASE1-REPORT.md",
+   "docs/PHASE2-REPORT.md",
+   "docs/PHASE3-REPORT.md",
+   "docs/TODO.md"
+  ],
+  "tests_executed": [
+   "cd engine && uv run --frozen python -m pytest -q ../services/engine-demo/tests => 0 (7 passed)",
+   "cd platform && pnpm --filter @adport/cloud exec vitest run test/markting-translate.test.ts test/markting-bridge.test.ts test/markting-engine-client.test.ts test/markting-sandbox.test.ts test/markting-snapchat-wire.test.ts test/i18n.test.ts => 0 (53 passed)",
+   "git diff --stat 4162146 HEAD -- engine => 0 (empty; engine tree unmodified)",
+   "git diff --stat fa7bf19 HEAD -- platform => 0 (95 files changed)",
+   "grep -rln adport engine/src services/engine-demo/serve_demo.py => 0 (only serve_demo.py; no adport→engine data client)",
+   "grep -rn 'cron|schedule|interval|autopilot|monitor' platform/apps/cloud/lib/markting services/engine-demo/serve_demo.py => 1 (no matches)"
+  ],
+  "findings": [
+   {
+    "id": "J1-01",
+    "title": "Intelligence layer never observes tenant data; UI and README claim it does",
+    "severity": "P1",
+    "classification": "VERIFIED_CODE",
+    "evidence": [
+     "services/engine-demo/serve_demo.py:383-388",
+     "services/engine-demo/serve_demo.py:163-166",
+     "engine/src/paid_media_agent/runtime/catalog.py:51-58",
+     "engine/src/paid_media_agent/runtime/profiles.py:403-407",
+     "engine/config/accounts.example.toml:5-20",
+     "platform/apps/cloud/lib/i18n/messages/assistant.ts:5,16",
+     "README.md:14,83",
+     "grep -rln adport engine/src => none"
+    ],
+    "description": "Both engine modes force PAID_MEDIA_DATA_MODE=sample, so every analysis, report and proposal is computed over three shipped JSON fixtures and the fixture account registry. 'live' changes the model, not the data. No data path from adport's tenant vault into the engine exists. The live placeholder says 'Ask about your campaigns…'.",
+    "recommendation": "Build an engine ReadProvider over adport's normalized report API with per-tenant scoped tokens and a per-tenant AccountRegistry; until then remove 'connected accounts' copy and show the synthetic-data banner whenever the engine runs in sample mode (always, today)."
+   },
+   {
+    "id": "J1-02",
+    "title": "Engine report surface is global across tenants",
+    "severity": "P2",
+    "classification": "VERIFIED_CODE",
+    "evidence": [
+     "services/engine-demo/serve_demo.py:62,246-264,304-306,355-374",
+     "platform/apps/cloud/app/api/reports/engine/route.ts:16-24",
+     "platform/apps/cloud/app/api/reports/engine/[name]/route.ts:10-15",
+     ".env.example:44"
+    ],
+    "description": "Report runs and files carry no organization key; any signed-in user of any org lists and downloads every run; a global [:50] cap evicts other tenants' runs. P2 only because content is fixture data (J1-01); becomes P0 if the engine ever sees tenant data.",
+    "recommendation": "Key the report index and file namespace by organization (or store metadata in adport Postgres with organization_id) and filter in the cloud route."
+   },
+   {
+    "id": "J1-03",
+    "title": "Demo model is process-global mutable state shared by all threads and tenants",
+    "severity": "P2",
+    "classification": "VERIFIED_CODE",
+    "evidence": [
+     "services/engine-demo/serve_demo.py:92-115,194-198,224-227",
+     "engine/.venv/lib/python3.11/site-packages/langchain_core/language_models/chat_models.py:2695-2697",
+     "engine/src/paid_media_agent/surfaces/api/app.py:91-101"
+    ],
+    "description": "One LoopingScriptedChatModel per process mutates steps/call_count/seen_human_messages from whatever thread calls it; _generate runs in a thread executor so concurrent turns interleave and corrupt each other's script (interleaving itself INFERRED, not reproduced).",
+    "recommendation": "Instantiate the scripted model per request or key its state by thread_id; or make the demo path single-flight."
+   },
+   {
+    "id": "J1-04",
+    "title": "Intent detection is a regex, the proposal is canned, and the demo/live toggle matrix is unguarded",
+    "severity": "P2",
+    "classification": "VERIFIED_CODE",
+    "evidence": [
+     "services/engine-demo/serve_demo.py:63-66,109-111,132-136",
+     "engine/src/paid_media_agent/testing/demo_script.py:158-170",
+     "platform/apps/cloud/app/dashboard/approvals/page.tsx:37",
+     "platform/apps/cloud/lib/markting/env.ts:237",
+     "platform/apps/cloud/lib/markting/translate.ts:133-145"
+    ],
+    "description": "Any message containing 'change'/'budget' (or Arabic equivalents) yields the fixed proposal demo-google/g-103→240 with a fabricated reason shown to approvers. With MARKTING_DEMO_MODE=false and an alias row binding demo-google to a real account, the canned proposal becomes a real budget preview. Human approval and the 25% cap remain, so not P0.",
+    "recommendation": "Refuse to bridge when the engine is scripted and the cloud is not in demo mode; flag scripted proposals as synthetic; label engine prose as model/script-generated on Approvals."
+   },
+   {
+    "id": "J1-05",
+    "title": "Live mode shares one filesystem workspace and one checkpoint store across tenants",
+    "severity": "P1",
+    "classification": "VERIFIED_CODE",
+    "evidence": [
+     "engine/src/paid_media_agent/assembly.py:59,211,251-253",
+     "engine/src/paid_media_agent/runtime/local.py:133-155,183",
+     "docker-compose.yml:55-57",
+     "engine/src/paid_media_agent/persistence/postgres.py:12-42",
+     "services/engine-demo/serve_demo.py:211-219"
+    ],
+    "description": "In live mode the LLM keeps ls/read_file/write_file/edit_file/glob/grep over a single /app root with writes allowed under /workspace/**, one shared volume, one DB without a tenant column. Tenant A's model can read tenant B's artifacts/notes and persist prompt-injection content tenant B's model later reads. Not reachable in the shipped demo default (scripted model never calls fs tools); live mode has never been run here.",
+    "recommendation": "Before enabling live for more than one organization: per-tenant workspace roots or no filesystem tools, tenant id in engine tables and checkpoint namespaces, tenant-scoped artifact store."
+   },
+   {
+    "id": "J1-06",
+    "title": "Unsupported proposals are never handed back to the engine; the thread stays interrupted",
+    "severity": "P2",
+    "classification": "VERIFIED_CODE",
+    "evidence": [
+     "platform/apps/cloud/lib/markting/bridge.ts:136-141,157,169",
+     "engine/src/paid_media_agent/surfaces/runner.py:91-93,134,139-141",
+     "platform/apps/cloud/lib/markting/assistant.ts:51",
+     "platform/apps/cloud/lib/markting/repository.ts:183"
+    ],
+    "description": "The unsupported branch records and returns without calling handoff, so the engine proposal stays awaiting_approval and latest_proposal re-surfaces it on every later turn; the bridge re-records it each time. This is the first-run state of any real tenant with no alias rows.",
+    "recommendation": "Call handoff (reject with 'unsupported by adport') in the unsupported branch; have the runner surface only awaiting_approval proposals."
+   },
+   {
+    "id": "J1-07",
+    "title": "Synchronous, non-idempotent, single-process chat path",
+    "severity": "P2",
+    "classification": "VERIFIED_CODE",
+    "evidence": [
+     "platform/apps/cloud/lib/markting/env.ts:241",
+     "platform/apps/cloud/app/api/assistant/messages/route.ts:7",
+     "platform/apps/cloud/lib/markting/engine-client.ts:113-116",
+     "services/engine-demo/serve_demo.py:411-417",
+     "platform/apps/cloud/lib/cloud/repository.ts:355",
+     "engine/src/paid_media_agent/surfaces/api/app.py:16-17"
+    ],
+    "description": "Each turn pins a Next.js request and an engine coroutine for up to 240 s (max 900 s); one uvicorn process serves all tenants with no engine-side limit (cloud allows 120/min/user); retrying the same text re-runs the graph and can create a second proposal.",
+    "recommendation": "Job table + workers + streaming; idempotency key per client turn; per-tenant concurrency limits at the engine host."
+   },
+   {
+    "id": "J1-08",
+    "title": "Engine container receives every secret in .env",
+    "severity": "P2",
+    "classification": "VERIFIED_CODE",
+    "evidence": [
+     "docker-compose.yml:39",
+     ".env.example:7,12-14,21-22,34-35",
+     "engine/src/paid_media_agent/assembly.py:293-306"
+    ],
+    "description": "env_file: .env hands the LLM-agent process SUPABASE_SECRET_KEY, ADPORT_CLOUD_ENCRYPTION_KEY, STRIPE_SECRET_KEY, SNAPCHAT_CLIENT_SECRET it never needs; RedactionMiddleware covers only engine secrets. No in-model read path found (virtual filesystem), so exposure is operational.",
+    "recommendation": "Pass only MARKTING_ENGINE_TOKEN, MARKTING_ENGINE_MODE, model key and PAID_MEDIA_* to the engine service."
+   },
+   {
+    "id": "J1-09",
+    "title": "Policy depth far below a media buyer's needs; budget caps not re-checked at apply",
+    "severity": "P3",
+    "classification": "VERIFIED_CODE",
+    "evidence": [
+     "platform/packages/core/src/policy/policy.ts:172-185",
+     "platform/packages/core/src/policy/engine.ts:110-113,133-153",
+     "platform/apps/cloud/lib/i18n/messages/approvals.ts:5",
+     "docs/TODO.md:104"
+    ],
+    "description": "Only per-operation % delta, absolute cap, protected accounts and TTL; require_validation unused; ten successive +25% approvals = 9.3x; apply re-runs only the static check against a preview taken up to 15 minutes earlier.",
+    "recommendation": "Cumulative/windowed caps, cooldowns per target, per-account ceilings, re-preview and re-run checkBudgetPolicy at apply."
+   },
+   {
+    "id": "J1-10",
+    "title": "Pending-row lookup is an O(n) scan capped at 200",
+    "severity": "P3",
+    "classification": "VERIFIED_CODE",
+    "evidence": [
+     "platform/apps/cloud/app/api/approvals/[id]/apply/route.ts:20",
+     "platform/apps/cloud/app/api/approvals/[id]/reject/route.ts:13",
+     "platform/apps/cloud/lib/cloud/repository.ts:697-705"
+    ],
+    "description": "Apply/reject load the 200 newest pending rows and .find(); a valid older row is unreachable (404).",
+    "recommendation": "Use the tenant-scoped PostgresPendingStore.get(id) plus a single-row created_by query."
+   },
+   {
+    "id": "J1-11",
+    "title": "Engine host state lives in files on one volume; cannot run more than one replica",
+    "severity": "P3",
+    "classification": "VERIFIED_CODE",
+    "evidence": [
+     "services/engine-demo/serve_demo.py:173-180,246-264,304-306,324,344",
+     "docker-compose.yml:55-57"
+    ],
+    "description": "Report index read-modify-write guarded only by an in-process asyncio.Lock; kill switch is a file; demo model state is per process. Horizontal scaling and blue/green deploys are precluded.",
+    "recommendation": "Move report metadata and the kill switch to Postgres with tenant keys."
+   },
+   {
+    "id": "J1-12",
+    "title": "Snapchat exists only on the adport side of the bridge",
+    "severity": "P3",
+    "classification": "VERIFIED_CODE",
+    "evidence": [
+     "engine/src/paid_media_agent/domain/common.py:37-41",
+     "engine/config/accounts.example.toml",
+     "platform/apps/cloud/lib/markting/sandbox-provider.ts:212-213,226-227,376",
+     "infra/seed/seed-demo.mjs:54",
+     "platform/apps/cloud/test/fixtures/engine-proposal.ts"
+    ],
+    "description": "The engine can never emit a snap_ads proposal in any mode; the seeded demo-snap alias and sandbox Snap account suggest a path reachable only from a hand-written test fixture or REST/MCP. Acknowledged in docs/PHASE3-REPORT.md:66.",
+    "recommendation": "Add a Snap fixture and write-policy rows upstream, or remove demo-snap from the seeded alias map."
+   },
+   {
+    "id": "J1-13",
+    "title": "Seeded sandbox alias rows break non-demo mode with a 500",
+    "severity": "P3",
+    "classification": "VERIFIED_CODE",
+    "evidence": [
+     "infra/seed/seed-demo.mjs:50-62",
+     "platform/apps/cloud/lib/markting/translate.ts:105,116,139-141",
+     "platform/apps/cloud/lib/markting/runtime.ts:215",
+     "platform/apps/cloud/lib/markting/bridge.ts:146",
+     "platform/packages/core/src/tools/registry.ts:76-80",
+     "platform/apps/cloud/lib/http.ts:24-33"
+    ],
+    "description": "With MARKTING_DEMO_MODE=false the tenant runtime has no sandbox tools; registry.get throws outside the BridgeAccessError catch and the user sees 'Internal server error' instead of an unsupported message.",
+    "recommendation": "Resolve the tool inside the try block and map missing tool/provider to the unsupported outcome."
+   }
+  ],
+  "capabilities": [
+   {
+    "capability": "AI analysis of the tenant's connected ad accounts",
+    "rating": "MOCK_ONLY",
+    "evidence": "serve_demo.py:163-166,383-388; runtime/catalog.py:51-58; fixtures/data/*.json; no adport→engine client"
+   },
+   {
+    "capability": "Natural-language → typed change proposal",
+    "rating": "MOCK_ONLY (demo) / EXISTS_BUT_LIMITED (live)",
+    "evidence": "serve_demo.py:63-66 regex; demo_script.py:158-170 canned; live limited to fixture aliases profiles.py:403-407"
+   },
+   {
+    "capability": "Engine proposal → adport guarded preview (bridge)",
+    "rating": "EXISTS_BUT_LIMITED",
+    "evidence": "translate.ts:65-123 (2 ops, 5 providers + sandbox); bridge.ts:136-141 unsupported path wedges thread"
+   },
+   {
+    "capability": "Two-step preview/approve/apply gate",
+    "rating": "EXISTS_AND_STRONG",
+    "evidence": "policy/engine.ts:58-125; tools/write.ts:39-66; apply/route.ts:18-27; vitest 53/53"
+   },
+   {
+    "capability": "Engine cannot write to ad platforms",
+    "rating": "EXISTS_AND_STRONG",
+    "evidence": "serve_demo.py:69-81,139-180; test_demo_api.py:66-145 (pytest 7/7)"
+   },
+   {
+    "capability": "Multi-tenant isolation",
+    "rating": "PARTIAL",
+    "evidence": "adport: RLS + principal-scoped stores (migration:68-89, repository.ts:371-427); engine: none (J1-02, J1-05)"
+   },
+   {
+    "capability": "Periodic/scheduled reports",
+    "rating": "MOCK_ONLY",
+    "evidence": "fixture data; on-demand POST only; global listing (serve_demo.py:355-358)"
+   },
+   {
+    "capability": "Continuous monitoring / anomaly-driven proposals",
+    "rating": "MISSING",
+    "evidence": "grep cron|schedule|monitor in glue → none"
+   },
+   {
+    "capability": "Streaming or asynchronous chat",
+    "rating": "MISSING",
+    "evidence": "engine-client.ts:113-116; messages/route.ts:7"
+   },
+   {
+    "capability": "Budget policy sophistication",
+    "rating": "EXISTS_BUT_LIMITED",
+    "evidence": "policy.ts:172-185; engine.ts:110-113"
+   },
+   {
+    "capability": "Snapchat AI proposals",
+    "rating": "MISSING (engine) / EXISTS_BUT_LIMITED (adport wire)",
+    "evidence": "common.py:37-41; markting-snapchat-wire.test.ts uses synthetic fixture"
+   },
+   {
+    "capability": "Approval workflow (notifications, SLA, quorum)",
+    "rating": "MISSING",
+    "evidence": "approval-actions.tsx; policy.ts:184 15-min TTL only"
+   },
+   {
+    "capability": "Automated execution without a human",
+    "rating": "UNSAFE_TO_AUTOMATE",
+    "evidence": "the only brain is scripted or fixture-fed; correctly not offered"
+   }
+  ],
+  "key_findings": [
+   "Not an intelligent media buyer: the engine is forced to sample (fixture) data in both demo and live modes (serve_demo.py:163-166,383-388); 'live' swaps the model, not the data, and no adport→engine data path exists.",
+   "Default demo 'AI' is a regex (serve_demo.py:63-66) selecting a canned proposal (demo-google/g-103→240) whose fabricated reason is shown to approvers; nothing prevents the scripted engine from being paired with real accounts (MARKTING_DEMO_MODE=false).",
+   "The single-write-path invariant is real and defended in depth on both sides (VERIFIED_CODE + VERIFIED_TEST: pytest 7/7, vitest 53/53); engine/ is byte-identical to its import commit.",
+   "Engine has no tenant concept: one caller identity, one workspace volume, one DB without org column, and a global report index/file surface listable and downloadable by any org (J1-02; P0 the moment real data flows).",
+   "Demo model is a process-global mutable singleton executed in a thread pool; concurrent users corrupt each other's script (J1-03).",
+   "Unsupported proposals are never handed back to the engine, so a real tenant's first change request wedges the thread (J1-06).",
+   "Scale will hurt first at: synchronous 4-minute HTTP chat into a single uvicorn process, file-based report index and kill switch, per-org alias map over a global fixture alias set, O(n) pending lookups capped at 200.",
+   "README/UI copy ('Analyses connected accounts', 'Ask about your campaigns…') contradicts the code; the README's own 'Not production-ready' list is honest but incomplete (omits global reports and shared live-mode workspace)."
+  ],
+  "disagreements": "README.md:14,83 and lib/i18n/messages/assistant.ts:5,16 claim analysis of connected accounts — the engine only ever reads shipped fixtures (serve_demo.py:163-166,383-388; catalog.py:51-58). README.md:49,118 present 'live' as a live assistant — live changes only the model. docs/PHASE1-REPORT.md:42 says 'Live mode has no such limit' — live can still only propose against the three fixture aliases (profiles.py:403-407; writes.py:389-402). approvals.ts:5 and apply/route.ts:9-12 imply the policy is fully re-verified at apply — only protected accounts are re-checked (engine.ts:110-113; TODO.md:104 admits it). README.md:77 'scheduled reports' — reports are on-demand POST only, no scheduler wired. PHASE1-REPORT.md:17 'three fixture accounts and eight campaigns' — four and ten after Phase 3 (stale). README.md:59,128 present markting_threads as the tenant-isolation story — omits global engine reports (J1-02) and shared live workspace/checkpoints (J1-05). docs/ARCHITECTURE.md §6 #5 ('serve cannot use scripted:demo') is superseded by serve_demo.py:224; the file predates the markting layer though README.md:66,135 calls it 'the architecture as it is in the code'. Where I tried to disprove and failed: UPSTREAM.md 'No file modified' in engine/ (git diff empty), PHASE1 fail-closed boot assertions, and the single write path all hold.",
+  "confidence": 0.82,
+  "not_verified": "Concurrency interleaving of the shared scripted model (J1-03) reasoned from run_in_executor and a single shared instance, not reproduced with parallel requests. Cross-tenant file reads in live mode (J1-05) reasoned from mounts and FilesystemPermission rules; no model key available and live mode has never been run in this repo (PHASE1-REPORT.md:37). docker compose topology read statically (network blocked). LangGraph behaviour on new input to an interrupted thread not checked (J1-06 does not depend on it). Not inspected: upstream provider packages beyond account-scope.ts, Slack surface, billing, i18n correctness, engine tools/direct/*, reports/cadence.py internals."
+ },
+ "J2": {
+  "agent_id": "J2",
+  "role": "Independent security skeptic (red team)",
+  "report_path": "docs/audit/agents/J2.md",
+  "scope": "Red-team pass over the markting-ai glue: demo-mode flags (MARKTING_DEMO_MODE, MARKTING_ALLOW_SELF_APPROVAL, ADPORT_DEMO, includeMock), the sandbox provider inside the cloud app, the shared engine bearer token, Approvals apply/reject routes and the created_by self-approval check, engine report routes and file streaming, the locale cookie route, the engine's unauthenticated FastAPI surface, infra env/seed scripts, Dockerfile build context, tenant isolation of threads/proposals/reports, and README/PHASE1-REPORT claims vs code. Ran the markting vitest suites, the engine-host pytest suite, the infra node test, and an in-process ASGI probe of the engine host with two caller tokens (synthetic data, no network).",
+  "files_inspected": [
+   "/home/user/markting-ai/.env.example",
+   "/home/user/markting-ai/.gitignore",
+   "/home/user/markting-ai/Makefile",
+   "/home/user/markting-ai/docker-compose.yml",
+   "/home/user/markting-ai/README.md",
+   "/home/user/markting-ai/UPSTREAM.md",
+   "/home/user/markting-ai/docs/PHASE1-REPORT.md",
+   "/home/user/markting-ai/docs/TODO.md",
+   "/home/user/markting-ai/infra/cloud.Dockerfile",
+   "/home/user/markting-ai/infra/package.json",
+   "/home/user/markting-ai/infra/scripts/fill-env.mjs",
+   "/home/user/markting-ai/infra/scripts/sync-supabase-env.mjs",
+   "/home/user/markting-ai/infra/scripts/stripe-setup.mjs",
+   "/home/user/markting-ai/infra/seed/seed-demo.mjs",
+   "/home/user/markting-ai/services/engine-demo/serve_demo.py",
+   "/home/user/markting-ai/services/engine-demo/tests/test_demo_api.py",
+   "/home/user/markting-ai/engine/Dockerfile",
+   "/home/user/markting-ai/engine/src/paid_media_agent/surfaces/api/app.py",
+   "/home/user/markting-ai/engine/src/paid_media_agent/surfaces/runner.py",
+   "/home/user/markting-ai/engine/src/paid_media_agent/config.py",
+   "/home/user/markting-ai/engine/src/paid_media_agent/reports/bridge.py",
+   "/home/user/markting-ai/engine/src/paid_media_agent/tools/artifacts.py",
+   "/home/user/markting-ai/platform/apps/cloud/lib/markting/env.ts",
+   "/home/user/markting-ai/platform/apps/cloud/lib/markting/runtime.ts",
+   "/home/user/markting-ai/platform/apps/cloud/lib/markting/engine-client.ts",
+   "/home/user/markting-ai/platform/apps/cloud/lib/markting/bridge.ts",
+   "/home/user/markting-ai/platform/apps/cloud/lib/markting/repository.ts",
+   "/home/user/markting-ai/platform/apps/cloud/lib/markting/assistant.ts",
+   "/home/user/markting-ai/platform/apps/cloud/lib/markting/sandbox-provider.ts",
+   "/home/user/markting-ai/platform/apps/cloud/lib/markting/translate.ts",
+   "/home/user/markting-ai/platform/apps/cloud/lib/cloud/auth.ts",
+   "/home/user/markting-ai/platform/apps/cloud/lib/cloud/repository.ts",
+   "/home/user/markting-ai/platform/apps/cloud/lib/cloud/runtime.ts",
+   "/home/user/markting-ai/platform/apps/cloud/lib/cloud/account-scope.ts",
+   "/home/user/markting-ai/platform/apps/cloud/lib/cloud/dashboard.ts",
+   "/home/user/markting-ai/platform/apps/cloud/lib/http.ts",
+   "/home/user/markting-ai/platform/apps/cloud/lib/supabase/server.ts",
+   "/home/user/markting-ai/platform/apps/cloud/lib/supabase/proxy.ts",
+   "/home/user/markting-ai/platform/apps/cloud/lib/supabase/browser.ts",
+   "/home/user/markting-ai/platform/apps/cloud/lib/i18n/config.ts",
+   "/home/user/markting-ai/platform/apps/cloud/lib/i18n/server.ts",
+   "/home/user/markting-ai/platform/apps/cloud/app/api/approvals/[id]/apply/route.ts",
+   "/home/user/markting-ai/platform/apps/cloud/app/api/approvals/[id]/reject/route.ts",
+   "/home/user/markting-ai/platform/apps/cloud/app/api/assistant/messages/route.ts",
+   "/home/user/markting-ai/platform/apps/cloud/app/api/reports/engine/route.ts",
+   "/home/user/markting-ai/platform/apps/cloud/app/api/reports/engine/[name]/route.ts",
+   "/home/user/markting-ai/platform/apps/cloud/app/api/locale/route.ts",
+   "/home/user/markting-ai/platform/apps/cloud/app/api/v1/tools/[tool]/route.ts",
+   "/home/user/markting-ai/platform/apps/cloud/app/mcp/route.ts",
+   "/home/user/markting-ai/platform/apps/cloud/app/dashboard/approvals/page.tsx",
+   "/home/user/markting-ai/platform/apps/cloud/app/dashboard/approvals/approval-actions.tsx",
+   "/home/user/markting-ai/platform/apps/cloud/app/dashboard/assistant/assistant-chat.tsx",
+   "/home/user/markting-ai/platform/apps/cloud/app/dashboard/reports/engine-reports.tsx",
+   "/home/user/markting-ai/platform/apps/cloud/proxy.ts",
+   "/home/user/markting-ai/platform/apps/cloud/next.config.ts",
+   "/home/user/markting-ai/platform/apps/cloud/.env.local (key names only)",
+   "/home/user/markting-ai/platform/supabase/migrations/20261002000000_markting_bridge.sql",
+   "/home/user/markting-ai/platform/packages/core/src/policy/engine.ts",
+   "/home/user/markting-ai/platform/packages/mcp/src/index.ts"
+  ],
+  "tests_executed": [
+   "cd platform && pnpm --filter @adport/cloud exec vitest run test/markting-translate.test.ts test/markting-bridge.test.ts test/markting-engine-client.test.ts test/markting-sandbox.test.ts test/markting-snapchat-wire.test.ts test/i18n.test.ts => 0 (6 files, 53 passed)",
+   "cd engine && uv run --frozen python -m pytest -q ../services/engine-demo/tests => 0 (7 passed)",
+   "node --test infra/scripts/stripe-setup.test.mjs => 0 (3 passed)",
+   "cd engine && uv run --frozen python <scratchpad>/probe.py (in-process ASGI probe of serve_demo.build_app_async with tokens tokA:adport-bridge and tokB:other-tenant) => 0 (unauth /docs,/openapi.json,/redoc,/health,/markting/info all 200; /reports 401; caller B listed and downloaded caller A's report 200; B on A's thread 403; B reading A's proposal 403; approve with bridge token 403 approver_policy)",
+   "git ls-files | grep -E '__pycache__|\\.pyc$|\\.next/|\\.env' => 0 (two tracked .pyc files)",
+   "git diff fa7bf19 HEAD --stat -- platform => 0 (95 files changed in adport tree since import)"
+  ],
+  "findings": [
+   {
+    "id": "J2-01",
+    "title": "Live mode: engine always reasons over synthetic fixture data while adport applies the result to real accounts",
+    "severity": "P1",
+    "classification": "VERIFIED_CODE",
+    "evidence": [
+     "services/engine-demo/serve_demo.py:383-387",
+     "services/engine-demo/serve_demo.py:163-166",
+     "docker-compose.yml:47",
+     "platform/apps/cloud/lib/markting/translate.ts:133-145",
+     "platform/apps/cloud/lib/markting/repository.ts:40-50",
+     "platform/apps/cloud/lib/markting/runtime.ts:50",
+     "README.md:116-118"
+    ],
+    "description": "The host pins paid_media_data_mode to 'sample' in both demo and live modes and refuses to boot otherwise. With MARKTING_ENGINE_MODE=live and MARKTING_DEMO_MODE=false the model analyses bundled fixture campaigns and its proposals are translated via markting_account_aliases onto real provider accounts through the real tenant runtime. README presents live mode as 'real accounts' without this caveat.",
+    "recommendation": "Document that live mode is model-live/data-synthetic and refuse alias bindings to non-sandbox providers while the engine is in sample mode; design a per-tenant live data path before offering live mode; add a cloud boot assertion tied to the engine's reported data mode."
+   },
+   {
+    "id": "J2-02",
+    "title": "Engine reports are a global, cross-organization resource",
+    "severity": "P1",
+    "classification": "VERIFIED_RUNTIME",
+    "evidence": [
+     "platform/apps/cloud/app/api/reports/engine/route.ts:35-43",
+     "platform/apps/cloud/app/api/reports/engine/route.ts:46-57",
+     "platform/apps/cloud/app/api/reports/engine/[name]/route.ts:68-84",
+     "services/engine-demo/serve_demo.py:246-307",
+     "services/engine-demo/serve_demo.py:355-374",
+     "docker-compose.yml:49",
+     "probe.py => exit 0: caller B listed and downloaded caller A's report (200)"
+    ],
+    "description": "Report runs and their HTML/PDF/JSON files carry no organization on either side; any authenticated user (including viewers) of any organization lists and downloads every run. Content is synthetic today (see J2-01) so no customer data leaks yet, but the boundary is structurally absent and rate limiting is per org on a single shared engine.",
+    "recommendation": "Record organization_id per run on the adport side, scope engine runs by an org-specific requested_by (per-org token or request field), filter list/download by org, and rate-limit the shared engine globally."
+   },
+   {
+    "id": "J2-03",
+    "title": "Separation-of-duties control on Apply is bypassable three ways",
+    "severity": "P2",
+    "classification": "VERIFIED_CODE",
+    "evidence": [
+     ".env.example:47",
+     ".env.example:49",
+     "Makefile:21-23",
+     "platform/apps/cloud/lib/markting/env.ts:16",
+     "platform/apps/cloud/app/api/approvals/[id]/apply/route.ts:22",
+     "platform/apps/cloud/lib/cloud/repository.ts:371-381",
+     "platform/apps/cloud/lib/cloud/repository.ts:333",
+     "platform/apps/cloud/app/api/v1/tools/[tool]/route.ts:5-13",
+     "platform/apps/cloud/app/mcp/route.ts:14",
+     "platform/packages/core/src/policy/engine.ts:104"
+    ],
+    "description": "(1) Shipped .env.example sets MARKTING_ALLOW_SELF_APPROVAL=true and MARKTING_DEMO_MODE=true, which make env copies. (2) The check is `row.createdBy && ...`; API-key principals have no userId so every REST/MCP-created preview has created_by=null and skips the check. (3) The check lives only in the dashboard route; /api/v1 and /mcp apply pending_operation_id with the same key that created the preview. README.md:79 and PHASE1-REPORT.md:16 claim a human approves on the Approvals page and requester != approver.",
+    "recommendation": "Ship the flags off by default; persist created_by_api_key_id and refuse applies by the key's owner; enforce the rule in the pending store/PolicyEngine so REST and MCP are covered, or document them as single-actor paths."
+   },
+   {
+    "id": "J2-04",
+    "title": "Cloud master secrets are injected into the engine container",
+    "severity": "P2",
+    "classification": "VERIFIED_CODE",
+    "evidence": [
+     "docker-compose.yml:17",
+     "docker-compose.yml:40",
+     ".env.example:7-13",
+     ".env.example:39-41",
+     ".env.example:47-50",
+     "docker-compose.yml:56"
+    ],
+    "description": "Both services load the same .env via env_file, so the engine process (which executes model-driven code with skills mounted) receives SUPABASE_SECRET_KEY, the Postgres superuser DSN, ADPORT_CLOUD_ENCRYPTION_KEY, ADPORT_API_KEY_PEPPER, ADPORT_MCP_OAUTH_SIGNING_KEY, STRIPE_SECRET_KEY and the demo password.",
+    "recommendation": "Use per-service env files or an explicit environment allowlist for the engine; never pass the Supabase service key or the vault key to the engine."
+   },
+   {
+    "id": "J2-05",
+    "title": "Engine exposes unauthenticated /docs, /redoc, /openapi.json, /health and /markting/info",
+    "severity": "P3",
+    "classification": "VERIFIED_RUNTIME",
+    "evidence": [
+     "engine/src/paid_media_agent/surfaces/api/app.py:51",
+     "engine/src/paid_media_agent/surfaces/api/app.py:80-89",
+     "services/engine-demo/serve_demo.py:326-336",
+     "docker-compose.yml:64",
+     "probe.py => exit 0: all five routes 200 without a token"
+    ],
+    "description": "FastAPI defaults publish interactive docs and the OpenAPI schema (listing /proposals/{id}/approve and /edit); /markting/info returns mode, write provider class, kill-switch state, approver list and account aliases without auth. The port is not published to the host, so exposure is limited to the compose network.",
+    "recommendation": "Disable docs/redoc/openapi in the host, put /markting/info behind the caller dependency, keep /health minimal."
+   },
+   {
+    "id": "J2-06",
+    "title": "One shared engine token for every tenant; the token can reach approve/edit on the engine",
+    "severity": "P3",
+    "classification": "VERIFIED_RUNTIME",
+    "evidence": [
+     "docker-compose.yml:49",
+     "platform/apps/cloud/lib/markting/engine-client.ts:119",
+     "platform/apps/cloud/lib/markting/engine-client.ts:135-137",
+     "engine/src/paid_media_agent/surfaces/api/app.py:116-148",
+     "services/engine-demo/serve_demo.py:159-162",
+     "services/engine-demo/serve_demo.py:69-81",
+     "platform/apps/cloud/lib/markting/assistant.ts:180-184",
+     "platform/apps/cloud/lib/markting/repository.ts:17-27",
+     "engine/src/paid_media_agent/surfaces/runner.py:86-89",
+     "probe.py => exit 0: approve with bridge token 403 approver_policy; cross-caller thread/proposal 403"
+    ],
+    "description": "All tenants are a single engine caller; thread and proposal isolation rests entirely on the cloud's thread-id regex and markting_threads. Only a client-side regex stops the bridge from calling approve/edit; the engine accepts those routes for the token but refuses by policy (empty approver set, proposal-only provider, kill switch). Defense in depth holds today.",
+    "recommendation": "Issue one token per organization (engine already supports token:caller pairs) or a signed per-request tenant claim; keep the kill switch and empty approver set as the second layer."
+   },
+   {
+    "id": "J2-07",
+    "title": "Approvers approve a summary, not the change",
+    "severity": "P2",
+    "classification": "VERIFIED_CODE",
+    "evidence": [
+     "platform/apps/cloud/app/dashboard/approvals/page.tsx:30-40",
+     "platform/apps/cloud/app/dashboard/approvals/approval-actions.tsx:19",
+     "platform/apps/cloud/lib/markting/sandbox-provider.ts:156-162",
+     "docs/TODO.md:30"
+    ],
+    "description": "The Approvals table renders preview.summary, provider, account, kind, provenance and expiry; preview.changes, budgetDeltas and coercions are never shown and Apply uses a generic window.confirm. The only human gate in the product does not show from/to amounts. Acknowledged as a follow-up in TODO.md.",
+    "recommendation": "Render the full preview (changes, budget deltas with currency, coercions, serverValidated) plus the engine reason and risk flags before enabling Apply; require typed confirmation for large deltas."
+   },
+   {
+    "id": "J2-08",
+    "title": "MARKTING_DEMO_MODE is a global switch that mixes synthetic and real paths in one deployment",
+    "severity": "P2",
+    "classification": "VERIFIED_CODE",
+    "evidence": [
+     "platform/apps/cloud/lib/markting/runtime.ts:49-57",
+     "platform/apps/cloud/app/mcp/route.ts:14",
+     "platform/apps/cloud/app/api/v1/tools/[tool]/route.ts:8",
+     "platform/apps/cloud/lib/markting/repository.ts:45",
+     "platform/apps/cloud/lib/markting/sandbox-provider.ts:6-8",
+     "platform/packages/core/src/policy/engine.ts:104",
+     "platform/apps/cloud/app/dashboard/assistant/assistant-chat.tsx:89"
+    ],
+    "description": "When the env flag is true, the Assistant and Approvals apply paths of every organization use the credential-free SandboxProvider while /mcp and /api/v1 keep real providers; sandbox pending rows and audit events share the production tables; the only UI hint is a placeholder string. The sandbox-provider comment claiming tool names were chosen to evade an upstream demo_/mock_/synthetic_ refusal could not be substantiated (NOT_VERIFIED); the provider-id check in PolicyEngine.apply does prevent cross-mode applies.",
+    "recommendation": "Make demo a per-organization attribute set by the seed, show a persistent banner, and tag or segregate sandbox audit events."
+   },
+   {
+    "id": "J2-09",
+    "title": "No .dockerignore: .env.local with secrets is in the build context and NEXT_PUBLIC_* are baked at build time without build args",
+    "severity": "P2",
+    "classification": "INFERRED",
+    "evidence": [
+     "infra/cloud.Dockerfile:140",
+     "ls platform/.dockerignore platform/apps/cloud/.dockerignore => missing",
+     "platform/apps/cloud/.env.local (exists; keys SUPABASE_SECRET_KEY, ADPORT_CLOUD_ENCRYPTION_KEY, ADPORT_API_KEY_PEPPER, ADPORT_MCP_OAUTH_SIGNING_KEY)",
+     "platform/.gitignore:8-9",
+     "platform/apps/cloud/lib/supabase/browser.ts:7-8",
+     "docker-compose.yml:21",
+     "docs/PHASE1-REPORT.md:36"
+    ],
+    "description": "COPY . . pulls whatever .env* and build output sit in platform/ into the build stage where next build reads them; a clean checkout yields an undefined browser Supabase URL, while compose sets NEXT_PUBLIC_SUPABASE_URL only at runtime and to host.docker.internal, which a host browser cannot resolve. Docker builds are blocked in this sandbox, so the runtime effect is inferred; the secret-in-build-context fact is VERIFIED_CODE (P3 hygiene).",
+    "recommendation": "Add platform/.dockerignore (.env*, node_modules, .next, .turbo), pass NEXT_PUBLIC_* as build args, and document a host-resolvable Supabase URL for the browser."
+   },
+   {
+    "id": "J2-10",
+    "title": "Infra scripts write secrets with default permissions; seed uses service key and superuser DSN with no local-only guard",
+    "severity": "P3",
+    "classification": "VERIFIED_CODE",
+    "evidence": [
+     "infra/scripts/fill-env.mjs:24",
+     "infra/scripts/sync-supabase-env.mjs:51",
+     "infra/scripts/stripe-setup.mjs:86",
+     "infra/seed/seed-demo.mjs:68-70",
+     "infra/seed/seed-demo.mjs:76-77",
+     "infra/seed/seed-demo.mjs:96",
+     "Makefile:41-43"
+    ],
+    "description": "Generated .env files get umask-default permissions; the seed connects with the Supabase service-role key and the Postgres DSN from .env (superuser by default), creates a known-email account, grants the operator plan by direct UPDATE and never refuses a non-local Supabase URL; make stripe-setup exports the whole .env into the shell.",
+    "recommendation": "chmod 0600 after writing; refuse to seed unless the Supabase host is loopback/host.docker.internal or an explicit override flag is passed; minimise privileges used by the seed."
+   },
+   {
+    "id": "J2-11",
+    "title": "Locale cookie route and report file streaming: no defect found",
+    "severity": "P3",
+    "classification": "VERIFIED_CODE",
+    "evidence": [
+     "platform/apps/cloud/app/api/locale/route.ts:95-100",
+     "platform/apps/cloud/lib/i18n/config.ts:7-9",
+     "platform/apps/cloud/app/api/reports/engine/[name]/route.ts:73-83",
+     "platform/apps/cloud/lib/markting/engine-client.ts:193",
+     "services/engine-demo/serve_demo.py:363",
+     "engine/src/paid_media_agent/reports/bridge.py:35-48"
+    ],
+    "description": "Locale route is unauthenticated by design, enum-validated, sets a non-secret cookie. Report file route enforces a content-type allowlist, attachment disposition with sanitized filename, nosniff and no-store; the engine applies a tighter filename regex and realpath/symlink/size checks. No traversal found. Recorded as a non-finding so it is not re-derived.",
+    "recommendation": "None required; optionally align the cloud filename regex with the engine's."
+   },
+   {
+    "id": "J2-12",
+    "title": "Compiled Python bytecode is tracked in git",
+    "severity": "P3",
+    "classification": "VERIFIED_CODE",
+    "evidence": [
+     "git ls-files => services/engine-demo/__pycache__/serve_demo.cpython-311.pyc, services/engine-demo/tests/__pycache__/test_demo_api.cpython-311-pytest-9.1.1.pyc",
+     ".gitignore:1-11 (no __pycache__ rule)"
+    ],
+    "description": "Two .pyc files are committed; the root .gitignore lacks __pycache__/ and *.pyc rules.",
+    "recommendation": "Add the ignore rules and git rm --cached the two files."
+   },
+   {
+    "id": "J2-13",
+    "title": "No alias-management surface for live accounts",
+    "severity": "GAP",
+    "classification": "VERIFIED_CODE",
+    "evidence": [
+     "rg upsertAlias platform/apps/cloud => only lib/markting/repository.ts and test/markting-repository.database.test.ts",
+     "platform/apps/cloud/lib/markting/repository.ts:52-58"
+    ],
+    "description": "upsertAlias has no caller outside tests, so binding an engine alias to a real provider account (the precondition for any live-mode preview) requires hand-written SQL with no validation against organization_ad_accounts.",
+    "recommendation": "Add an owner/admin-only UI/API that validates the account against the organization's enabled ad accounts before inserting an alias."
+   }
+  ],
+  "key_findings": [
+   "Live mode is model-live but data-synthetic: serve_demo.py pins PAID_MEDIA_DATA_MODE=sample in every mode, so real adport writes would be driven by analysis of fixture campaigns (P1, contradicts README.md:116-118).",
+   "Engine reports are global: any authenticated user of any organization lists and downloads every run; runtime-verified with two caller tokens (P1 structural cross-tenant, synthetic content today).",
+   "The requester != approver control is dashboard-only, skipped when created_by is null (all API-key previews), and the shipped .env.example turns it off (P2).",
+   "Both compose services load the same .env, so the engine container receives the Supabase service key, DB superuser DSN, vault encryption key, API-key pepper and Stripe secret (P2).",
+   "Engine /docs, /redoc, /openapi.json, /health and /markting/info answer without a token (runtime-verified, P3; port not published to host).",
+   "The single human gate shows only preview.summary, never changes or budget deltas (P2, acknowledged in TODO.md:30).",
+   "MARKTING_DEMO_MODE is a process-wide flag defaulting to true that routes every org's Assistant/Approvals through the sandbox while /mcp and /api/v1 stay real (P2).",
+   "All markting test suites pass (vitest 53, pytest 7, node 3); the proposal-only/kill-switch guarantees hold at runtime (approve with the bridge token -> 403)."
+  ],
+  "disagreements": "README.md:116-118 and PHASE1-REPORT.md:37-38 present MARKTING_DEMO_MODE=false / MARKTING_ENGINE_MODE=live as 'real accounts' operation, but serve_demo.py:163-166,383-387 and docker-compose.yml:47 pin the engine to sample fixture data in every mode. README.md:79 says nothing is applied until a human approves on the Approvals page, but /api/v1/tools/[tool] and /mcp apply pending_operation_id with the creating API key. PHASE1-REPORT.md:16 claims requester != approver unless the flag is set, but the check is dashboard-only, skipped for null created_by (every API-key preview), and the shipped .env.example:49 sets the override to true. PHASE1-REPORT.md:14 presents engine reports as an organization feature while runs/files are engine-global (runtime-verified cross-caller download). sandbox-provider.ts:6-8 claims an upstream production refusal of demo_/mock_/synthetic_ tool names that I could not find anywhere in the cloud or MCP code (NOT_VERIFIED). PHASE1-REPORT.md:31 browser E2E was run from source on :3100, not the compose image, whose browser bundle has no NEXT_PUBLIC_SUPABASE_URL build arg and whose runtime value is host.docker.internal.",
+  "confidence": 0.82,
+  "not_verified": "docker compose up --build (network-blocked), so J2-09's browser-auth effect is inferred from browser.ts:7-8 and the missing build args. MARKTING_ENGINE_MODE=live with a real model key was not exercised; J2-01 rests on the settings code path. markting-repository.database.test.ts (needs local Supabase) was not run. Existence of any upstream guard refusing demo_/mock_/synthetic_ tool names was searched for and not found, recorded as NOT_VERIFIED rather than false. Supabase auth cookie SameSite attributes come from @supabase/ssr defaults and were not inspected in the installed version, so CSRF mitigation on the JSON POST routes is assumed, not verified. Values in platform/apps/cloud/.env.local were deliberately not read (key names only). Other agents' reports under docs/audit/agents were not read."
+ },
+ "J4": {
+  "agent_id": "J4",
+  "role": "Independent AI skeptic",
+  "report_path": "docs/audit/agents/J4.md",
+  "scope": "How much AI exists in markting-ai: engine/instructions.md and skills, assembly.py live-model path, the scripted demo model in services/engine-demo/serve_demo.py (LoopingScriptedChatModel + WRITE_INTENT regex), compose default MARKTING_ENGINE_MODE=demo, deterministic analysis layer (compute/compare_periods/summary), proposal risk derivation, evaluation assets (tests/eval, tests/behavior, engine-demo tests), cloud-side glue (assistant/bridge/translate/engine-client/approvals UI), and docs claims (README, ARCHITECTURE, PHASE reports, TODO, UPSTREAM).",
+  "files_inspected": [
+   "engine/instructions.md",
+   "engine/identity.py",
+   "engine/src/paid_media_agent/assembly.py",
+   "engine/src/paid_media_agent/config.py",
+   "engine/src/paid_media_agent/runtime/mda.py",
+   "engine/src/paid_media_agent/runtime/profiles.py",
+   "engine/src/paid_media_agent/middleware/tool_selection.py",
+   "engine/src/paid_media_agent/middleware/current_date.py",
+   "engine/src/paid_media_agent/testing/scripted_model.py",
+   "engine/src/paid_media_agent/testing/demo_script.py",
+   "engine/src/paid_media_agent/testing/fake_models.py",
+   "engine/src/paid_media_agent/domain/analysis.py",
+   "engine/src/paid_media_agent/domain/reports.py",
+   "engine/src/paid_media_agent/domain/proposals.py",
+   "engine/src/paid_media_agent/tools/compute.py",
+   "engine/src/paid_media_agent/tools/compare_periods.py",
+   "engine/src/paid_media_agent/tools/summary.py",
+   "engine/src/paid_media_agent/tools/fixtures.py",
+   "engine/src/paid_media_agent/tools/writes.py",
+   "engine/src/paid_media_agent/tools/reports.py",
+   "engine/src/paid_media_agent/reports/cadence.py",
+   "engine/src/paid_media_agent/fixtures/data/google_ads.json",
+   "engine/src/paid_media_agent/fixtures/data/meta_ads.json",
+   "engine/src/paid_media_agent/fixtures/data/reddit_ads.json",
+   "engine/config/accounts.example.toml",
+   "engine/pyproject.toml",
+   "engine/Dockerfile",
+   "engine/workspace/skills/paid-media-analysis/SKILL.md",
+   "engine/workspace/skills/paid-media-analysis/references/validation-checklist.md",
+   "engine/workspace/skills/paid-media-wiki/SKILL.md",
+   "engine/workspace/skills/paid-media-wiki/anomaly-and-significance.md",
+   "engine/workspace/skills/paid-media-wiki/decision-model.md",
+   "engine/workspace/skills/paid-media-wiki/benchmarks.md",
+   "engine/workspace/skills/paid-media-wiki/bidding-and-budget.md",
+   "engine/workspace/skills/paid-media-wiki/write-safety.md",
+   "engine/workspace/skills/paid-media-writes/SKILL.md",
+   "engine/tests/eval/README.md",
+   "engine/tests/eval/questions.json",
+   "engine/tests/eval/run_questions.py",
+   "engine/tests/eval/grade.py",
+   "engine/tests/behavior/test_scripted_behavior.py",
+   "services/engine-demo/serve_demo.py",
+   "services/engine-demo/tests/test_demo_api.py",
+   "docker-compose.yml",
+   "Makefile",
+   ".env.example",
+   "infra/seed/seed-demo.mjs",
+   "platform/apps/cloud/lib/markting/assistant.ts",
+   "platform/apps/cloud/lib/markting/bridge.ts",
+   "platform/apps/cloud/lib/markting/translate.ts",
+   "platform/apps/cloud/lib/markting/engine-client.ts",
+   "platform/apps/cloud/lib/markting/env.ts",
+   "platform/apps/cloud/lib/markting/repository.ts",
+   "platform/apps/cloud/lib/markting/runtime.ts",
+   "platform/apps/cloud/lib/markting/sandbox-provider.ts",
+   "platform/apps/cloud/app/api/assistant/messages/route.ts",
+   "platform/apps/cloud/app/api/approvals/[id]/apply/route.ts",
+   "platform/apps/cloud/app/api/approvals/[id]/reject/route.ts",
+   "platform/apps/cloud/app/dashboard/approvals/page.tsx",
+   "platform/apps/cloud/app/dashboard/assistant/assistant-chat.tsx",
+   "platform/apps/cloud/lib/i18n/messages/assistant.ts",
+   "platform/apps/cloud/lib/i18n/messages/reports.ts",
+   "README.md",
+   "UPSTREAM.md",
+   "docs/ARCHITECTURE.md",
+   "docs/PHASE0-REPORT.md",
+   "docs/PHASE1-REPORT.md",
+   "docs/TODO.md",
+   "engine/README.md"
+  ],
+  "tests_executed": [
+   "cd engine && uv run --frozen python -m pytest -q ../services/engine-demo/tests => 0 (7 passed)",
+   "cd engine && uv run --frozen python -m pytest -q tests/behavior tests/unit/test_compute.py tests/unit/test_summary.py tests/unit/test_demo.py => 4 (my typo: files do not exist)",
+   "cd engine && uv run --frozen python -m pytest -q tests/behavior tests/unit/test_compute.py tests/unit/test_summarize_window.py => 1 (12 passed, 1 failed: test_demo_uses_the_fixture_anchor... fails because engine/workspace/KILL_SWITCH exists)",
+   "python3 <scratch>/regex_probe.py (WRITE_INTENT vs tests/eval/questions.json + Arabic prompts) => 0 (6/15 route to write script; q01,q02,q04,q14 are analysis questions)",
+   "cd engine && uv run --frozen python <scratch>/probe_demo.py (in-process ASGI, demo mode, tmp workspace) => 0 ('What changed in Meta spend last week?' -> g-103 daily_budget 240 proposal, interrupted=True)",
+   "cd engine && uv run --frozen python <scratch>/probe_threads.py => 0 (second thread with same human count gets exhausted text; cross-thread state leak confirmed)",
+   "python3 fixture inspection of engine/src/paid_media_agent/fixtures/data/*.json => 0 (3/3/2 campaigns, 28/28/26 days, USD)",
+   "git ls-files engine/workspace/KILL_SWITCH; git check-ignore -v engine/workspace/KILL_SWITCH => 0 (untracked, ignored via engine/.gitignore:32)",
+   "find engine -path '*company-context*' => 0 (none found)"
+  ],
+  "findings": [
+   {
+    "id": "J4-01",
+    "title": "AI can never see a tenant's real ad data; README claims it analyses connected accounts",
+    "severity": "P1",
+    "classification": "VERIFIED_CODE",
+    "evidence": [
+     "services/engine-demo/serve_demo.py:383-388",
+     "services/engine-demo/serve_demo.py:139-170",
+     "services/engine-demo/serve_demo.py:183-191",
+     "engine/src/paid_media_agent/runtime/profiles.py:73-77",
+     "engine/src/paid_media_agent/runtime/profiles.py:146",
+     "engine/src/paid_media_agent/runtime/mda.py:65-72",
+     "engine/config/accounts.example.toml:5-21",
+     "platform/apps/cloud/lib/markting/assistant.ts:40-47",
+     "README.md:83"
+    ],
+    "description": "Both demo and live modes force paid_media_data_mode='sample' and the host refuses to start with any provider credential, so the model (scripted or real) only ever reads the three shipped synthetic fixture accounts (demo-google/meta/reddit). No read bridge from adport's tenant data to the engine exists; the cloud forwards only the user's text. README.md:83 says the engine 'Analyses connected accounts (spend, conversions, CPA, ROAS)'.",
+    "recommendation": "Build an adport-backed ReadProvider/catalog serving tenant reports under org-scoped aliases (engine protocols already support it), or correct README/UI to say analysis is demo-only. Do not ship real data without J4-05/J4-09 controls."
+   },
+   {
+    "id": "J4-02",
+    "title": "Demo intent regex turns analysis questions into a hard-coded Google budget-cut proposal on the Approvals queue",
+    "severity": "P2",
+    "classification": "VERIFIED_RUNTIME",
+    "evidence": [
+     "services/engine-demo/serve_demo.py:63-66",
+     "services/engine-demo/serve_demo.py:109-111",
+     "engine/src/paid_media_agent/testing/demo_script.py:158-170",
+     "platform/apps/cloud/lib/markting/assistant.ts:50-62",
+     "platform/apps/cloud/lib/markting/bridge.ts:76-96",
+     ".env.example:49",
+     "regex_probe.py exit 0: q01,q02,q04,q14 misrouted; Arabic 'تغيّر'/'الميزانية' match",
+     "probe_demo.py exit 0: 'What changed in Meta spend last week?' -> proposal google_ads__update_campaign_budget g-103 daily_budget=240 interrupted=True"
+    ],
+    "description": "WRITE_INTENT matches 'change', 'budget', 'تغيّر', 'ميزاني' etc., so performance questions trigger the write script, which always proposes g-103 -> 240 regardless of platform, campaign, direction or amount requested. The proposal is bridged into an adport pending operation shown with an Apply button; shipped .env.example allows self-approval.",
+    "recommendation": "Narrow routing to imperative change requests, label every demo turn as a replay in the response, stage a proposal only when the demo campaign is named, and add a test that the 15 eval questions route per their category."
+   },
+   {
+    "id": "J4-03",
+    "title": "Shared scripted-model state leaks across threads; second thread's first turn misfires",
+    "severity": "P2",
+    "classification": "VERIFIED_RUNTIME",
+    "evidence": [
+     "services/engine-demo/serve_demo.py:92-115",
+     "services/engine-demo/serve_demo.py:224-227",
+     "services/engine-demo/tests/test_demo_api.py:59-63",
+     "probe_threads.py exit 0: userA ok (call_count=5); userB same human count -> exhausted text (call_count=6)",
+     "probe_demo.py: t2 returned 'No receipt was returned: no tool result'"
+    ],
+    "description": "LoopingScriptedChatModel resets its script only when the count of human messages differs from the last call, but one instance is shared by every thread in the process, so the next thread's first message (same count=1) is not reset and yields the exhausted text or a receipt-less message. Mutable counters are also shared across concurrent asyncio requests. The test suite builds a fresh app per test and cannot observe this.",
+    "recommendation": "Key the script on thread_id or instantiate per request; add a two-thread test to test_demo_api.py."
+   },
+   {
+    "id": "J4-04",
+    "title": "Default deployment has zero model reasoning and the UI's demo label is bound to the wrong flag",
+    "severity": "P2",
+    "classification": "VERIFIED_CODE",
+    "evidence": [
+     "docker-compose.yml:51",
+     ".env.example:51",
+     "engine/src/paid_media_agent/testing/demo_script.py:85-129",
+     "engine/src/paid_media_agent/testing/demo_script.py:143-151",
+     "engine/src/paid_media_agent/assembly.py:236-245",
+     "platform/apps/cloud/lib/markting/assistant.ts:73",
+     "platform/apps/cloud/lib/markting/env.ts:14,29",
+     "platform/apps/cloud/app/dashboard/assistant/assistant-chat.tsx:89",
+     "platform/apps/cloud/lib/i18n/messages/assistant.ts:15-16,41-42",
+     "platform/apps/cloud/lib/i18n/messages/reports.ts:23-24,65-66",
+     "engine/src/paid_media_agent/reports/cadence.py:141"
+    ],
+    "description": "With MARKTING_ENGINE_MODE=demo (default) analysis prose is an f-string template and the proposal is fixed; no skills or wiki are read. The Assistant's 'demo accounts' placeholder depends on MARKTING_DEMO_MODE (sandbox provider), not the engine mode, so MARKTING_DEMO_MODE=false with the default engine mode shows 'Ask about your campaigns…' while replaying fixtures. The Reports card is titled 'AI analysis reports' but is a deterministic report with recommendations=[] and no model call.",
+    "recommendation": "Show /markting/info.mode in the Assistant header, prefix demo responses with a replay notice, rename the Reports card."
+   },
+   {
+    "id": "J4-05",
+    "title": "No computed significance, sample-size or magnitude gating; 'confidence' is a model-authored word",
+    "severity": "P2",
+    "classification": "VERIFIED_CODE",
+    "evidence": [
+     "engine/src/paid_media_agent/tools/compute.py:349-375",
+     "engine/src/paid_media_agent/tools/summary.py:27",
+     "engine/src/paid_media_agent/domain/reports.py:58",
+     "engine/src/paid_media_agent/tools/reports.py:33,93",
+     "engine/src/paid_media_agent/tools/writes.py:78-125",
+     "engine/src/paid_media_agent/tools/writes.py:390-436",
+     "engine/workspace/skills/paid-media-wiki/anomaly-and-significance.md:21-28",
+     "engine/workspace/skills/paid-media-analysis/SKILL.md:11,48",
+     "find engine -path '*company-context*' => none",
+     "fixture inspection: 2-3 campaigns/platform, 26-28 days"
+    ],
+    "description": "Attention lines are top-3 absolute spend movers with relative % regardless of base; the only flag is a 50% day-over-day move. grep finds no significance/sample-size logic in engine/src. Report recommendations' confidence (low|medium|high) and propose_change's reason/measurement/reversal are free text from the model with no required evidence artifact. classify_risk is keyword-based with no magnitude. Thin-data restraint exists only as prose in the wiki, and the company-context skill the skills depend on does not exist in the repo, so every analysis is by the skill's own rule 'directional' while proposals are typed and actionable.",
+    "recommendation": "Add code-owned evidence quality (conversion counts, coverage, low_evidence flag, interval) to AnalysisSummary/PlatformHeadline; require evidence_artifact_ids in propose_change and refuse budget proposals on low evidence; add magnitude to classify_risk; ship a company-context template and surface its absence."
+   },
+   {
+    "id": "J4-06",
+    "title": "Evaluation harness is thin, never run here, and targets the wrong transport for the shipped host",
+    "severity": "P3",
+    "classification": "VERIFIED_CODE",
+    "evidence": [
+     "engine/tests/eval/questions.json",
+     "engine/tests/eval/grade.py:55-69,81-86",
+     "engine/tests/eval/README.md:7-16",
+     "engine/tests/eval/run_questions.py:14",
+     "find . -name 'results*.jsonl' => none; git log -- engine/tests/eval => import commit only",
+     "docs/TODO.md:26",
+     "docs/PHASE1-REPORT.md:37"
+    ],
+    "description": "15 English questions; numeric substring checks only for q01, q02, q05; the rest are hand-judged. Requires langgraph dev + langgraph_sdk, not the host's /threads API. No results committed; live mode admitted never exercised. No Arabic questions and no restraint-on-thin-data cases. Passing behavior tests verify plumbing with the scripted model, not judgement.",
+    "recommendation": "Port run_questions.py to the host API, add Arabic and restraint cases, grade proposals structurally, record per-model results in CI."
+   },
+   {
+    "id": "J4-07",
+    "title": "Arabic-first positioning does not reach the engine",
+    "severity": "P3",
+    "classification": "VERIFIED_CODE",
+    "evidence": [
+     "engine/instructions.md (English only, no language directive)",
+     "grep Arabic script in engine/instructions.md and engine/workspace/skills => only report-design/COMPONENTS.md",
+     "engine/src/paid_media_agent/testing/demo_script.py:85-129",
+     "probe_demo.py: Arabic question answered with English exhausted-script text",
+     "README.md:3,72"
+    ],
+    "description": "Demo answers are English-only templates; the system prompt has no language instruction; live-model Arabic behaviour is untested here (NOT_VERIFIED).",
+    "recommendation": "Pass a language directive via build_agent_components(system_prompt=...) in the host (assembly.py:186), localise the demo template, add Arabic eval questions."
+   },
+   {
+    "id": "J4-08",
+    "title": "Running the host writes KILL_SWITCH into the upstream checkout and breaks an upstream behaviour test",
+    "severity": "P3",
+    "classification": "VERIFIED_TEST",
+    "evidence": [
+     "services/engine-demo/serve_demo.py:173-180,381",
+     "engine/.gitignore:32",
+     "pytest tests/behavior => exit 1: test_demo_uses_the_fixture_anchor_and_fails_on_unreconciled_analysis fails with reason=kill_switch",
+     "UPSTREAM.md:67"
+    ],
+    "description": "engage_kill_switch uses project_root(), so running the host or its tests from the engine checkout leaves engine/workspace/KILL_SWITCH, after which upstream's demo --with-proposal and behaviour suite fail. UPSTREAM.md's 'No file modified' holds only for tracked files.",
+    "recommendation": "Point the host kill switch at the mounted workspace volume explicitly or clean it in make test; document the side effect."
+   },
+   {
+    "id": "J4-09",
+    "title": "Reviewer approving an AI proposal sees almost none of the AI's evidence",
+    "severity": "P3",
+    "classification": "VERIFIED_CODE",
+    "evidence": [
+     "platform/apps/cloud/app/dashboard/approvals/page.tsx:35-37",
+     "platform/apps/cloud/lib/markting/translate.ts:24-44",
+     "platform/apps/cloud/lib/markting/repository.ts:72-88",
+     "platform/apps/cloud/lib/markting/bridge.ts:89-93",
+     "services/engine-demo/serve_demo.py:360-374"
+    ],
+    "description": "The Approvals row shows tool name, alias/target and reason.slice(0,160). Before/after values, risk flags, measurement and reversal plans are persisted and audited but not rendered; nothing links the proposal to the analysis artifact the model relied on.",
+    "recommendation": "Render before/after with currency, risk flags, measurement/reversal plans and a link to the analysis artifact already served by /reports/files/{name}."
+   },
+   {
+    "id": "J4-10",
+    "title": "Live-mode timeout mismatch can orphan an engine proposal",
+    "severity": "P3",
+    "classification": "INFERRED",
+    "evidence": [
+     "engine/src/paid_media_agent/config.py:118-121",
+     "engine/src/paid_media_agent/assembly.py:239-245",
+     "platform/apps/cloud/lib/markting/engine-client.ts:73",
+     "platform/apps/cloud/app/api/assistant/messages/route.ts:7",
+     "platform/apps/cloud/lib/markting/assistant.ts:44-46"
+    ],
+    "description": "Up to 40 model calls at 120 s each exceed the client's 240 s abort; the cloud reports 'engine not reachable' while the engine run continues and may park a proposal at awaiting_approval that no later cloud code fetches. Not runtime-verified (no model key).",
+    "recommendation": "Verify with a real key; reconcile awaiting proposals on the next turn or lower PAID_MEDIA_MAX_MODEL_CALLS for the host."
+   }
+  ],
+  "key_findings": [
+   "In the shipped default (MARKTING_ENGINE_MODE=demo) there is no AI: a regex picks one of two fixed scripts, prose is an f-string template, and the 'recommendation' is a hard-coded g-103 -> 240 budget cut (VERIFIED_RUNTIME).",
+   "Neither mode can ever read a tenant's real ad data: the host forces sample fixtures and refuses to boot with provider credentials, contradicting README.md:83 'Analyses connected accounts' (VERIFIED_CODE, P1).",
+   "Analysis questions containing 'change'/'budget'/Arabic equivalents are misrouted to the write script and land as pending operations on the Approvals page; 4 of the project's own 15 eval questions misroute (VERIFIED_RUNTIME).",
+   "The shared scripted model leaks script state across threads: a second user's first message gets the 'exhausted' text (VERIFIED_RUNTIME).",
+   "The deterministic numeric layer (code-owned metrics, reconciliation, missing!=zero, provenance) is genuinely strong and tested; the judgement layer (significance, thin-data gating, structured evidence, magnitude-aware risk) exists only as prose in the wiki (VERIFIED_CODE).",
+   "Evaluation is 15 English questions with 3 numeric substring checks, never run in this repo, targeting a transport the shipped host does not expose; live mode is admitted never exercised.",
+   "Arabic-first does not reach the engine: English-only prompt and demo template; Arabic questions get English replay text.",
+   "Reviewers approve AI proposals seeing only tool/target and 160 chars of reason; before/after, risk flags and plans are stored but not shown."
+  ],
+  "disagreements": "README.md:83 claims the engine analyses connected accounts; serve_demo.py:383-388 and :139-170 force sample fixtures in both modes and refuse credentials. README.md:8,77 call the engine 'AI analysis'; the default mode is a regex-driven replay (serve_demo.py:63-66, demo_script.py:85-129). reports.ts:23 labels a deterministic, model-free report (cadence.py:141 recommendations=[]) 'AI analysis reports' while its own note says 'Deterministic period comparison'. PHASE1-REPORT.md:42 and the exhausted-script text imply the g-103 proposal appears only when asked to change a budget; runtime shows analysis questions trigger it too. PHASE0-REPORT.md:141 says the test asserts /approve under the kill switch yields a rejected receipt; the test asserts a 403 and no receipt (test_demo_api.py:123-125,139-141). ARCHITECTURE.md:666-669 / PHASE0:84 say the self-hosted API has no demo mode (stale; superseded by serve_demo.py). UPSTREAM.md:67 'No file modified' in engine/ is true for tracked files only; running the host writes engine/workspace/KILL_SWITCH which fails an upstream behaviour test.",
+  "confidence": 0.8,
+  "not_verified": "Live-model behaviour (reasoning quality, Arabic output, restraint on thin data, whether it reads wiki pages) - no model key or network; adport PolicyEngine caps (e.g. 25% budget cap cited in PHASE0-REPORT.md:133) - outside workstream, platform/packages/core not read; cloud UI as rendered and the markting-* vitest suites - not run; report HTML/PDF rendering path - not executed; the concurrent-request race in J4-03 was shown sequentially, the overlapping-request case is inferred from shared mutable state; whether any operator path maps a demo alias to a live account (only upsertAlias exists, called by seed and a test; a direct DB insert would).",
+  "capabilities": [
+   {
+    "capability": "Code-owned metric computation, window parity, reconciliation, missing!=zero",
+    "rating": "EXISTS_AND_STRONG",
+    "evidence": "engine/src/paid_media_agent/tools/compute.py:300-339; tools/compare_periods.py:43-72; tests/unit/test_compute.py and test_summarize_window.py pass",
+    "provider": "engine"
+   },
+   {
+    "capability": "Provenance of figures (artifact ids, windows, versions)",
+    "rating": "EXISTS_AND_STRONG",
+    "evidence": "engine/src/paid_media_agent/domain/analysis.py:107-171; demo_script.py:120-124",
+    "provider": "engine"
+   },
+   {
+    "capability": "Model reasoning in shipped default (MARKTING_ENGINE_MODE=demo)",
+    "rating": "MOCK_ONLY",
+    "evidence": "services/engine-demo/serve_demo.py:63-66,109-111; testing/demo_script.py:85-129,158-170; probe_demo.py/probe_threads.py exit 0",
+    "provider": "engine-demo host"
+   },
+   {
+    "capability": "Model reasoning in live mode",
+    "rating": "EXISTS_BUT_LIMITED",
+    "evidence": "assembly.py:147-172 real init_chat_model path, bounded by config.py:118-121; never exercised (docs/TODO.md:26); fixture data only (serve_demo.py:383-388)",
+    "provider": "engine"
+   },
+   {
+    "capability": "Analysis of a tenant's connected accounts",
+    "rating": "DOCUMENTED_NOT_IMPLEMENTED",
+    "evidence": "README.md:83 vs serve_demo.py:139-170,383-388; profiles.py:73-77,146",
+    "provider": "markting-ai"
+   },
+   {
+    "capability": "Statistical significance / thin-data gating / evidence-quality scoring",
+    "rating": "MISSING",
+    "evidence": "grep for significance/sample-size/confidence logic in engine/src finds none; only prose in paid-media-wiki/anomaly-and-significance.md:21-28",
+    "provider": "engine"
+   },
+   {
+    "capability": "Structured evidence attached to a recommendation",
+    "rating": "PARTIAL",
+    "evidence": "tools/writes.py:390-436 free-text reason/plans; domain/reports.py:58 model-authored confidence",
+    "provider": "engine"
+   },
+   {
+    "capability": "Business goals/targets context (company-context skill)",
+    "rating": "MISSING",
+    "evidence": "find engine -path '*company-context*' => none; paid-media-analysis/SKILL.md:11,48 depend on it",
+    "provider": "markting-ai"
+   },
+   {
+    "capability": "Risk classification of proposals",
+    "rating": "EXISTS_BUT_LIMITED",
+    "evidence": "tools/writes.py:78-125 keyword flags, no magnitude thresholds",
+    "provider": "engine"
+   },
+   {
+    "capability": "Reviewer-visible rationale at approval time",
+    "rating": "PARTIAL",
+    "evidence": "platform/apps/cloud/app/dashboard/approvals/page.tsx:35-37 shows tool/target and 160-char reason only",
+    "provider": "cloud"
+   },
+   {
+    "capability": "Evaluation of model behaviour",
+    "rating": "EXISTS_BUT_LIMITED",
+    "evidence": "engine/tests/eval/* 15 questions, numeric checks for 3 (grade.py:55-69); no results in repo; requires langgraph dev not the host API",
+    "provider": "engine"
+   },
+   {
+    "capability": "Arabic reasoning/output",
+    "rating": "MISSING",
+    "evidence": "instructions.md English-only; demo_script.py English template; Arabic probe answered in English; live-model behaviour NOT_VERIFIED",
+    "provider": "engine"
+   },
+   {
+    "capability": "Autonomous execution of changes",
+    "rating": "UNSAFE_TO_AUTOMATE",
+    "evidence": "Correctly not automated: serve_demo.py:69-81 ProposalOnlyWriteProvider raises, kill switch engaged, /approve 403 (test_demo_api.py:123-125); automating would be unsafe given J4-05",
+    "provider": "markting-ai"
+   }
+  ]
+ },
+ "J3": {
+  "agent_id": "J3",
+  "role": "Independent senior media buyer skeptic (Saudi/Gulf markets)",
+  "report_path": "docs/audit/agents/J3.md",
+  "scope": "Would a Gulf media buyer trust this with a 200k SAR/month account? Inspected the engine host (services/engine-demo), the proposal bridge and sandbox (platform/apps/cloud/lib/markting), Assistant/Approvals/Reports/Policies pages and API routes, the upstream policy engine and Snapchat/TikTok/Meta/Google provider packages, the engine fixtures, demo script, comparison logic, report template and prompt, infra/env/seed/billing scripts, then compared against README.md, UPSTREAM.md and docs/PHASE0..3-REPORT.md. Ran the glue vitest and pytest suites and two in-process runtime probes of the demo engine (fixture data, no network).",
+  "files_inspected": [
+   "services/engine-demo/serve_demo.py",
+   "services/engine-demo/tests/test_demo_api.py",
+   "platform/apps/cloud/lib/markting/assistant.ts",
+   "platform/apps/cloud/lib/markting/bridge.ts",
+   "platform/apps/cloud/lib/markting/translate.ts",
+   "platform/apps/cloud/lib/markting/repository.ts",
+   "platform/apps/cloud/lib/markting/runtime.ts",
+   "platform/apps/cloud/lib/markting/sandbox-provider.ts",
+   "platform/apps/cloud/lib/markting/engine-client.ts",
+   "platform/apps/cloud/lib/markting/env.ts",
+   "platform/apps/cloud/app/dashboard/assistant/page.tsx",
+   "platform/apps/cloud/app/dashboard/assistant/assistant-chat.tsx",
+   "platform/apps/cloud/app/api/assistant/messages/route.ts",
+   "platform/apps/cloud/app/dashboard/approvals/page.tsx",
+   "platform/apps/cloud/app/dashboard/approvals/approval-actions.tsx",
+   "platform/apps/cloud/app/api/approvals/[id]/apply/route.ts",
+   "platform/apps/cloud/app/api/approvals/[id]/reject/route.ts",
+   "platform/apps/cloud/app/dashboard/reports/page.tsx",
+   "platform/apps/cloud/app/dashboard/reports/engine-reports.tsx",
+   "platform/apps/cloud/app/api/reports/engine/route.ts",
+   "platform/apps/cloud/app/api/reports/engine/[name]/route.ts",
+   "platform/apps/cloud/app/dashboard/page.tsx",
+   "platform/apps/cloud/app/dashboard/findings/page.tsx",
+   "platform/apps/cloud/app/dashboard/policies/policy-form.tsx",
+   "platform/apps/cloud/components/ui.tsx",
+   "platform/apps/cloud/lib/i18n/messages/assistant.ts",
+   "platform/apps/cloud/lib/i18n/messages/approvals.ts",
+   "platform/apps/cloud/lib/i18n/messages/reports.ts",
+   "platform/apps/cloud/lib/cloud/reads.ts",
+   "platform/apps/cloud/lib/cloud/plans.ts",
+   "platform/apps/cloud/lib/cloud/repository.ts",
+   "platform/apps/cloud/lib/cloud/runtime.ts",
+   "platform/apps/cloud/lib/cloud/dashboard.ts",
+   "platform/apps/cloud/lib/cloud/provider-oauth-extra.ts",
+   "platform/apps/cloud/lib/env.ts",
+   "platform/apps/cloud/test/markting-snapchat-wire.test.ts",
+   "platform/packages/core/src/policy/policy.ts",
+   "platform/packages/core/src/policy/engine.ts",
+   "platform/packages/core/src/model.ts",
+   "platform/packages/core/src/audit/packs/core-performance.ts",
+   "platform/packages/snapchat/src/tools.ts",
+   "platform/packages/snapchat/src/provider.ts",
+   "platform/packages/snapchat/src/schemas.ts",
+   "platform/packages/tiktok/src/tools.ts",
+   "platform/packages/tiktok/src/provider.ts",
+   "platform/packages/meta/src/provider.ts",
+   "platform/packages/meta/src/tools.ts",
+   "platform/packages/google/src/tools.ts",
+   "platform/supabase/migrations/20261002000000_markting_bridge.sql",
+   "engine/instructions.md",
+   "engine/config/accounts.example.toml",
+   "engine/config/write-policy.example.toml",
+   "engine/src/paid_media_agent/config.py",
+   "engine/src/paid_media_agent/tools/fixtures.py",
+   "engine/src/paid_media_agent/tools/compute.py",
+   "engine/src/paid_media_agent/tools/compare_periods.py",
+   "engine/src/paid_media_agent/tools/pipeboard.py",
+   "engine/src/paid_media_agent/domain/analysis.py",
+   "engine/src/paid_media_agent/domain/common.py",
+   "engine/src/paid_media_agent/testing/demo_script.py",
+   "engine/src/paid_media_agent/testing/scripted_model.py",
+   "engine/src/paid_media_agent/reports/cadence.py",
+   "engine/src/paid_media_agent/reports/templates/report.html.j2",
+   "engine/src/paid_media_agent/surfaces/api/app.py",
+   "engine/src/paid_media_agent/assembly.py",
+   "engine/src/paid_media_agent/fixtures/data/google_ads.json",
+   "engine/src/paid_media_agent/fixtures/data/meta_ads.json",
+   "engine/src/paid_media_agent/fixtures/data/reddit_ads.json",
+   "engine/workspace/skills/paid-media-wiki/benchmarks.md",
+   "engine/workspace/skills/paid-media-wiki/platform-differences.md",
+   "engine/.agents/skills/paid-media-onboarding/SKILL.md",
+   "README.md",
+   "UPSTREAM.md",
+   ".env.example",
+   "docker-compose.yml",
+   "Makefile",
+   "infra/seed/seed-demo.mjs",
+   "infra/scripts/stripe-setup.mjs",
+   "docs/TODO.md",
+   "docs/billing.md",
+   "docs/snapchat-live-checklist.md",
+   "docs/ARCHITECTURE.md",
+   "docs/PHASE0-REPORT.md",
+   "docs/PHASE1-REPORT.md",
+   "docs/PHASE2-REPORT.md",
+   "docs/PHASE3-REPORT.md"
+  ],
+  "tests_executed": [
+   "cd platform && pnpm --filter @adport/cloud exec vitest run test/markting-translate.test.ts test/markting-bridge.test.ts test/markting-engine-client.test.ts test/markting-sandbox.test.ts test/markting-snapchat-wire.test.ts test/i18n.test.ts => 0 (6 files, 53 passed)",
+   "cd engine && uv run --frozen python -m pytest -q ../services/engine-demo/tests => 0 (7 passed)",
+   "cd engine && uv run --frozen python <scratchpad>/j3_probe.py (in-process demo host, 5 Arabic/English messages + weekly report, fixture data, no network) => 0",
+   "cd engine && uv run --frozen python <scratchpad>/j3_probe2.py 2026-08-28 (fresh app per probe; two tenants on one app) => 0",
+   "cd engine && uv run --frozen python <scratchpad>/j3_probe2.py (no PAID_MEDIA_FIXTURE_ANCHOR; compose default) => 0",
+   "git log --oneline -- engine/ => 0 (single import commit)"
+  ],
+  "findings": [
+   {
+    "id": "J3-01",
+    "title": "Engine never analyses tenant accounts; live mode is an LLM over US fixture data",
+    "severity": "P1",
+    "classification": "VERIFIED_RUNTIME",
+    "evidence": [
+     "services/engine-demo/serve_demo.py:163-166",
+     "services/engine-demo/serve_demo.py:383-388",
+     "services/engine-demo/serve_demo.py:142-143",
+     "engine/config/accounts.example.toml:5-19",
+     "engine/src/paid_media_agent/fixtures/data/google_ads.json (currency USD, timezone America/New_York)",
+     "probe: POST /reports/run -> summary.platforms account_ref == [demo-google, demo-meta, demo-reddit], requested_by adport-bridge"
+    ],
+    "description": "The host pins PAID_MEDIA_DATA_MODE=sample in both demo and live mode and refuses the only live data source (Pipeboard). No path feeds adport-connected accounts into the engine. The Assistant and the AI reports therefore describe three fictitious US accounts for every tenant; in live mode a real model reasons about the same fake data.",
+    "recommendation": "Build an adport-to-engine read provider (org-scoped, carrying currency and timezone) or remove every 'analyses connected accounts' claim and banner live mode as synthetic."
+   },
+   {
+    "id": "J3-02",
+    "title": "Non-demo mode has no way to bind engine aliases to real accounts; every proposal is unsupported",
+    "severity": "P1",
+    "classification": "VERIFIED_CODE",
+    "evidence": [
+     "platform/apps/cloud/lib/markting/translate.ts:133-134",
+     "platform/apps/cloud/lib/markting/repository.ts:40-58",
+     "grep -rn upsertAlias platform/apps/cloud => only test/markting-repository.database.test.ts:47",
+     "infra/seed/seed-demo.mjs:50-62 (sandbox aliases only)"
+    ],
+    "description": "loadAliasMap returns only DB rows (plus sandbox aliases in demo mode); nothing in the app writes markting_account_aliases for real providers. With MARKTING_DEMO_MODE=false the advertised proposal-to-approval flow cannot operate without hand-written SQL.",
+    "recommendation": "Admin UI/route that derives validated org-scoped aliases from connected accounts, or auto-create aliases at connection time."
+   },
+   {
+    "id": "J3-03",
+    "title": "Engine report index and files are global; any organisation lists and downloads every other organisation's runs",
+    "severity": "P1",
+    "classification": "VERIFIED_CODE",
+    "evidence": [
+     "services/engine-demo/serve_demo.py:246-264",
+     "services/engine-demo/serve_demo.py:355-374",
+     "platform/apps/cloud/app/api/reports/engine/route.ts:16-24",
+     "platform/apps/cloud/app/api/reports/engine/[name]/route.ts:10-26"
+    ],
+    "description": "One workspace/out/markting-reports.json index with no organisation key; the adport routes only authenticate the session and pass everything through. Today the content is identical fixture data so nothing real leaks, but the structure is cross-tenant and becomes P0 the moment J3-01 is fixed.",
+    "recommendation": "Key report runs and artifact names by organisation on the host and filter on the adport side."
+   },
+   {
+    "id": "J3-04",
+    "title": "Demo scripted model shares mutable script state across all threads and tenants",
+    "severity": "P2",
+    "classification": "VERIFIED_RUNTIME",
+    "evidence": [
+     "services/engine-demo/serve_demo.py:92-115",
+     "probe2: tenant A 1st msg -> analysis; tenant B 1st msg on same app -> 'Script exhausted' text; tenant B read-only 2nd msg -> proposal google_ads__update_campaign_budget g-103 -> 240"
+    ],
+    "description": "LoopingScriptedChatModel restarts the script only when the count of human messages changes; counts are compared across threads, so a second user's first turn fails and their next read-only question produces a budget-cut proposal. Host tests pass because each builds a fresh app.",
+    "recommendation": "Scope script position by thread_id or keep it in graph state."
+   },
+   {
+    "id": "J3-05",
+    "title": "Demo proposal is a keyword regex that always proposes cutting Google g-103 to 240, including on Arabic read-only questions",
+    "severity": "P2",
+    "classification": "VERIFIED_RUNTIME",
+    "evidence": [
+     "services/engine-demo/serve_demo.py:63-66",
+     "engine/src/paid_media_agent/testing/demo_script.py:158-170",
+     "probe: 'ما هي الميزانية الحالية لحملة سناب شات رمضان؟' -> interrupted True, proposal g-103 daily_budget 240",
+     "probe: Arabic 'raise Snap Ramadan campaign to 1000 SAR' -> same Google cut proposal",
+     "platform/apps/cloud/lib/markting/assistant.ts:30-75 (no engine-mode check)",
+     ".env.example:47-51"
+    ],
+    "description": "Any message containing budget/ميزاني/change/أوقف/ارفع etc. triggers the fixed proposal regardless of meaning; the bridge turns it into a real pending_operations row. Nothing ties engine demo mode to adport demo mode, so a misconfigured deployment (MARKTING_DEMO_MODE=false, engine still demo, hand-seeded real alias) gets a pending cut of a real campaign on every budget question; human approval and the 25% cap still apply.",
+    "recommendation": "Label scripted proposals in the UI, refuse to preview when /markting/info.mode is demo while adport is not, and never route questions without an explicit change verb to the write script."
+   },
+   {
+    "id": "J3-06",
+    "title": "Budget-delta cap is skipped when the target has no current budget (Snapchat campaign-level caps)",
+    "severity": "P2",
+    "classification": "VERIFIED_CODE",
+    "evidence": [
+     "platform/packages/core/src/policy/engine.ts:143",
+     "platform/packages/snapchat/src/schemas.ts:17",
+     "platform/packages/snapchat/src/provider.ts:124-129",
+     "platform/packages/core/src/policy/policy.ts:15 (absolute cap default null)"
+    ],
+    "description": "The percentage check requires fromMicros; a Snap campaign without daily_budget_micro (budgets usually live on ad squads — INFERRED) yields an 'add' patch with no baseline, so only the absolute cap applies and it is null by default. A campaign-level cap throttles every ad squad beneath it.",
+    "recommendation": "Treat missing baseline as a policy violation unless an absolute cap is set; show the delta in account currency."
+   },
+   {
+    "id": "J3-07",
+    "title": "Currency is never part of proposals, caps or previews",
+    "severity": "P2",
+    "classification": "VERIFIED_CODE",
+    "evidence": [
+     "platform/apps/cloud/lib/markting/translate.ts:52-53",
+     "platform/apps/cloud/lib/markting/translate.ts:147-153",
+     "platform/apps/cloud/lib/markting/translate.ts:107 (Meta cents = micros/10000, hard-coded 100 offset)",
+     "platform/packages/core/src/policy/policy.ts:13-15",
+     "platform/apps/cloud/app/dashboard/reports/page.tsx:40-44",
+     "platform/packages/core/src/model.ts:41-42",
+     "engine/config/write-policy.example.toml:23 (unit 'account currency per day')"
+    ],
+    "description": "The engine's unit string is ignored, alias currency is preview-only, policy caps are unit-less micros, the campaign table omits the row currency. A model saying 240 (USD) on a SAR account becomes 240 SAR; mixed SAR/USD orgs cannot express a meaningful absolute cap; the 100-minor-unit Meta assumption is questionable for KWD/BHD/OMR (INFERRED).",
+    "recommendation": "Carry currency on every budget delta, validate against the account currency, format money as money."
+   },
+   {
+    "id": "J3-08",
+    "title": "All buyer-facing content (analysis, proposal reason, previews, reports) is English and USD; Arabic covers only the chrome",
+    "severity": "P2",
+    "classification": "VERIFIED_RUNTIME",
+    "evidence": [
+     "engine/src/paid_media_agent/reports/templates/report.html.j2:3 (<html lang=\"en\">)",
+     "probe: generated report contains 'USD' and no Arabic codepoints",
+     "engine/src/paid_media_agent/testing/demo_script.py:85-129",
+     "services/engine-demo/serve_demo.py:124-129",
+     "platform/apps/cloud/components/ui.tsx:71-74 (expiry shown in UTC)",
+     "docs/PHASE2-REPORT.md:28-29 (engine prose and provider text intentionally untranslated)"
+    ],
+    "description": "Dictionaries, RTL and plurals are solid (53 tests pass), but everything the buyer reads to make a decision is English/USD/UTC.",
+    "recommendation": "Arabic RTL report templates via ReportRenderer(templates_dir), Arabic prompt instruction in live mode, structured (not prose) preview summaries translated in the UI."
+   },
+   {
+    "id": "J3-09",
+    "title": "Approvals page lacks before/after, currency, delta % and full reasoning needed to approve money",
+    "severity": "P3",
+    "classification": "VERIFIED_CODE",
+    "evidence": [
+     "platform/apps/cloud/app/dashboard/approvals/page.tsx:30-40",
+     "platform/apps/cloud/lib/markting/bridge.ts:12-19 (changes/budgetDeltas/coercions available but unrendered)",
+     "platform/packages/snapchat/src/provider.ts:128 (raw micros in changes)",
+     "platform/apps/cloud/app/dashboard/approvals/approval-actions.tsx:19 (window.confirm)"
+    ],
+    "description": "An admin sees a summary sentence, raw account id and expiry; the preview's structured deltas and the engine's full reason are not shown. docs/TODO.md:30 acknowledges.",
+    "recommendation": "Render changes, budget deltas in account currency with %, current status and recent CPA/ROAS of the target."
+   },
+   {
+    "id": "J3-10",
+    "title": "No conversation persistence, history or streaming in the Assistant",
+    "severity": "P3",
+    "classification": "VERIFIED_CODE",
+    "evidence": [
+     "platform/apps/cloud/app/dashboard/assistant/assistant-chat.tsx:24-25",
+     "platform/apps/cloud/lib/markting/repository.ts:29 (listThreads has no caller)",
+     "platform/apps/cloud/lib/markting/env.ts:18 (240s synchronous default)"
+    ],
+    "description": "Reload loses the conversation; live-mode turns are a silent wait of up to minutes.",
+    "recommendation": "List and resume markting_threads; stream or poll."
+   },
+   {
+    "id": "J3-11",
+    "title": "Environment template ships MARKTING_ALLOW_SELF_APPROVAL=true (four-eyes off by default)",
+    "severity": "P3",
+    "classification": "VERIFIED_CODE",
+    "evidence": [
+     ".env.example:48-49",
+     "Makefile:20-23",
+     "platform/apps/cloud/app/api/approvals/[id]/apply/route.ts:22-24"
+    ],
+    "description": "make env copies the template verbatim; the requester-cannot-approve check only engages when the flag is false.",
+    "recommendation": "Default false in the template; let the demo seed enable it."
+   },
+   {
+    "id": "J3-12",
+    "title": "Snapchat and TikTok are invisible to the engine (no fixtures, normalization or admitted writes); sandbox Snap campaigns reachable only from tests",
+    "severity": "GAP",
+    "classification": "VERIFIED_CODE",
+    "evidence": [
+     "engine/src/paid_media_agent/tools/fixtures.py:26-33",
+     "engine/src/paid_media_agent/fixtures/data/ (google_ads, meta_ads, reddit_ads only)",
+     "engine/config/write-policy.example.toml (no snap/tiktok rows)",
+     "platform/apps/cloud/lib/markting/runtime.ts:18-27 and callers assistant.ts:53, approvals apply route:25",
+     "platform/packages/snapchat/src/provider.ts:14,139 (conversions = purchases only)",
+     "docs/snapchat-live-checklist.md:36 (DOCUMENTED_ONLY: Snap not a performance adapter even with Pipeboard)"
+    ],
+    "description": "The platforms that carry Saudi spend cannot be analysed or proposed on by the AI; the demo's 'Ramadan Awareness - KSA' Snap campaign is an adport-side label the engine never sees; Snap app-install/lead campaigns read 0 conversions.",
+    "recommendation": "Add snap_ads/tiktok_ads fixtures, normalization and admitted writes upstream; map Snap conversion types beyond purchases."
+   },
+   {
+    "id": "J3-13",
+    "title": "Arabic-market requirements absent: Ramadan/Eid seasonality, Hijri, Asia/Riyadh windows, SAR/VAT billing, Salla/Zid, WhatsApp approvals, creative-level tools",
+    "severity": "GAP",
+    "classification": "VERIFIED_CODE",
+    "evidence": [
+     "grep -rniE 'ramadan|رمضان|Asia/Riyadh|hijri|\\bSAR\\b|\\bVAT\\b|salla|\\bzid\\b|whatsapp|KSA|saudi|gulf' => labels and TODO prose only",
+     "engine/src/paid_media_agent/reports/cadence.py:34-48 (equal-length period-over-period, timezone default UTC)",
+     "services/engine-demo/serve_demo.py:272-280 (no timezone passed)",
+     "platform/apps/cloud/lib/cloud/plans.ts:25-29 and infra/scripts/stripe-setup.mjs:11-16 (EUR, tax-exclusive)",
+     "platform/apps/cloud/lib/markting/translate.ts:65-70 (two operations, campaign level only)",
+     "docs/TODO.md:8,10-16"
+    ],
+    "description": "No seasonal baselines (Ramadan week will look like an anomaly), no Hijri calendar, UTC windows, EUR pricing without VAT, no store revenue, no WhatsApp channel, no ad/creative-level analysis.",
+    "recommendation": "See report section 'What a world-class system would need'."
+   },
+   {
+    "id": "J3-14",
+    "title": "Enabling a paused campaign has no spend guard; engine risk flags are audit-only",
+    "severity": "P3",
+    "classification": "VERIFIED_CODE",
+    "evidence": [
+     "platform/packages/core/src/policy/engine.ts:133-153",
+     "platform/apps/cloud/lib/markting/sandbox-provider.ts:171",
+     "platform/packages/snapchat/src/provider.ts:129",
+     "engine/config/write-policy.example.toml:34-35",
+     "platform/apps/cloud/lib/markting/bridge.ts:92"
+    ],
+    "description": "Status previews carry empty budgetDeltas so no cap logic runs; the engine's risk=high is only written to the audit note. Budget caps are re-checked only at validate (docs/TODO.md:38).",
+    "recommendation": "Add an exposure check for status enables (budget x days) and enforce risk flags in policy."
+   },
+   {
+    "id": "J3-15",
+    "title": "Demo mode shows no performance data for the sandbox campaigns it previews against",
+    "severity": "P3",
+    "classification": "VERIFIED_CODE",
+    "evidence": [
+     "platform/apps/cloud/lib/cloud/reads.ts:50-56 (createTenantRuntime, empty without a connection)",
+     "platform/apps/cloud/app/dashboard/page.tsx:29-37",
+     "platform/apps/cloud/lib/markting/sandbox-provider.ts:99-143 (report() has no UI caller)"
+    ],
+    "description": "Reports campaign table and Overview are empty in the shipped demo; the only 'data' is the English engine text.",
+    "recommendation": "Route demo-mode dashboard reads through the sandbox runtime or add a sandbox performance card."
+   },
+   {
+    "id": "J3-16",
+    "title": "Stale architecture statement about the Approvals page",
+    "severity": "P3",
+    "classification": "VERIFIED_CODE",
+    "evidence": [
+     "docs/ARCHITECTURE.md:825",
+     "platform/apps/cloud/app/dashboard/approvals/approval-actions.tsx",
+     "platform/apps/cloud/app/dashboard/approvals/page.tsx:40"
+    ],
+    "description": "ARCHITECTURE.md says the dashboard has no apply button; Phase 1 added one.",
+    "recommendation": "Update the doc."
+   },
+   {
+    "id": "J3-17",
+    "title": "Positive: the single write path is real and tested",
+    "severity": "P3",
+    "classification": "VERIFIED_TEST",
+    "evidence": [
+     "services/engine-demo/serve_demo.py:69-81,139-180",
+     "platform/apps/cloud/lib/markting/engine-client.ts:61,77-79",
+     "platform/apps/cloud/lib/markting/bridge.ts:76-95,119-121",
+     "platform/packages/core/src/policy/engine.ts:87-125",
+     "vitest 53 passed exit 0; pytest 7 passed exit 0; test_demo_api.py:125-128 (engine approve -> 403)"
+    ],
+    "description": "Proposal-only write provider, kill switch, zero approvers, no approve/edit client path, hash-bound two-step apply, org/user-namespaced threads enforced on the adport side. This part I would trust.",
+    "recommendation": "Keep it; the risk is what flows into the gate, not the gate."
+   }
+  ],
+  "key_findings": [
+   "Would not trust it with a 200k SAR/month account: the AI never sees the tenant's data. The host pins the engine to fixture data in demo AND live mode, so every Assistant answer and every AI report describes three fictitious US accounts in USD (serve_demo.py:163-166,383-388; runtime probe).",
+   "In non-demo mode the headline proposal-to-approval flow cannot run at all: no code writes the engine-alias-to-account map, so every proposal is 'unsupported' (repository.ts:40-58; upsertAlias has no app caller).",
+   "Engine report runs and files are one global index readable/downloadable by every organisation (serve_demo.py:246-264,355-374; app/api/reports/engine/**) — only fixture data today, structurally cross-tenant.",
+   "The demo is theater with sharp edges: a keyword regex turns any message with 'budget/ميزانية/pause/ارفع' into the same fixed 'cut Google g-103 to 240' proposal (an Arabic read-only Snap question produced a pending operation), and the scripted model shares state across tenants so a second user's turns misfire (runtime-verified).",
+   "Policy gaps a buyer would hit: no currency anywhere in proposals or caps, the 25% cap is skipped when the target has no baseline budget (Snap campaign-level caps), status enables have no spend guard, approvals show no before/after or money.",
+   "Arabic-first holds for menus and buttons only; analysis text, proposal reasons, previews and PDFs are English/USD/UTC.",
+   "Saudi-market essentials are absent from code: Snap/TikTok in the engine, Ramadan/Eid seasonality and Hijri, Asia/Riyadh windows, SAR/VAT billing (EUR today), Salla/Zid revenue, WhatsApp approvals, creative-level tools.",
+   "What is genuinely strong: the single write path (proposal-only provider, kill switch, hash-bound two-step apply, no approve path from adport), org/user-scoped threads, and the i18n/RTL foundation; 53 vitest + 7 pytest glue tests pass."
+  ],
+  "disagreements": "README.md:120 ('Analyses connected accounts … on the Assistant page') is contradicted: the engine is pinned to sample data and reads only fixture accounts in every mode (serve_demo.py:163-166,383-388; probe). README.md:134 ('false = real accounts connected through OAuth') is contradicted: no alias writer exists, so proposals are always unsupported outside demo mode (repository.ts:40-58). README.md:136 implies tenant isolation is handled via markting_threads; engine report runs/files have no isolation (serve_demo.py:246-264,355-374). docs/PHASE3-REPORT.md:22 claims the sandbox Snap account lets the adport side 'demo Snap previews, reports and approvals'; those campaigns are reachable only via createBridgeRuntime (callers: engine bridge and apply route), the demo engine never emits snap_ads, and the Reports page uses createTenantRuntime, so they are exercised by unit tests only. docs/PHASE1-REPORT.md:42 understates the demo limitation (any keyword-matching message, including read-only Arabic questions, yields the g-103 cut; script state is shared across tenants) and :31 presents a regex match as an Arabic end-to-end flow. docs/ARCHITECTURE.md:825 ('no apply button') is stale. Confirmed claims: UPSTREAM.md 'engine/ unmodified' (git history), .env.example anchor default keeps the demo fresh (runtime), Snapchat wire-tested-only (agreed, plus the engine cannot propose Snap changes at all).",
+  "confidence": 0.85,
+  "not_verified": "MARKTING_ENGINE_MODE=live with a real model key (no key available; cannot change J3-01 which is structural). Live Snapchat/TikTok/Meta/Google API behaviour (no credentials): the Snap ad-squad budget semantics in J3-06 and Meta minor-unit offsets for KWD/BHD/OMR in J3-07 are INFERRED from platform knowledge. The Docker stack and the Playwright browser flows in the phase reports (Docker blocked in sandbox; not re-run). Supabase RLS on markting_* tables at runtime (migration read only). Upstream full test suites (only the Makefile glue suites were run)."
+ },
+ "J5": {
+  "agent_id": "J5",
+  "role": "Independent SaaS production skeptic",
+  "report_path": "docs/audit/agents/J5.md",
+  "scope": "What stops the first paying customer: deployment story (compose/Makefile/Dockerfiles/Supabase CLI/vercel.json), CI and supply chain, Stripe billing, secrets handling, backups/DR, observability, support path, legal/branding, and the engine bridge as it affects a real customer (data mode, alias map, report tenancy). Compared against README \"Not production-ready yet\", docs/TODO.md, phase reports and the Snapchat checklist. Did not read docs/audit/** reports.",
+  "files_inspected": [
+   "README.md",
+   "docs/TODO.md",
+   "docs/billing.md",
+   "docs/snapchat-live-checklist.md",
+   "docs/PHASE0-REPORT.md",
+   "docs/PHASE1-REPORT.md",
+   "docs/PHASE3-REPORT.md",
+   "docs/ARCHITECTURE.md (selected lines)",
+   "UPSTREAM.md",
+   "docker-compose.yml",
+   "Makefile",
+   ".env.example",
+   ".gitignore",
+   "infra/cloud.Dockerfile",
+   "infra/package.json",
+   "infra/scripts/fill-env.mjs",
+   "infra/scripts/sync-supabase-env.mjs",
+   "infra/scripts/stripe-setup.mjs",
+   "infra/scripts/stripe-setup.test.mjs",
+   "infra/seed/seed-demo.mjs",
+   "services/engine-demo/serve_demo.py",
+   "services/engine-demo/tests/test_demo_api.py",
+   "engine/Dockerfile",
+   "engine/.github/workflows/ci.yml",
+   "engine/config/accounts.example.toml",
+   "engine/src/paid_media_agent/config.py",
+   "engine/src/paid_media_agent/runtime/catalog.py",
+   "engine/src/paid_media_agent/runtime/profiles.py",
+   "platform/.github/workflows/ci.yml",
+   "platform/.gitignore",
+   "platform/supabase/config.toml",
+   "platform/supabase/seed.sql",
+   "platform/supabase/migrations/20261002000000_markting_bridge.sql",
+   "platform/supabase/migrations/20260817171039_cloud_initial_schema.sql (retention/cron lines)",
+   "platform/docs/deployment-model.md",
+   "platform/docs/cloud-local-development.md",
+   "platform/apps/cloud/package.json",
+   "platform/apps/cloud/next.config.ts",
+   "platform/apps/cloud/vercel.json",
+   "platform/apps/cloud/proxy.ts",
+   "platform/apps/cloud/.env.example",
+   "platform/apps/cloud/scripts/prepare-standalone.mjs",
+   "platform/apps/cloud/lib/env.ts",
+   "platform/apps/cloud/lib/crypto.ts",
+   "platform/apps/cloud/lib/cloud/plans.ts",
+   "platform/apps/cloud/lib/cloud/billing.ts",
+   "platform/apps/cloud/lib/cloud/support.ts",
+   "platform/apps/cloud/lib/cloud/credential-rotation.ts",
+   "platform/apps/cloud/lib/markting/env.ts",
+   "platform/apps/cloud/lib/markting/runtime.ts",
+   "platform/apps/cloud/lib/markting/assistant.ts",
+   "platform/apps/cloud/lib/markting/bridge.ts",
+   "platform/apps/cloud/lib/markting/repository.ts",
+   "platform/apps/cloud/lib/markting/engine-client.ts",
+   "platform/apps/cloud/lib/markting/translate.ts",
+   "platform/apps/cloud/lib/supabase/{admin,browser,server,proxy}.ts",
+   "platform/apps/cloud/lib/i18n/messages/common.ts",
+   "platform/apps/cloud/app/dashboard/billing/actions.ts",
+   "platform/apps/cloud/app/dashboard/billing/page.tsx",
+   "platform/apps/cloud/app/dashboard/reports/engine-reports.tsx",
+   "platform/apps/cloud/app/api/billing/webhook/route.ts",
+   "platform/apps/cloud/app/api/support/route.ts",
+   "platform/apps/cloud/app/api/deletion/route.ts",
+   "platform/apps/cloud/app/api/waitlist/route.ts",
+   "platform/apps/cloud/app/api/assistant/messages/route.ts",
+   "platform/apps/cloud/app/api/approvals/[id]/apply/route.ts",
+   "platform/apps/cloud/app/api/approvals/[id]/reject/route.ts",
+   "platform/apps/cloud/app/api/reports/engine/route.ts",
+   "platform/apps/cloud/app/api/reports/engine/[name]/route.ts",
+   "platform/apps/cloud/components/auth-screen.tsx",
+   "platform/packages/core/src/policy/policy.ts",
+   "platform/website/terms.html"
+  ],
+  "tests_executed": [
+   "cd platform && pnpm --filter @adport/cloud exec vitest run test/markting-translate.test.ts test/markting-bridge.test.ts test/markting-engine-client.test.ts test/markting-sandbox.test.ts test/markting-snapchat-wire.test.ts test/i18n.test.ts => 0 (53 passed)",
+   "cd engine && uv run --frozen python -m pytest -q ../services/engine-demo/tests => 0 (7 passed)",
+   "node --test infra/scripts/stripe-setup.test.mjs => 0 (3 pass)",
+   "cd platform && pnpm --filter @adport/cloud typecheck => 0",
+   "ls -la .github (repo root) => 2 (absent)",
+   "git log --all --diff-filter=A --name-only | grep -E '(^|/)\\.env(\\.local)?$' => 1 (never committed)",
+   "ls platform/.dockerignore platform/apps/cloud/.dockerignore => 2 (absent)",
+   "ls infra/package-lock.json infra/pnpm-lock.yaml => 2 (absent)",
+   "git ls-files services infra | grep -E 'pycache|pytest_cache' => 0 (two .pyc tracked)",
+   "docker build / docker compose up => not run (network-blocked; never built per docs/PHASE1-REPORT.md:36)"
+  ],
+  "findings": [
+   {
+    "id": "J5-01",
+    "title": "Engine can never analyse a customer's real ad accounts (fixture-only data mode is enforced)",
+    "severity": "P1",
+    "classification": "VERIFIED_CODE",
+    "evidence": [
+     "services/engine-demo/serve_demo.py:163-166",
+     "services/engine-demo/serve_demo.py:383-387",
+     "services/engine-demo/serve_demo.py:142-143",
+     "engine/src/paid_media_agent/runtime/catalog.py:51-58",
+     "engine/src/paid_media_agent/runtime/profiles.py:72-76",
+     "services/engine-demo/tests/test_demo_api.py:71,81-91",
+     "README.md:83"
+    ],
+    "description": "assert_fail_closed refuses to start unless PAID_MEDIA_DATA_MODE=sample and refuses any Pipeboard token; live mode still forces sample. sample selects build_fixture_catalog() with read_provider=None and the fixture alias registry. The Assistant and Reports therefore analyse synthetic accounts regardless of which accounts the customer connected through adport OAuth. README sells 'Analyses connected accounts'; neither the README not-ready list nor docs/TODO.md mentions this.",
+    "recommendation": "Build a per-organization adport->engine read bridge (or honestly label the AI layer as a synthetic demo). Do not add real reads before J5-03 is fixed."
+   },
+   {
+    "id": "J5-02",
+    "title": "No alias management; live mode maps nothing so every proposal is unsupported, and a hand-inserted alias would target real accounts with synthetic analysis",
+    "severity": "P1",
+    "classification": "VERIFIED_CODE",
+    "evidence": [
+     "platform/apps/cloud/lib/markting/repository.ts:40-50",
+     "platform/apps/cloud/lib/markting/repository.ts:52-58 (upsertAlias callers only in test/markting-repository.database.test.ts:47)",
+     "platform/apps/cloud/lib/markting/bridge.ts:135-141",
+     "infra/seed/seed-demo.mjs:50-62"
+    ],
+    "description": "loadAliasMap starts empty when MARKTING_DEMO_MODE=false and no route/page/script writes markting_account_aliases except the demo seed (sandbox rows). The core proposal->preview loop therefore cannot work for a real customer; if an operator inserts an alias manually, synthetic-data proposals are previewed against real campaigns (still behind policy + human approval, so not P0, but UNSAFE_TO_AUTOMATE).",
+    "recommendation": "Block fixture aliases in live mode until J5-01 is solved; add an owner-only, audited alias management surface; show analysis provenance on Approvals."
+   },
+   {
+    "id": "J5-03",
+    "title": "Engine reports are a tenant-global index exposed to any signed-in user of any organization",
+    "severity": "P1",
+    "classification": "VERIFIED_CODE",
+    "evidence": [
+     "services/engine-demo/serve_demo.py:62,246-264,304-306,343,355-374",
+     "platform/apps/cloud/app/api/reports/engine/route.ts:16-36",
+     "platform/apps/cloud/app/api/reports/engine/[name]/route.ts:10-26",
+     "docker-compose.yml:49"
+    ],
+    "description": "One markting-reports.json index per engine; GET /reports and /reports/files/{name} return everything; the cloud routes only call sessionPrincipal() and never filter by organization; requested_by is always the shared caller 'adport-bridge'. Currently only synthetic data (J5-01) so not yet a real cross-tenant leak; becomes P0 the moment real data enters the engine.",
+    "recommendation": "Key report runs, index and file authorization by organization; add a two-principal isolation test before any real data path."
+   },
+   {
+    "id": "J5-04",
+    "title": "No production deployment artefact; the only stack is a dev stack whose start command resets the database",
+    "severity": "P1",
+    "classification": "VERIFIED_CODE",
+    "evidence": [
+     "Makefile:26-28,33",
+     "docker-compose.yml:17,24-27,40,43,70-72",
+     "infra/cloud.Dockerfile:9 (no .dockerignore, ls exit 2)",
+     "docs/PHASE1-REPORT.md:36",
+     "docs/PHASE0-REPORT.md:59-60,70",
+     "platform/docs/deployment-model.md:47-58",
+     "platform/apps/cloud/vercel.json"
+    ],
+    "description": "make up depends on supabase-start which runs `supabase db reset --local --yes` every time, destroying all adport data; compose reaches Supabase via host.docker.internal with postgres:postgres, hardcodes engine-db credentials, mounts the whole .env into both containers, has no cloud healthcheck or TLS; neither image has ever been built; no hosted-Supabase link/push procedure exists; vercel.json is upstream's.",
+    "recommendation": "Separate start from reset; add .dockerignore; build images in CI; write a hosted Supabase + TLS + health runbook; parameterize credentials."
+   },
+   {
+    "id": "J5-05",
+    "title": "No CI runs for this repository (no root .github; nested upstream workflows do not execute)",
+    "severity": "P1",
+    "classification": "VERIFIED_CODE",
+    "evidence": [
+     "ls -la .github => exit 2",
+     "platform/.github/workflows/ci.yml:26-33",
+     "engine/.github/workflows/ci.yml:17-27",
+     "engine/.gitleaks.toml (only scanner config; none at root)",
+     "infra/package.json:9 (no lockfile)"
+    ],
+    "description": "Workflows exist only under platform/ and engine/ subdirectories, which GitHub does not execute (INFERRED platform behaviour). Tests pass locally (53 vitest, 7 pytest, 3 node, tsc clean) but nothing enforces it; no root secret scanning; infra deps float.",
+    "recommendation": "Root CI running make test, upstream suites, tsc, both Docker builds and gitleaks over the monorepo; commit infra lockfile."
+   },
+   {
+    "id": "J5-06",
+    "title": "Billing is test-mode plumbing: EUR, no tax, no locale, products named 'Adport', no live webhook procedure",
+    "severity": "P2",
+    "classification": "VERIFIED_CODE",
+    "evidence": [
+     "platform/apps/cloud/app/dashboard/billing/actions.ts:21-35",
+     "platform/apps/cloud/lib/cloud/plans.ts:23-44,77,93,103",
+     "infra/scripts/stripe-setup.mjs:12-17,78-79",
+     "Makefile:62",
+     "infra/seed/seed-demo.mjs:16-18,44",
+     "README.md:124-131",
+     "docs/billing.md"
+    ],
+    "description": "Checkout has no automatic_tax/locale/customer_email; prices EUR; Stripe products carry the upstream vendor's name so invoices say 'Adport'; only `stripe listen` is documented for webhooks; the seed grants operator by SQL with no remote-DB guard. Plan gating and webhook verification themselves are sound. README acknowledges VAT/SAR only.",
+    "recommendation": "Decide SAR pricing, enable Stripe Tax, rename products, document live webhook registration, guard the seed."
+   },
+   {
+    "id": "J5-07",
+    "title": "Customer would accept the upstream vendor's legal terms (adport.dev, German law); markting-ai has none",
+    "severity": "P2",
+    "classification": "VERIFIED_CODE",
+    "evidence": [
+     "platform/apps/cloud/components/auth-screen.tsx:73-74",
+     "platform/website/terms.html:50-51",
+     "platform/apps/cloud/lib/i18n/messages/common.ts:29,62",
+     "platform/apps/cloud/app/api/waitlist/route.ts:16",
+     "platform/apps/cloud/lib/cloud/support.ts:65"
+    ],
+    "description": "Sign-in links to https://adport.dev/privacy and /terms; those terms are governed by German law for Adport; i18n domain, waitlist CORS and support sender are all adport. No markting-ai privacy/terms/DPA/subprocessor list/PDPL text exists. Deletion path exists and is sound (app/api/deletion/route.ts:9-26).",
+    "recommendation": "Publish markting-ai's own bilingual legal documents and re-point every adport.dev literal."
+   },
+   {
+    "id": "J5-08",
+    "title": "Support path relies on Resend sandbox sender and has no inbox; failures are silent",
+    "severity": "P2",
+    "classification": "VERIFIED_CODE",
+    "evidence": [
+     "platform/apps/cloud/lib/cloud/support.ts:59-60,65",
+     "platform/apps/cloud/app/api/support/route.ts:28-41",
+     "platform/apps/cloud/.env.example:27-28",
+     "rg -l feedback platform/apps/cloud/app => no dashboard reader",
+     ".env.example (root) lacks RESEND_API_KEY/SUPPORT_NOTIFICATION_EMAIL"
+    ],
+    "description": "Without Resend config the route stores the message, marks notification failed and returns 201; the sender onboarding@resend.dev only delivers to the Resend account owner; no UI reads public.feedback; no SLA/status page/runbook.",
+    "recommendation": "Verified sending domain, support inbox, env vars in the root template, documented response commitment."
+   },
+   {
+    "id": "J5-09",
+    "title": "Secrets: env-file delivery, fixed key version with no rotation, demo defaults (self-approval on) in the only root template",
+    "severity": "P2",
+    "classification": "VERIFIED_CODE",
+    "evidence": [
+     "platform/apps/cloud/lib/crypto.ts:5-9,16,21",
+     "platform/apps/cloud/lib/cloud/repository.ts:162",
+     "infra/scripts/fill-env.mjs:8-14",
+     "docker-compose.yml:17,40",
+     ".env.example:47-49",
+     "platform/apps/cloud/app/api/approvals/[id]/apply/route.ts:22-24",
+     "engine/src/paid_media_agent/runtime/profiles.py:104-109",
+     "platform/docs/deployment-model.md:41-45"
+    ],
+    "description": "Master key read from env, ciphertext pinned to v1 and key_version always 1 (no rotation path, no KMS); plaintext .env mounted into both containers; root template defaults MARKTING_ALLOW_SELF_APPROVAL=true and MARKTING_DEMO_MODE=true (upstream template defaults false); engine approval signing key ephemeral (low impact since engine never approves). Positive: no secrets in git history; 32-byte key enforced.",
+    "recommendation": "KMS/secret-manager with real key versioning; per-service env; flip template defaults to false; set a stable engine signing key."
+   },
+   {
+    "id": "J5-10",
+    "title": "No backups, restore or DR for either database",
+    "severity": "P2",
+    "classification": "VERIFIED_CODE",
+    "evidence": [
+     "rg -i 'backup|pg_dump|restore' => no code or runbook",
+     "docker-compose.yml:81-83",
+     "platform/supabase/migrations/20260817171039_cloud_initial_schema.sql:375-408",
+     "docs/TODO.md:20",
+     "Makefile:27"
+    ],
+    "description": "Only named compose volumes; adport tenant data (incl. the encrypted credential vault) lives in a local Supabase that make up resets; retention cron deletes but nothing restores. TODO mentions backups for the engine DB only.",
+    "recommendation": "Hosted Supabase with PITR or scheduled dumps, pg_dump cron for engine-db, tested restore runbook."
+   },
+   {
+    "id": "J5-11",
+    "title": "No observability: no cloud health route, no metrics, no alerting",
+    "severity": "P2",
+    "classification": "VERIFIED_CODE",
+    "evidence": [
+     "rg -i 'sentry|opentelemetry|otel|datadog|prometheus|/api/health|healthz' => only engine/docs/self-hosting.md:13 and lockfile",
+     "engine/Dockerfile:21",
+     "docker-compose.yml:56-57",
+     "platform/docs/deployment-model.md:52"
+    ],
+    "description": "Engine has /health; the cloud app has no health route or compose healthcheck; errors are console.error strings. deployment-model lists monitoring/alerting as a gate; docs/TODO.md omits it.",
+    "recommendation": "/api/health, structured logs, error tracker, uptime alerting, incident note."
+   },
+   {
+    "id": "J5-12",
+    "title": "Docs instruct a Pipeboard-connected engine that the shipped host refuses to start",
+    "severity": "P3",
+    "classification": "VERIFIED_CODE",
+    "evidence": [
+     "docs/snapchat-live-checklist.md:36",
+     "docs/TODO.md:20",
+     "services/engine-demo/serve_demo.py:142-143",
+     "services/engine-demo/tests/test_demo_api.py:81-91"
+    ],
+    "description": "Checklist step E and TODO item 4 assume PIPEBOARD_API_TOKEN can be set; assert_fail_closed makes it a boot failure.",
+    "recommendation": "Rewrite both docs or deliberately allow Pipeboard reads after fixing J5-03."
+   },
+   {
+    "id": "J5-13",
+    "title": "Python bytecode tracked in git",
+    "severity": "P3",
+    "classification": "VERIFIED_CODE",
+    "evidence": [
+     "git ls-files services => services/engine-demo/__pycache__/serve_demo.cpython-311.pyc, services/engine-demo/tests/__pycache__/test_demo_api.cpython-311-pytest-9.1.1.pyc",
+     ".gitignore (root) lacks __pycache__/ and .pytest_cache/"
+    ],
+    "description": "Build residue committed; root .gitignore does not cover Python caches.",
+    "recommendation": "Add patterns and git rm --cached."
+   },
+   {
+    "id": "J5-14",
+    "title": "Hosted auth hardening settings unspecified (signup open, no email confirmation locally)",
+    "severity": "GAP",
+    "classification": "NOT_VERIFIED",
+    "evidence": [
+     "platform/supabase/config.toml:176,221,226",
+     "platform/supabase/config.toml:182-185"
+    ],
+    "description": "Local config has open signup and confirmations off; hosted values are dashboard settings with no runbook. Hosted behaviour not verifiable here.",
+    "recommendation": "Record production auth settings and SMTP sender in the deployment runbook."
+   },
+   {
+    "id": "J5-15",
+    "title": "Single write path and plan gate verified (positive finding)",
+    "severity": "P3",
+    "classification": "VERIFIED_TEST",
+    "evidence": [
+     "services/engine-demo/serve_demo.py:69-81,139-180",
+     "services/engine-demo/tests/test_demo_api.py:66-91,106-156",
+     "platform/apps/cloud/lib/markting/engine-client.ts:61,77-79",
+     "platform/apps/cloud/lib/markting/bridge.ts:143-151,194-196",
+     "platform/packages/core/src/policy/policy.ts:19",
+     "vitest 53 passed, pytest 7 passed (exit 0)"
+    ],
+    "description": "Engine write provider always raises, kill switch engaged, boot refuses write flags; bridge has no approve/edit path and refuses without tools:write; apply is the identical second call; 15-minute TTL matches README. Recorded so the capability table is honest; not a defect.",
+    "recommendation": "Keep these tests in the (currently missing) root CI."
+   }
+  ],
+  "key_findings": [
+   "The AI layer is demo-only for everyone: the engine host hard-forces fixture data mode and refuses Pipeboard credentials (serve_demo.py:142-143,163-166,386), so a paying customer never gets analysis of their own accounts; README.md:83 claims otherwise and neither README nor TODO lists it.",
+   "Engine reports are a single tenant-global index with no organization check in the cloud routes (serve_demo.py:355-374; api/reports/engine/route.ts:16-24); synthetic-only today, P0 the day real data arrives.",
+   "No production artefact exists: compose is dev-only, `make up` runs `supabase db reset` on every start (Makefile:27,33), images have never been built, no hosted-Supabase procedure, no TLS/health.",
+   "No CI runs for this repo (no root .github; nested upstream workflows don't execute) and no root secret scanning; the local suites do pass (53 vitest, 7 pytest, 3 node, tsc clean).",
+   "Billing is Stripe test-mode plumbing in EUR without tax/locale and with 'Adport'-named products; legal links point to adport.dev's German-law terms; support email uses the Resend sandbox sender with no inbox.",
+   "Secrets are env-file only with a fixed ciphertext version (no rotation/KMS); the only root template defaults MARKTING_ALLOW_SELF_APPROVAL=true; no backups/DR or monitoring anywhere.",
+   "The one invariant that does hold, verified in code and tests: the engine cannot write and every change goes through adport's policy engine with human approval."
+  ],
+  "disagreements": "README.md:83 ('Analyses connected accounts') vs fixture-only engine (serve_demo.py:163-166,386; catalog.py:51-58). README.md:128 implies the single engine token is contained by markting_threads; true for threads, false for reports (global index). docs/snapchat-live-checklist.md:36 and docs/TODO.md:20 assume a Pipeboard-connected engine that serve_demo.py:142-143 refuses to start. README/Makefile describe `make up` as 'start' while Makefile:27 resets the database every run. docs/TODO.md orders billing as the first blocker while the absence of real analysis, deployment and CI are not listed at all. README 'Not production-ready yet' (124-131) omits fixture-only analysis, cross-tenant reports, no CI, no backups, no monitoring, no own legal docs, destructive start, no alias management and the support sender. docs/billing.md test-mode walkthrough is DOCUMENTED_ONLY (never executed in this repo). Items that agree with the code: VAT/SAR missing, OAuth app review pending, English reports, Snapchat wire-tested only, 15-minute TTL (policy.ts:19), UPSTREAM.md 'engine/ unmodified', no .env ever committed.",
+  "confidence": 0.82,
+  "not_verified": "Docker image builds and `docker compose up` (network-blocked; never built per PHASE1-REPORT.md:36), including whether the standalone cloud image serves sign-in with the host.docker.internal Supabase URL and the build-time CSP default (next.config.ts:37-39). The Stripe test-mode walkthrough (needs a key). Hosted Supabase behaviour of the migrations (pg_cron, adport_backend role) and production auth settings. GitHub's non-execution of nested workflows is platform knowledge (INFERRED), not executed. MARKTING_ENGINE_MODE=live with a real model, and any live provider (Snapchat) call, deliberately not attempted. Whether Stripe Tax alone satisfies Saudi VAT/ZATCA obligations is a legal question outside the code.",
+  "capabilities": [
+   {
+    "capability": "Local one-command dev stack",
+    "rating": "EXISTS_BUT_LIMITED",
+    "evidence": "Makefile, docker-compose.yml; images never built (PHASE1-REPORT.md:36); make up resets DB (Makefile:26-28,33)"
+   },
+   {
+    "capability": "Production deployment",
+    "rating": "DOCUMENTED_NOT_IMPLEMENTED",
+    "evidence": "gates in platform/docs/deployment-model.md:47-58; no artefact in repo"
+   },
+   {
+    "capability": "CI for this repository",
+    "rating": "MISSING",
+    "evidence": "no root .github; nested upstream workflows only"
+   },
+   {
+    "capability": "Stripe billing",
+    "rating": "EXISTS_BUT_LIMITED",
+    "provider": "Stripe",
+    "evidence": "billing.ts/plans.ts sound; actions.ts:21-35 no tax/locale; stripe-setup.mjs:12-17 EUR, 'Adport' names"
+   },
+   {
+    "capability": "Plan -> tools:write entitlement",
+    "rating": "EXISTS_AND_STRONG",
+    "evidence": "plans.ts:77-105; bridge.ts:143-145"
+   },
+   {
+    "capability": "Secrets management (KMS/rotation)",
+    "rating": "PARTIAL",
+    "evidence": "crypto.ts:5-21 env key, v1 only; repository.ts:162 key_version=1"
+   },
+   {
+    "capability": "Backups / DR",
+    "rating": "MISSING",
+    "evidence": "no backup/restore code or runbook; compose volumes only"
+   },
+   {
+    "capability": "Monitoring / alerting / health",
+    "rating": "MISSING",
+    "evidence": "engine /health only; no cloud health route or telemetry"
+   },
+   {
+    "capability": "Support channel",
+    "rating": "EXISTS_BUT_LIMITED",
+    "provider": "Resend",
+    "evidence": "support.ts:59-65 sandbox sender; route.ts:28-41 silent failure; no inbox"
+   },
+   {
+    "capability": "Legal documents for markting-ai",
+    "rating": "MISSING",
+    "evidence": "auth-screen.tsx:73-74 links adport.dev; terms.html:50-51 German law"
+   },
+   {
+    "capability": "AI analysis of customer's connected accounts",
+    "rating": "MOCK_ONLY",
+    "evidence": "serve_demo.py:163-166,386; catalog.py:51-58; test_demo_api.py:71"
+   },
+   {
+    "capability": "Engine proposal -> real account preview",
+    "rating": "UNSAFE_TO_AUTOMATE",
+    "evidence": "repository.ts:40-58 no alias writer; synthetic analysis would target real campaigns"
+   },
+   {
+    "capability": "Tenant isolation of Assistant threads",
+    "rating": "EXISTS_AND_STRONG",
+    "evidence": "assistant.ts:34-38; repository.ts:17-27; markting_bridge.sql:68-89"
+   },
+   {
+    "capability": "Tenant isolation of engine reports",
+    "rating": "MISSING",
+    "evidence": "serve_demo.py:355-374; api/reports/engine/route.ts:16-24"
+   },
+   {
+    "capability": "Single write path with human approval",
+    "rating": "EXISTS_AND_STRONG",
+    "evidence": "serve_demo.py:69-81,139-180; bridge.ts:194-196; 53 vitest + 7 pytest passed"
+   },
+   {
+    "capability": "Live LLM mode",
+    "rating": "NOT_VERIFIED",
+    "evidence": "docs/TODO.md:26; no test covers MARKTING_ENGINE_MODE=live"
+   }
+  ]
+ },
+ "J6": {
+  "agent_id": "J6",
+  "role": "Independent data / attribution skeptic",
+  "report_path": "docs/audit/agents/J6.md",
+  "scope": "Every way a number shown to a buyer could be wrong, non-comparable or fabricated-looking: engine normalize/compute/compare_periods/fixtures and domain metrics; platform core model/report-summary and provider report paths (google, meta, reddit, snapchat, tiktok, x, apple, microsoft); sandbox provider; cloud dashboard rendering (overview, reports, assistant); glue (serve_demo.py, docker-compose, env); docs (reporting-semantics.md, README, ARCHITECTURE, phase reports) compared against code.",
+  "files_inspected": [
+   "engine/src/paid_media_agent/tools/normalize.py",
+   "engine/src/paid_media_agent/tools/compute.py",
+   "engine/src/paid_media_agent/tools/compare_periods.py",
+   "engine/src/paid_media_agent/tools/fixtures.py",
+   "engine/src/paid_media_agent/tools/summary.py",
+   "engine/src/paid_media_agent/tools/reports.py",
+   "engine/src/paid_media_agent/tools/reads.py",
+   "engine/src/paid_media_agent/tools/pipeboard.py",
+   "engine/src/paid_media_agent/tools/providers.py",
+   "engine/src/paid_media_agent/tools/direct/__init__.py",
+   "engine/src/paid_media_agent/tools/direct/x_ads.py",
+   "engine/src/paid_media_agent/tools/direct/openai_ads.py",
+   "engine/src/paid_media_agent/domain/metrics.py",
+   "engine/src/paid_media_agent/domain/analysis.py",
+   "engine/src/paid_media_agent/domain/common.py",
+   "engine/src/paid_media_agent/domain/format.py",
+   "engine/src/paid_media_agent/runtime/catalog.py",
+   "engine/src/paid_media_agent/runtime/mda.py",
+   "engine/src/paid_media_agent/runtime/profiles.py",
+   "engine/src/paid_media_agent/config.py",
+   "engine/src/paid_media_agent/reports/cadence.py",
+   "engine/src/paid_media_agent/reports/render.py",
+   "engine/src/paid_media_agent/testing/demo_script.py",
+   "engine/src/paid_media_agent/fixtures/data/google_ads.json",
+   "engine/src/paid_media_agent/fixtures/data/meta_ads.json",
+   "engine/src/paid_media_agent/fixtures/data/reddit_ads.json",
+   "engine/config/accounts.example.toml",
+   "engine/.env.example",
+   "engine/tests/unit/test_compute.py",
+   "engine/tests/unit/test_summarize_window.py",
+   "engine/tests/unit/test_entity_grain.py",
+   "engine/tests/unit/test_reads_and_surfaces.py",
+   "engine/tests/unit/test_direct_adapters.py",
+   "engine/tests/eval/questions.json",
+   "services/engine-demo/serve_demo.py",
+   "docker-compose.yml",
+   ".env.example",
+   "platform/packages/core/src/model.ts",
+   "platform/packages/core/src/report-summary.ts",
+   "platform/packages/core/src/tools/builtin.ts",
+   "platform/packages/core/src/tools/outputs.ts",
+   "platform/packages/core/test/report-summary.test.ts",
+   "platform/packages/google/src/provider.ts",
+   "platform/packages/meta/src/provider.ts",
+   "platform/packages/reddit/src/provider.ts",
+   "platform/packages/reddit/test/reddit.test.ts",
+   "platform/packages/snapchat/src/provider.ts",
+   "platform/packages/tiktok/src/provider.ts",
+   "platform/packages/x/src/provider.ts",
+   "platform/packages/mcp/src/index.ts",
+   "platform/apps/cloud/lib/markting/sandbox-provider.ts",
+   "platform/apps/cloud/lib/markting/runtime.ts",
+   "platform/apps/cloud/lib/markting/env.ts",
+   "platform/apps/cloud/lib/markting/translate.ts",
+   "platform/apps/cloud/lib/markting/assistant.ts",
+   "platform/apps/cloud/lib/markting/bridge.ts",
+   "platform/apps/cloud/lib/markting/engine-client.ts",
+   "platform/apps/cloud/lib/cloud/reads.ts",
+   "platform/apps/cloud/app/dashboard/live-data.tsx",
+   "platform/apps/cloud/app/dashboard/reports/page.tsx",
+   "platform/apps/cloud/app/dashboard/reports/engine-reports.tsx",
+   "platform/apps/cloud/app/dashboard/assistant/page.tsx",
+   "platform/apps/cloud/app/api/dashboard/summary/route.ts",
+   "platform/apps/cloud/app/api/reports/engine/route.ts",
+   "platform/apps/cloud/app/api/reports/engine/[name]/route.ts",
+   "platform/apps/cloud/components/ui.tsx",
+   "platform/apps/cloud/lib/i18n/messages/reports.ts",
+   "platform/apps/cloud/lib/i18n/messages/overview.ts",
+   "platform/apps/cloud/lib/i18n/messages/assistant.ts",
+   "platform/docs/reporting-semantics.md",
+   "README.md",
+   "UPSTREAM.md",
+   "docs/ARCHITECTURE.md",
+   "docs/PHASE0-REPORT.md",
+   "docs/PHASE1-REPORT.md",
+   "docs/PHASE3-REPORT.md",
+   "docs/TODO.md"
+  ],
+  "tests_executed": [
+   "cd engine && uv run --frozen pytest -q tests/unit/test_compute.py tests/unit/test_summarize_window.py tests/unit/test_entity_grain.py tests/unit/test_reads_and_surfaces.py tests/unit/test_direct_adapters.py => 0 (35 passed)",
+   "cd platform && pnpm --filter @adport/core test => 0 (41 passed)",
+   "cd engine && uv run --frozen python <scratchpad>/j6_repro.py (10 read-only probes of normalize_rows/compare_platform/compare_periods/run_compare_periods) => 0",
+   "rg -n 'ATTRIBUTION_DIFFERS|CURRENCY_MISMATCH|TIMEZONE_MISMATCH|SOURCE_UNAVAILABLE|STALE_CATALOG' engine/src | grep -v common.py => 1 (no matches: flags never raised)",
+   "rg -n -i 'synthetic|fixture|demo|sample' engine/src/paid_media_agent/reports/templates/* engine/src/paid_media_agent/reports/render.py => 1 (no matches: no synthetic marker in rendered reports)",
+   "git log --oneline -3 -- engine/.../compute.py engine/.../normalize.py platform/packages/core/src/report-summary.ts => 0 (only upstream import commits)"
+  ],
+  "findings": [
+   {
+    "id": "J6-01",
+    "title": "AI analysis reports shown to buyers are always synthetic fixture data, dated as current, labelled reconciled, with no demo marker",
+    "severity": "P1",
+    "classification": "VERIFIED_CODE",
+    "evidence": [
+     "docker-compose.yml:47",
+     "services/engine-demo/serve_demo.py:163-166",
+     "services/engine-demo/serve_demo.py:183-191",
+     "services/engine-demo/serve_demo.py:383-387",
+     "engine/src/paid_media_agent/tools/fixtures.py:201-214",
+     "engine/src/paid_media_agent/tools/fixtures.py:242-248",
+     "platform/apps/cloud/app/dashboard/reports/engine-reports.tsx:117-125",
+     "platform/apps/cloud/app/dashboard/reports/page.tsx:1-54 (no isDemoMode)",
+     "platform/apps/cloud/lib/i18n/messages/reports.ts:23-24,37",
+     "platform/apps/cloud/lib/markting/assistant.ts:52,73",
+     "README.md:14,83",
+     "rg over reports/templates and render.py for synthetic|fixture|demo => exit 1"
+    ],
+    "description": "The engine host can only read the three shipped fixtures in both demo and live engine modes; fixture dates are shifted to today-2; the cloud Reports page renders the resulting per-platform spend/CPA strings and a 'reconciled' badge under 'AI analysis reports' with no synthetic label, even when MARKTING_DEMO_MODE=false and real OAuth rows are shown on the same page. The Assistant demo banner is driven by the cloud flag, not by what the engine reads. README claims analysis of connected accounts. Report index is engine-global and the list route only authenticates, so every org sees every run.",
+    "recommendation": "Propagate a data_source field (catalog.source is available) into /reports, chat outcomes and the report payload; render a persistent synthetic banner on the Reports card and in HTML/PDF when it is fixture; hide the engine card when catalog_source != live outside demo mode; scope the report index per organization; correct the README or ship a live engine profile."
+   },
+   {
+    "id": "J6-02",
+    "title": "Default PAID_MEDIA_DATA_MODE=auto mixes synthetic Google/Meta/Reddit tools into a live catalog when only direct adapters are configured",
+    "severity": "P2",
+    "classification": "VERIFIED_CODE",
+    "evidence": [
+     "engine/src/paid_media_agent/runtime/catalog.py:61-86",
+     "engine/src/paid_media_agent/config.py:124",
+     "engine/.env.example:15",
+     "services/engine-demo/serve_demo.py:163-166 (mitigation in this repo)"
+    ],
+    "description": "With no Pipeboard token and X/OpenAI keys present, mode auto builds catalog source 'fixture+direct' with CompositeReadProvider(FixtureReadProvider(), direct_providers); compare_periods would total fixture rows with live X spend (same USD, same windows) and report reconciled. Unreachable through docker-compose because serve_demo refuses non-sample, hence P2 here; P1 for any direct `paid-media-agent serve` deployment.",
+    "recommendation": "Never mix: default to live-or-sample, or flag fixture-sourced rows and suppress totals that mix fixture:// with direct/pipeboard sources."
+   },
+   {
+    "id": "J6-03",
+    "title": "Overview ROAS tile is always 0x and spend tile sums across currencies and providers; undefined metrics render as 0",
+    "severity": "P2",
+    "classification": "VERIFIED_CODE",
+    "evidence": [
+     "platform/apps/cloud/lib/cloud/reads.ts:53-55 (conversion_value never requested)",
+     "platform/apps/cloud/app/dashboard/live-data.tsx:34-42,49,70-71",
+     "platform/apps/cloud/components/ui.tsx:66 (formatNumber(value = 0))",
+     "platform/apps/cloud/lib/i18n/messages/overview.ts:20",
+     "platform/docs/reporting-semantics.md:15"
+    ],
+    "description": "readReport requests spend/impressions/clicks/conversions/roas but live-data computes headline ROAS from conversion_value, which is therefore always 0 -> '0x' whenever spend > 0. The same block sums spend across all rows regardless of row.currency/provider. formatNumber renders undefined as 0, so untracked per-row ROAS/conversions print as 0.",
+    "recommendation": "Use the report tool's summary.groups (currency-grouped, spend-weighted ROAS) or request conversion_value; group tiles by currency; render null/undefined as a dash."
+   },
+   {
+    "id": "J6-04",
+    "title": "Platform providers (and sandbox) emit 0 for undefined ratios, contradicting the 'missing is never zero' rule",
+    "severity": "P2",
+    "classification": "VERIFIED_CODE",
+    "evidence": [
+     "platform/packages/google/src/provider.ts:198-202",
+     "platform/packages/meta/src/provider.ts:190-191,210-214",
+     "platform/packages/tiktok/src/provider.ts:160-164",
+     "platform/packages/reddit/src/provider.ts:234-238",
+     "platform/packages/snapchat/src/provider.ts:149",
+     "platform/packages/apple/src/provider.ts:207-211",
+     "platform/packages/microsoft/src/provider.ts:235-239",
+     "platform/apps/cloud/lib/markting/sandbox-provider.ts:128-132",
+     "platform/docs/reporting-semantics.md:13",
+     "platform/packages/core/src/tools/builtin.ts:57",
+     "engine/src/paid_media_agent/tools/compute.py:40-46 (engine does it right)"
+    ],
+    "description": "cpa = conversions>0 ? spend/conversions : 0, roas = spend>0 ? value/spend : 0, etc. A campaign with spend and no tracked conversions shows CPA 0 and ROAS 0; Meta counts only omni_purchase so lead-gen accounts always show conversions 0. summarizeReport is careful but only sees what providers emit.",
+    "recommendation": "Emit undefined for zero-denominator ratios and untracked conversion metrics; render as dash."
+   },
+   {
+    "id": "J6-05",
+    "title": "Clicks and conversions summed across platforms with different definitions and attribution; ATTRIBUTION_DIFFERS never raised",
+    "severity": "P2",
+    "classification": "VERIFIED_CODE",
+    "evidence": [
+     "engine/src/paid_media_agent/tools/normalize.py:28,130",
+     "engine/src/paid_media_agent/tools/compute.py:278-298,315-326",
+     "engine/src/paid_media_agent/domain/common.py:64 (+ rg exit 1)",
+     "engine/src/paid_media_agent/tools/direct/x_ads.py:420,428",
+     "platform/packages/x/src/provider.ts:75 (url_clicks)",
+     "platform/packages/meta/src/provider.ts:170-182 (no attribution window params)",
+     "platform/packages/snapchat/src/provider.ts:58-62,146 (28_DAY swipe, swipes as clicks)",
+     "platform/packages/tiktok/src/provider.ts:124-125,150-152",
+     "platform/packages/reddit/src/provider.ts:230",
+     "platform/packages/core/src/report-summary.ts:19-24",
+     "engine/src/paid_media_agent/reports/render.py:189-192,300 (only caveat)",
+     "probe 5 and probe 8 output"
+    ],
+    "description": "Engine prefers Meta all-clicks over link_clicks and accepts objective-dependent 'results' as conversions; attribution metadata is stored but never compared; cross-platform totals derive CVR/CPA/ROAS from summed conversions across 7d-click, 28-day swipe, click+view purchases and objective results. Engine X uses clicks while adport X uses url_clicks. Only the rendered report carries a one-line caveat; the model-facing summary, dashboard and report-tool summary do not.",
+    "recommendation": "Carry attribution and click_definition on rows; raise ATTRIBUTION_DIFFERS and suppress or caveat cross-platform ratio metrics while keeping spend totals."
+   },
+   {
+    "id": "J6-06",
+    "title": "Live reads have no provider-reported currency, timezone or completeness; labels come from static TOML and partial days count as complete",
+    "severity": "P2",
+    "classification": "VERIFIED_CODE",
+    "evidence": [
+     "engine/src/paid_media_agent/tools/pipeboard.py:186-193",
+     "engine/src/paid_media_agent/tools/direct/x_ads.py:301-312,424-430",
+     "engine/src/paid_media_agent/tools/direct/openai_ads.py:245-251",
+     "engine/src/paid_media_agent/tools/reads.py:235-239,246-247",
+     "engine/src/paid_media_agent/tools/normalize.py:141-142,156",
+     "engine/src/paid_media_agent/domain/metrics.py:60",
+     "engine/src/paid_media_agent/tools/compute.py:404-406",
+     "probe 6 (today's row is_complete True) and probe 10 (SAR row labelled USD)"
+    ],
+    "description": "PipeboardReadProvider and the direct adapters return payload only; reads.py falls back to the accounts TOML currency/timezone and data_complete_through=None, so every live row is complete and today's partial spend compares against full days as a drop; a row-level account_currency is never checked, so the currency printed next to every figure is operator-typed.",
+    "recommendation": "Require provider currency/timezone (X and OpenAI already fetch them), flag disagreement with the binding, and derive data_complete_through from a per-platform lag table at minimum."
+   },
+   {
+    "id": "J6-07",
+    "title": "compare_periods double-counts duplicate sources and accepts overlapping windows",
+    "severity": "P2",
+    "classification": "VERIFIED_TEST",
+    "evidence": [
+     "engine/src/paid_media_agent/tools/compare_periods.py:44-53,57-101",
+     "engine/src/paid_media_agent/tools/compute.py:329-331",
+     "engine/tests/unit/test_compute.py:141-146 ([complete, complete] => 28 expected)",
+     "engine/src/paid_media_agent/tools/summary.py:178-179 (summarize_window does dedupe)",
+     "probe 1: 70.00 USD platform, 140.00 USD total, reconciled True",
+     "probe 2: overlapping 08-05..08-11 vs 08-01..08-07 accepted"
+    ],
+    "description": "No uniqueness check on (platform, account_ref) across artifact_ids chosen by the model; a campaign-grain and ad-group-grain read, or a retried read, doubles the cross-platform total while still labelled reconciled. Overlapping current/previous windows pass validation.",
+    "recommendation": "Dedupe by (platform, account_ref), reject overlapping windows, add a cross-artifact reconciliation check for the same account."
+   },
+   {
+    "id": "J6-08",
+    "title": "INCOMPLETE_WINDOW is over-sensitive to sparse entities and has no live signal",
+    "severity": "P2",
+    "classification": "VERIFIED_TEST",
+    "evidence": [
+     "engine/src/paid_media_agent/tools/compute.py:128-129,181-186,203-207,319-322",
+     "probe 3: one campaign with rows on even days only => platform incomplete_window, total suppressed",
+     "docs/ARCHITECTURE.md:654 (documents default report always incomplete)"
+    ],
+    "description": "Any entity with fewer rows than days (paused campaign, provider omitting zero-activity days) marks the platform window incomplete and suppresses the cross-platform total; meanwhile live reads have no completeness signal (J6-06). The flag cannot be trusted in either direction.",
+    "recommendation": "Derive platform completeness from provider freshness, not entity coverage; report sparse entities separately."
+   },
+   {
+    "id": "J6-09",
+    "title": "Day assignment and time-zone handling make daily rows non-comparable across sources",
+    "severity": "P3",
+    "classification": "VERIFIED_CODE",
+    "evidence": [
+     "engine/src/paid_media_agent/tools/normalize.py:106-109,152-157",
+     "engine/src/paid_media_agent/tools/direct/x_ads.py:199-210,369-383 (UTC slicing)",
+     "engine/src/paid_media_agent/tools/reads.py:247 (labelled with TOML tz)",
+     "platform/packages/reddit/src/provider.ts:114,139 (time_zone_id UTC)",
+     "platform/packages/reddit/test/reddit.test.ts:109",
+     "platform/packages/snapchat/src/provider.ts:59-60,158-171",
+     "platform/packages/x/src/provider.ts:44-46",
+     "probe 4 (mixed tz total produced, no flag)",
+     "probe 5 (date_stop ignored)"
+    ],
+    "description": "Multi-day Meta rows are booked on date_start; engine X assigns days at UTC midnight but labels rows with the account timezone; adport Reddit queries UTC while Google/Meta use account-local dates and Snap/X compute account midnight; cross-platform totals ignore timezone differences.",
+    "recommendation": "Carry the reporting timezone per row, honour date_stop, raise TIMEZONE_MISMATCH when combining."
+   },
+   {
+    "id": "J6-10",
+    "title": "'reconciled' is a near-tautology in live mode but surfaced to the buyer as assurance",
+    "severity": "P3",
+    "classification": "VERIFIED_CODE",
+    "evidence": [
+     "engine/src/paid_media_agent/tools/compute.py:216-248",
+     "engine/src/paid_media_agent/tools/fixtures.py:386-391 (only fixtures supply totals)",
+     "engine/src/paid_media_agent/tools/reads.py:266",
+     "engine/src/paid_media_agent/domain/analysis.py:190-192",
+     "platform/apps/cloud/app/dashboard/reports/engine-reports.tsx:117",
+     "platform/apps/cloud/lib/i18n/messages/reports.ts:37,79",
+     "probe 7"
+    ],
+    "description": "entity_rows_sum_to_platform_spend compares two sums of the same rows; provider-total checks only run for fixtures; the UI prints 'reconciled / مُطابَق'.",
+    "recommendation": "Call it 'internally consistent' unless an external provider total was compared; show which checks ran."
+   },
+   {
+    "id": "J6-11",
+    "title": "CTR is a fraction in the engine and a percentage in adport; summarize_window emits it unlabelled",
+    "severity": "P3",
+    "classification": "VERIFIED_CODE",
+    "evidence": [
+     "engine/src/paid_media_agent/tools/compute.py:87",
+     "engine/src/paid_media_agent/tools/summary.py:100,140",
+     "engine/src/paid_media_agent/reports/render.py:59-60",
+     "platform/docs/reporting-semantics.md:11",
+     "platform/packages/google/src/provider.ts:198"
+    ],
+    "description": "A consumer mixing the two systems reads 10% CTR as 0.1%.",
+    "recommendation": "Single labelled convention (ctr_pct) across engine and platform."
+   },
+   {
+    "id": "J6-12",
+    "title": "Five DataQualityFlag members are defined but never produced",
+    "severity": "P3",
+    "classification": "VERIFIED_CODE",
+    "evidence": [
+     "engine/src/paid_media_agent/domain/common.py:55-65",
+     "rg over engine/src excluding common.py => exit 1",
+     "engine/src/paid_media_agent/tools/compute.py:149-151,316-318 (currency handled by raise/suppress, no flag)",
+     "probe 4 (mixed timezones unflagged)"
+    ],
+    "description": "CURRENCY_MISMATCH, TIMEZONE_MISMATCH, ATTRIBUTION_DIFFERS, SOURCE_UNAVAILABLE, STALE_CATALOG advertise detections that do not exist.",
+    "recommendation": "Implement or delete."
+   },
+   {
+    "id": "J6-13",
+    "title": "Reddit conversion value divided by 100 while spend divided by 1e6; unit unverified",
+    "severity": "P3",
+    "classification": "NOT_VERIFIED",
+    "evidence": [
+     "platform/packages/reddit/src/provider.ts:227,231",
+     "platform/packages/reddit/test/reddit.test.ts:97-110 (asserts the code's own assumption)"
+    ],
+    "description": "If conversion_purchase_total_value is in micros like spend, ROAS is 10,000x too high. Reddit docs could not be consulted offline.",
+    "recommendation": "Verify against the Reddit Ads reporting reference or a captured live sample and add a real fixture."
+   },
+   {
+    "id": "J6-14",
+    "title": "Dashboard tables omit currency while docs promise currencies stay provider-specific",
+    "severity": "P2",
+    "classification": "VERIFIED_CODE",
+    "evidence": [
+     "platform/apps/cloud/app/dashboard/reports/page.tsx:33-44",
+     "platform/apps/cloud/app/dashboard/live-data.tsx:65-71",
+     "platform/packages/core/src/model.ts:41-42",
+     "platform/apps/cloud/components/ui.tsx:67-70 (formatMoney exists, unused here)",
+     "platform/apps/cloud/lib/i18n/messages/reports.ts:5,47"
+    ],
+    "description": "Every ReportRow carries currency but rows are printed with formatNumber only; a SAR Snap row and a USD Google row look identical and are summed together on the overview.",
+    "recommendation": "Show currency per row and group totals by currency using the report tool's summary.groups."
+   },
+   {
+    "id": "J6-15",
+    "title": "Sandbox synthetic metrics: deliberately unlabelled tool names, process-global demo switch, formula-generated history; report() currently unreachable from UI",
+    "severity": "P3",
+    "classification": "VERIFIED_CODE",
+    "evidence": [
+     "platform/apps/cloud/lib/markting/sandbox-provider.ts:6-8,114-124,136",
+     "platform/apps/cloud/lib/markting/env.ts:56",
+     "platform/apps/cloud/lib/markting/runtime.ts:18-27",
+     "platform/apps/cloud/lib/markting/bridge.ts:1-7",
+     "platform/apps/cloud/lib/cloud/reads.ts:36,52",
+     "platform/apps/cloud/test/markting-sandbox.test.ts:36-37",
+     "docs/PHASE1-REPORT.md:17"
+    ],
+    "description": "Sandbox report rows are marked only by provider 'sandbox'; tool names avoid the demo_/mock_/synthetic_ prefixes the production MCP connector refuses; demo mode flips for all tenants at once. Today only the proposal bridge uses the sandbox runtime and it calls guarded writes only, so synthetic report rows cannot reach a dashboard (MOCK_ONLY), but the risk is latent. Metrics do not reproduce the engine fixture numbers despite 'mirroring' claims.",
+    "recommendation": "Add data_source:'sandbox' to sandbox ReportRows; refuse to register the sandbox module in production without a per-organization demo flag."
+   },
+   {
+    "id": "J6-16",
+    "title": "Gap: no FX conversion, no low-volume/significance handling, no freshness timestamp shown to the buyer",
+    "severity": "GAP",
+    "classification": "VERIFIED_CODE",
+    "evidence": [
+     "platform/docs/reporting-semantics.md:9,15,33,43",
+     "platform/packages/core/src/model.ts:41",
+     "rg for significance/volume handling in engine compute/summary: none"
+    ],
+    "description": "The project's own safe-comparison checklist (currency alignment, completed days, comparable conversion definitions, attribution, low-volume rows, query time) has code only for currency grouping; the rest is documentation.",
+    "recommendation": "Implement provenance, freshness and volume thresholds as data, not prose."
+   }
+  ],
+  "key_findings": [
+   "P1: in this repo's deployment the engine can only read synthetic fixtures (compose pins sample; serve_demo asserts sample in both engine modes), yet the Reports page shows those fabricated spend/CPA figures with current dates and a 'reconciled' badge under 'AI analysis reports' with no demo label even when MARKTING_DEMO_MODE=false; README claims analysis of connected accounts.",
+   "Engine arithmetic is sound (ratio-of-sums, Decimal, missing-not-zero) but its safety rails are weaker than they look: compare_periods double-counts duplicate artifacts (test codifies it), accepts overlapping windows, never raises attribution/timezone/currency flags, and 'reconciled' is a tautology outside fixtures.",
+   "Live engine reads carry no provider currency/timezone/freshness: currency labels come from a static TOML, today's partial day counts as complete, and INCOMPLETE_WINDOW instead over-triggers on sparse entities and suppresses totals.",
+   "Platform providers emit 0 for undefined CPA/ROAS/CPC/CTR (contradicting reporting-semantics.md and the report tool's own description); the overview ROAS tile is always 0x because conversion_value is never requested, and spend is summed across currencies without showing currency.",
+   "Cross-platform conversions/clicks mix definitions (Meta all-clicks vs link clicks, 'results', omni_purchase, Snap swipes with hard-coded 28-day attribution, TikTok objective 'conversion', Reddit click+view purchases, X clicks vs url_clicks) with no flag anywhere a buyer looks.",
+   "Default PAID_MEDIA_DATA_MODE=auto mixes fixture Google/Meta/Reddit tools into a live catalog when only direct adapters exist (mitigated here by serve_demo's sample assertion).",
+   "Sandbox synthetic report metrics are formula-generated and unlabelled but currently unreachable from any UI path (bridge calls guarded writes only).",
+   "Reddit conversion value unit (/100 vs spend /1e6) and real Pipeboard payload shapes are unverified offline."
+  ],
+  "disagreements": "README.md:14,83 claims the product analyses connected accounts; docker-compose.yml:47 and serve_demo.py:163-166,383-387 make the engine fixture-only. README.md:116 says MARKTING_DEMO_MODE=false means real accounts, but the engine's data stays synthetic and is shown unlabelled on the Reports page. reporting-semantics.md:13 and builtin.ts:57 say unavailable metrics are never zero; every platform provider emits 0 for undefined ratios and formatNumber renders undefined as 0. reporting-semantics.md:27 says dates are passed through without timezone shifting; Reddit is forced to UTC and Snap/X convert to account-local midnight. reports.ts:5 says currencies stay provider-specific; the table hides currency and the overview sums across currencies. catalog.py:72 comment says live sessions never mix synthetic platforms; the default auto mode does. DataQualityFlag (common.py:55-65) advertises currency/timezone/attribution mismatch detection that is never raised. PHASE1-REPORT.md:17 says the sandbox mirrors engine fixtures; campaign ids/budgets do, metrics do not. The 'reconciled' badge (engine-reports.tsx:117) overstates what compute.py:216-248 checks in live mode. ARCHITECTURE.md:654 agrees with code that default report runs are always 'incomplete' but records it as behaviour, not as the defect it is (J6-08).",
+  "confidence": 0.8,
+  "not_verified": "Real Pipeboard MCP payload shapes for Google/Meta/Reddit (field names, daily vs aggregated rows, account_currency presence) - the Meta clicks/results precedence and multi-day collapse were shown on representative inputs, not captured responses. Reddit, Snapchat, TikTok and X API unit and attribution semantics (especially Reddit conversion_purchase_total_value /100). Browser rendering of live-data.tsx and reports/page.tsx (conclusions from JSX and formatNumber; no Supabase stack available, cloud app vitest not run). Whether any deployment runs `paid-media-agent serve` with mode auto (affects J6-02 severity). Whether operator accounts.toml currencies ever disagree with real accounts in practice (J6-06 is a design gap, not an observed mislabel).",
+  "capabilities": [
+   {
+    "capability": "Ratio-of-sums aggregation (no ratio averaging)",
+    "rating": "EXISTS_AND_STRONG",
+    "evidence": "engine compute.py:71-95,278-298; core report-summary.ts:19-31; snapchat provider.ts:55-56"
+   },
+   {
+    "capability": "Missing metric stays missing (never zero)",
+    "rating": "EXISTS_BUT_LIMITED",
+    "evidence": "engine compute.py:40-46 honours it; platform providers emit 0 ratios (google 198-202, meta 210-214, tiktok 160-164, reddit 234-238, snapchat 149, apple 207-211); ui.tsx:66 renders undefined as 0"
+   },
+   {
+    "capability": "Currency safety",
+    "rating": "PARTIAL",
+    "evidence": "engine compute.py:149-151,316-318 raises/suppresses; core report-summary.ts:10-13 groups; dashboard live-data.tsx:34-42 sums across currencies; reads.py:246-247 static currency in live mode"
+   },
+   {
+    "capability": "Attribution awareness",
+    "rating": "DOCUMENTED_NOT_IMPLEMENTED",
+    "evidence": "common.py:64 flag never raised (rg exit 1); reporting-semantics.md:29-33; only caveat render.py:189-192"
+   },
+   {
+    "capability": "Incomplete-window detection",
+    "rating": "PARTIAL",
+    "evidence": "works for fixtures via fixtures.py:363-367; no live signal (pipeboard.py:193, reads.py:235-239); over-triggers on sparse entities compute.py:128-129,203-207 (probe 3)"
+   },
+   {
+    "capability": "Time-zone consistency",
+    "rating": "PARTIAL",
+    "evidence": "snapchat provider.ts:158-171 and x provider.ts:44-46 account-local; reddit provider.ts:114 UTC; engine x_ads.py:199-210 UTC labelled with TOML tz; no cross-source check (probe 4)"
+   },
+   {
+    "capability": "Reconciliation to provider totals",
+    "rating": "MOCK_ONLY",
+    "evidence": "fixtures.py:386-391 only source of totals; compute.py:216-224 tautological otherwise (probe 7)"
+   },
+   {
+    "capability": "Duplicate-source protection",
+    "rating": "PARTIAL",
+    "evidence": "summary.py:178-179 rejects; compare_periods.py:57-101 does not (probe 1; test_compute.py:141-146)"
+   },
+   {
+    "capability": "Synthetic-data labelling to the buyer",
+    "rating": "MISSING",
+    "evidence": "reports/page.tsx no isDemoMode; engine-reports.tsx:117-125; render.py/templates no marker (rg exit 1); only assistant/page.tsx:21 banner"
+   },
+   {
+    "capability": "Live engine analysis of connected accounts",
+    "rating": "DOCUMENTED_NOT_IMPLEMENTED",
+    "evidence": "docker-compose.yml:47; serve_demo.py:163-166,383-387; README.md:14,83"
+   },
+   {
+    "capability": "Deterministic versioned analysis artifacts",
+    "rating": "EXISTS_AND_STRONG",
+    "evidence": "analysis.py:80-81,174-192; compare_periods.py:113-124; render.py:245-285 reconcile_report"
+   },
+   {
+    "capability": "FX conversion",
+    "rating": "MISSING",
+    "evidence": "reporting-semantics.md:9,15; model.ts:41 (by design)"
+   },
+   {
+    "capability": "Low-volume / significance handling",
+    "rating": "MISSING",
+    "evidence": "reporting-semantics.md:43 checklist item with no code counterpart"
+   },
+   {
+    "capability": "Sandbox synthetic report metrics",
+    "rating": "MOCK_ONLY",
+    "provider": "sandbox",
+    "evidence": "sandbox-provider.ts:114-132 formula-generated; reachable only via createBridgeRuntime registry, exercised only by test/markting-sandbox.test.ts:36-37"
+   }
+  ]
+ }
+}
