@@ -1,0 +1,10 @@
+{
+  "name": "markting-infra",
+  "private": true,
+  "type": "module",
+  "description": "Helper scripts for the markting-ai local stack (env fill, Supabase key sync, demo seed).",
+  "dependencies": {
+    "@supabase/supabase-js": "2.112.3",
+    "postgres": "3.4.9"
+  }
+}

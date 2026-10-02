@@ -1,0 +1,82 @@
+# markting-ai local stack: adport cloud + paid-media-agent engine (proposal-only) + engine Postgres.
+#
+# Supabase (the adport database) is NOT a service here: adport's migrations need auth.users,
+# pg_cron and the adport_backend role, which only the Supabase image provides. Run it with the
+# Supabase CLI from ./platform (ports 553xx) — `make up` does both steps in order.
+#
+# Copy .env.example to .env first (never commit .env). `make env` generates the random values.
+
+name: markting-ai
+
+services:
+  cloud:
+    build:
+      context: ./platform
+      dockerfile: ../infra/cloud.Dockerfile
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      PORT: "3000"
+      HOSTNAME: 0.0.0.0
+      # Server-side reach to the engine on the compose network; the browser never sees this URL.
+      MARKTING_ENGINE_URL: http://engine:8080
+      # Supabase runs on the host (supabase start); reach it through the host gateway.
+      NEXT_PUBLIC_SUPABASE_URL: ${NEXT_PUBLIC_SUPABASE_URL:-http://host.docker.internal:55321}
+      SUPABASE_DB_URL: ${SUPABASE_DB_URL:-postgresql://postgres:postgres@host.docker.internal:55322/postgres}
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    ports:
+      - "127.0.0.1:3000:3000"
+    depends_on:
+      engine:
+        condition: service_healthy
+
+  engine:
+    # Upstream image, unchanged. The command is the markting host (services/engine-demo), which
+    # replaces the write provider with a proposal-only one and engages the kill switch at boot.
+    build:
+      context: ./engine
+    restart: unless-stopped
+    env_file: .env
+    command: ["python", "/opt/markting/serve_demo.py"]
+    environment:
+      DATABASE_URL: postgresql://paid_media:paid_media@engine-db:5432/paid_media
+      PAID_MEDIA_RUNTIME: self_hosted
+      PAID_MEDIA_API_HOST: 0.0.0.0
+      PAID_MEDIA_API_PORT: "8080"
+      PAID_MEDIA_DATA_MODE: sample
+      PAID_MEDIA_WRITES_ENABLED: "false"
+      PAID_MEDIA_API_TOKENS: ${MARKTING_ENGINE_TOKEN:?set MARKTING_ENGINE_TOKEN in .env}:adport-bridge
+      # demo = scripted offline model (no key). live = PAID_MEDIA_MODEL + its key from .env.
+      MARKTING_ENGINE_MODE: ${MARKTING_ENGINE_MODE:-demo}
+    volumes:
+      - ./services/engine-demo:/opt/markting:ro
+      - engine-workspace:/app/workspace
+      - ./engine/workspace/skills:/app/skills:ro
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8080/health')"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+    depends_on:
+      engine-db:
+        condition: service_healthy
+    # Not published to the host on purpose: only the cloud server talks to the engine.
+
+  engine-db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: paid_media
+      POSTGRES_PASSWORD: paid_media
+      POSTGRES_DB: paid_media
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U paid_media"]
+      interval: 5s
+      retries: 10
+    volumes:
+      - engine-pgdata:/var/lib/postgresql/data
+
+volumes:
+  engine-workspace:
+  engine-pgdata:

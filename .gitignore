@@ -1,0 +1,9 @@
+# Secrets and local configuration: only *.example files are tracked.
+.env
+.env.*
+!.env.example
+
+# Tooling residue at the repo root (each upstream tree has its own .gitignore).
+node_modules/
+.DS_Store
+*.log
