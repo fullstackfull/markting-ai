@@ -148,6 +148,9 @@ jobs:
       - name: pnpm audit (high+ fails)
         working-directory: platform
         run: pnpm install --frozen-lockfile && pnpm audit --prod --audit-level high
+      - name: migration RLS posture (every public table enables RLS)
+        working-directory: platform
+        run: node --test scripts/test-migration-rls.mjs
       - name: uv pip-audit (engine)
         uses: astral-sh/setup-uv@v5
       - name: python dependency audit

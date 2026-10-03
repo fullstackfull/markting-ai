@@ -66,7 +66,9 @@ describeDatabase('Launch validation on real Postgres', () => {
     const after = await admin<Array<{ count: number }>>`select count(*)::int as count from public.markting_operations where organization_id = ${a.organizationId}`;
     expect(Number(after[0]!.count)).toBe(5);
     // 6. verify RLS: the backend-scoped reader for org B sees none of org A's restored rows
-    expect((await listOperations(b.organizationId)).length).toBe(0);
+    const bOps = await listOperations(b.organizationId);
+    expect(bOps.rows.length).toBe(0);
+    expect(bOps.truncated).toBe(false);
     const restoreMs = Date.now() - t0;
     expect(restoreMs).toBeGreaterThanOrEqual(0); // duration recorded (RPO/RTO evidence captured in the doc)
   });

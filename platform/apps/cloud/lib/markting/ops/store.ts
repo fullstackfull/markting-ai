@@ -29,11 +29,23 @@ export async function createOperation(organizationId: string, op: {
        ${db().json(op.action as never)}, ${op.approvalExpiresAt ?? null}, ${op.traceId ?? null}, now(), now())`;
 }
 
-/** Backend-scoped read of an org's operations (org-filtered; RLS allows only the backend role). */
-export async function listOperations(organizationId: string): Promise<Array<Record<string, unknown>>> {
-  return db()<Array<Record<string, unknown>>>`
+/**
+ * Backend-scoped read of an org's operations (org-filtered; RLS allows only the backend role).
+ *
+ * The result is explicitly bounded and NEVER silently truncated: it fetches `limit + 1` rows, and if the
+ * extra row exists it reports `truncated: true` with the applied `limit` so a caller can page rather
+ * than compute totals over a silently clipped set. Default page is 1000 (was an unflagged hard 5000).
+ */
+export async function listOperations(
+  organizationId: string,
+  opts: { limit?: number } = {},
+): Promise<{ rows: Array<Record<string, unknown>>; truncated: boolean; limit: number }> {
+  const limit = Math.max(1, Math.min(opts.limit ?? 1000, 5000));
+  const fetched = await db()<Array<Record<string, unknown>>>`
     select operation_id, state, action_type, account_id from public.markting_operations
-    where organization_id = ${organizationId} order by created_at desc limit 5000`;
+    where organization_id = ${organizationId} order by created_at desc limit ${limit + 1}`;
+  const truncated = fetched.length > limit;
+  return { rows: truncated ? fetched.slice(0, limit) : fetched, truncated, limit };
 }
 
 export async function getOperation(organizationId: string, operationId: string): Promise<{ state: OperationState; claimToken: string | null; requesterUserId: string | null } | null> {

@@ -6,6 +6,20 @@ import { AssistantIntelligenceService } from '@/lib/markting/orchestrator/assist
 import { demoGatherer, emptyGatherer } from '@/lib/markting/orchestrator/demo-gatherer';
 import type { IntelligenceRequestContext, IntelligenceIntent } from '@/lib/markting/orchestrator/context';
 import type { AssistantAnswer } from '@/lib/markting/orchestrator/answer';
+import { assertResultPostureAllowed } from '@/lib/markting/ops/source-guard';
+import type { DataTier } from '@/lib/markting/orchestrator/trust';
+
+/**
+ * Defense-in-depth source isolation (CODE-RC Program 20): verify the composed answer's trust tier
+ * matches the deployment posture before it reaches a surface, so a future regression that wired the
+ * demo seed into a live deployment fails CLOSED here rather than leaking synthetic data to a customer.
+ * In normal operation this never triggers (DEMO→demoGatherer/SYNTHETIC, live→emptyGatherer/UNVERIFIED).
+ */
+function guardAnswerPosture<T extends { trustTier: string }>(answer: T): T {
+  const verdict = assertResultPostureAllowed(resolveRuntimeMode(), answer.trustTier as DataTier);
+  if (!verdict.ok) throw new Error(`source isolation violated: ${verdict.reason}`);
+  return answer;
+}
 
 /**
  * Coherence Program 3/4 — the server-side bridge from a dashboard tenant to the unified orchestrator.
@@ -32,12 +46,12 @@ function serviceForMode(): AssistantIntelligenceService {
 }
 
 export async function loadWorkspaceIntelligence(tenant: DashboardTenant, intent: IntelligenceIntent = 'DAILY_REVIEW', extra: Partial<IntelligenceRequestContext> = {}): Promise<AssistantAnswer> {
-  return serviceForMode().run(contextForTenant(tenant, extra), intent);
+  return guardAnswerPosture(await serviceForMode().run(contextForTenant(tenant, extra), intent));
 }
 
 /** Load a single typed-intent answer (with its analytical section) for a product surface. */
 export async function loadSection(tenant: DashboardTenant, intent: IntelligenceIntent, extra: Partial<IntelligenceRequestContext> = {}) {
-  return serviceForMode().run(contextForTenant(tenant, extra), intent);
+  return guardAnswerPosture(await serviceForMode().run(contextForTenant(tenant, extra), intent));
 }
 
 /** Load the campaign-detail section (campaign scope is not a free-text intent, so built directly). */
@@ -72,7 +86,7 @@ export async function loadCreativeDetail(_tenant: DashboardTenant, creativeId: s
 }
 
 export async function askAssistant(tenant: DashboardTenant, question: string, extra: Partial<IntelligenceRequestContext> = {}): Promise<AssistantAnswer & { intent: IntelligenceIntent }> {
-  return serviceForMode().ask(contextForTenant(tenant, extra), question);
+  return guardAnswerPosture(await serviceForMode().ask(contextForTenant(tenant, extra), question));
 }
 
 /**
@@ -93,5 +107,5 @@ export async function askAssistantForPrincipal(
     locale: 'en',
     ...extra,
   };
-  return serviceForMode().ask(context, question);
+  return guardAnswerPosture(await serviceForMode().ask(context, question));
 }

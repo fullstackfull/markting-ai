@@ -42,6 +42,22 @@ export function assertSourceAllowed(mode: RuntimeMode, source: DataSource): Sour
   return source === 'LIVE' ? { ok: true } : { ok: false, reason: `${source} data must not surface in a live (${mode}) deployment` };
 }
 
+/**
+ * Posture check for a COMPOSED orchestrator result, keyed by its single data-trust TIER (the result
+ * carries a tier, not a per-record source string). Defense-in-depth on top of the structural guarantee
+ * that a live deployment is wired to the empty (NOT_CONNECTED) gatherer, never the demo seed:
+ *  - a live (non-DEMO) deployment must NEVER surface a SYNTHETIC-tier result (that is demo-seed data);
+ *  - a DEMO deployment must NEVER surface a live tier (PLATFORM_REPORTED/VALIDATED/RECONCILED).
+ * The neutral UNVERIFIED tier (a live-but-empty NOT_CONNECTED result) is allowed in either posture.
+ */
+export function assertResultPostureAllowed(mode: RuntimeMode, tier: DataTier): SourceVerdict {
+  const isLiveTier = LIVE_TIERS.includes(tier);
+  if (isDemoDeployment(mode)) {
+    return isLiveTier ? { ok: false, reason: `live-tier (${tier}) result must not surface in a DEMO deployment` } : { ok: true };
+  }
+  return tier === 'SYNTHETIC' ? { ok: false, reason: `SYNTHETIC (demo-seed) result must not surface in a live (${mode}) deployment` } : { ok: true };
+}
+
 /** A result set must not mix live with non-live sources, and every record must pass the posture check. */
 export function assertNoMixedSources(mode: RuntimeMode, records: Array<Pick<DataTrust, 'tier' | 'source'>>): SourceVerdict {
   const sources = new Set(records.map(classifySource));
