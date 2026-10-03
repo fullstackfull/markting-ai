@@ -14,6 +14,12 @@ const HUMAN_A: ApplyActor = { type: 'human_user', id: 'a' };
 const HUMAN_B: ApplyActor = { type: 'human_user', id: 'b' };
 
 function pendingOp(id: string, expiresInMs = 15 * 60_000): PendingOperation {
+  // The schema enforces `expires_at > created_at`. To simulate an ALREADY-EXPIRED op (negative
+  // expiresInMs) we anchor createdAt strictly before expiresAt rather than at "now", so the row is
+  // validly created yet past expiry — exactly the state the claim path must reject.
+  const now = Date.now();
+  const expiresAt = now + expiresInMs;
+  const createdAt = Math.min(now, expiresAt - 1_000);
   return {
     id,
     provider: 'sandbox',
@@ -21,8 +27,8 @@ function pendingOp(id: string, expiresInMs = 15 * 60_000): PendingOperation {
     op: { tool: 'sandbox_set_budget', provider: 'sandbox', accountId: 'acc', kind: 'update', payload: { campaign_id: 'c', daily_budget_micros: 1 } },
     preview: { summary: 's', changes: [], coercions: [], budgetDeltas: [], serverValidated: false },
     previewDigest: 'digest',
-    createdAt: new Date().toISOString(),
-    expiresAt: new Date(Date.now() + expiresInMs).toISOString(),
+    createdAt: new Date(createdAt).toISOString(),
+    expiresAt: new Date(expiresAt).toISOString(),
     state: 'pending',
     requestedBy: { type: 'ai_agent', id: 'engine' },
   };

@@ -1,0 +1,19 @@
+# Root gitleaks config for the combined monorepo (used by the root CI `security` job).
+# It keeps the full default ruleset and only allowlists SYNTHETIC fixtures that live in test
+# directories — deterministic example credentials (e.g. the RFC 5849 OAuth sample tokens) that are
+# not real secrets. Production source, infra, and config are still fully scanned. The engine subtree
+# keeps its own engine/.gitleaks.toml for its vendored-CI secrets job.
+title = "markting-ai root"
+
+[extend]
+useDefault = true
+
+[allowlist]
+description = "Synthetic credential fixtures in test suites are not real secrets."
+paths = [
+  '''.*/test/.*''',
+  '''.*/tests/.*''',
+  '''.*\.test\.[cm]?tsx?$''',
+  '''.*/__fixtures__/.*''',
+  '''.*/fixtures/.*''',
+]
