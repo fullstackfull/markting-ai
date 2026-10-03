@@ -16,7 +16,8 @@ function fakeFetch(reply: unknown, status = 200) {
   return impl as unknown as typeof fetch;
 }
 const CREDS = { accessToken: 'tt-access-token', appId: 'app-1', secret: 'secret-1' };
-const provider = (reply: unknown, status = 200) => new TikTokAdsProvider(new TikTokClient(CREDS, fakeFetch(reply, status)));
+const APP = { appId: 'app-1', secret: 'secret-1' };
+const provider = (reply: unknown, status = 200) => new TikTokAdsProvider(new TikTokClient(CREDS, fakeFetch(reply, status)), APP);
 const query = {
   accountIds: ['7000000001'],
   level: 'campaign' as const,
