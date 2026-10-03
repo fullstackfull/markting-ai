@@ -25,7 +25,9 @@ const icon = {
 
 const PRIMARY_ITEMS: NavItem[] = [
   { label: 'nav.overview', href: '/dashboard', icon: icon.overview, exact: true },
+  { label: 'nav.workspace', href: '/dashboard/workspace', icon: icon.findings },
   { label: 'nav.assistant', href: '/dashboard/assistant', icon: icon.assistant },
+  { label: 'nav.recommendations', href: '/dashboard/recommendations', icon: icon.approvals },
   { label: 'nav.connections', href: '/dashboard/connections', icon: icon.connections },
   { label: 'nav.accounts', href: '/dashboard/accounts', icon: icon.accounts },
   { label: 'nav.reports', href: '/dashboard/reports', icon: icon.reports },
