@@ -55,9 +55,15 @@ export function fitResponseCurve(points: ResponsePoint[], currency?: string): Re
   const form: CurveForm = diminishing ? 'DIMINISHING_RETURNS' : monotonic ? 'LOCAL_LINEAR' : 'MONOTONIC_BOUNDED';
   const fitQuality: ResponseCurve['fitQuality'] = sample >= 100 && distinctSpend >= 6 ? 'HIGH' : sample >= 50 ? 'MEDIUM' : 'LOW';
   limitations.push('simple empirical fit — not a causal model; valid only within the observed spend range');
+  // For a DIMINISHING_RETURNS curve the average slope OVERSTATES the incremental response near the top
+  // of the range, so we expose the CONSERVATIVE local (last-segment) marginal — projecting a scale-up
+  // with the average slope would be optimistic exactly where scaling is most tempting.
+  const localSlope = marginals[marginals.length - 1] ?? avgSlope;
+  const reportedSlope = form === 'DIMINISHING_RETURNS' ? Math.min(avgSlope, localSlope) : avgSlope;
+  if (form === 'DIMINISHING_RETURNS') limitations.push('diminishing returns — marginal uses the conservative last-segment slope, not the average');
   return {
     form,
-    marginalConversionsPerMinor: avgSlope,
+    marginalConversionsPerMinor: reportedSlope,
     evidenceWindow: { points: clean.length },
     sampleSize: sample,
     fitQuality,

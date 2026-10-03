@@ -71,8 +71,9 @@ export function scalePriority(c: Candidate, s: CandidateSignals, soft: SoftConst
   // Profit-aware: a healthy contribution margin raises priority; thin margin lowers it.
   if (s.contributionMarginPct != null) { if (s.contributionMarginPct >= 20) { score += 15; reasons.push('healthy contribution margin'); } else if (s.contributionMarginPct < 0) { score -= 30; reasons.push('negative contribution margin'); } }
 
-  // Saturation reduces scaling priority + confidence (signal, never proven).
-  if (s.saturation === 'STRONG_SATURATION_SIGNAL') { score -= 30; conf -= 1; reasons.push('strong saturation signal'); }
+  // Saturation reduces scaling priority + confidence (signal, never proven). A STRONG signal HOLDs the
+  // candidate out of scaling entirely (symmetric with creative fatigue) — do not scale into saturation.
+  if (s.saturation === 'STRONG_SATURATION_SIGNAL') { score -= 30; conf -= 1; flags.push('SCALE_HOLD_PENDING_SATURATION_REVIEW'); reasons.push('strong saturation signal — held out of scaling'); }
   else if (s.saturation === 'SATURATION_SIGNAL') { score -= 15; reasons.push('saturation signal'); }
 
   // Creative fatigue → HOLD pending refresh review, not blind scaling.
@@ -116,28 +117,39 @@ export function allocateExtra(input: {
   const scored = input.candidates
     .filter((x) => x.candidate.currency === input.currency && receiveEligible(x.candidate, input.hard).eligible)
     .map((x) => ({ ...x, ...scalePriority(x.candidate, x.signals, soft) }))
-    .filter((x) => x.score > 0 && !x.flags.includes('BUDGET_HOLD_PENDING_CREATIVE_REFRESH_REVIEW'))
+    .filter((x) => x.score > 0 && !x.flags.includes('BUDGET_HOLD_PENDING_CREATIVE_REFRESH_REVIEW') && !x.flags.includes('SCALE_HOLD_PENDING_SATURATION_REVIEW'))
     .sort((a, b) => b.score - a.score);
+
+  // AGGREGATE org-budget guard: the org cap applies to the SUM across candidates, not per-candidate.
+  // Track the running org total (current + already-allocated) so no step pushes the aggregate over it.
+  const sameCurrency = input.candidates.filter((x) => x.candidate.currency === input.currency);
+  const orgCurrentTotal = sameCurrency.reduce((a, x) => a + x.candidate.currentBudgetMinor, 0);
+  const orgCap = input.hard.orgMaxBudgetMinor;
 
   const alloc = new Map<string, number>();
   let remaining = input.extraMinor;
+  let allocatedTotal = 0;
+  let orgCapReached = false;
   // Greedy: repeatedly give a step to the current best candidate with headroom.
   let guard = steps * Math.max(1, scored.length) + steps;
-  while (remaining > 0 && scored.length > 0 && guard-- > 0) {
+  while (remaining > 0 && scored.length > 0 && !orgCapReached && guard-- > 0) {
     let placed = false;
     for (const s of scored) {
+      const orgHeadroom = orgCap != null ? orgCap - (orgCurrentTotal + allocatedTotal) : Number.POSITIVE_INFINITY;
+      if (orgHeadroom <= 0) { orgCapReached = true; break; } // aggregate org cap hit — leftover stays unallocated
       const cap = maxAllowedForCandidate(s.candidate, input.hard);
       const current = s.candidate.currentBudgetMinor + (alloc.get(s.candidate.id) ?? 0);
       const headroom = cap - current;
       if (headroom <= 0) continue;
-      const give = Math.min(step, headroom, remaining);
+      const give = Math.min(step, headroom, remaining, orgHeadroom);
       if (give <= 0) continue;
       alloc.set(s.candidate.id, (alloc.get(s.candidate.id) ?? 0) + give);
       remaining -= give;
+      allocatedTotal += give;
       placed = true;
       if (remaining <= 0) break;
     }
-    if (!placed) break; // everyone capped out
+    if (!placed) break; // everyone capped out (per-candidate or aggregate org cap)
   }
 
   const moves: AllocationMove[] = scored.filter((s) => (alloc.get(s.candidate.id) ?? 0) > 0).map((s) => ({
@@ -163,9 +175,15 @@ export function reduceBudget(input: {
   const soft = input.soft ?? {};
   const steps = input.steps ?? DEFAULT_STEPS;
   const step = Math.max(1, Math.floor(input.reduceMinor / steps));
-  // Least damaging first = lowest scale priority first; protected candidates excluded.
+  // Least damaging first = lowest scale priority first. Excluded from cuts: protected (minAllowed ==
+  // current), experiment-excluded candidates (cutting an active-experiment arm would contaminate it),
+  // and brand/strategic campaigns (never raided merely for lower direct performance — structural, not
+  // just a soft preference), unless the caller explicitly opts into reducing brand/strategic.
+  const protectRoles = input.soft?.preserveBrandCampaigns !== false; // default: protect brand/strategic
   const scored = input.candidates
     .filter((x) => x.candidate.currency === input.currency)
+    .filter((x) => !input.hard.experimentExcludedIds?.includes(x.candidate.id))
+    .filter((x) => !(protectRoles && (x.candidate.role === 'brand' || x.candidate.role === 'strategic')))
     .map((x) => ({ ...x, ...scalePriority(x.candidate, x.signals, soft) }))
     .filter((x) => minAllowedForCandidate(x.candidate, input.hard) < x.candidate.currentBudgetMinor)
     .sort((a, b) => a.score - b.score);
