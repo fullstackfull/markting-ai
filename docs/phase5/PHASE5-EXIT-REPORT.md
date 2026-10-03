@@ -7,9 +7,9 @@ inventory automation.**
 The 37-item final response:
 
 1. **Branch** — `claude/amazing-heisenberg-0unnak`.
-2. **HEAD** — `__HEAD__` (built on Phase-4 exit `10ec080`).
+2. **HEAD** — `34c1843` + this docs-only commit (built on Phase-4 exit `10ec080`).
 3. **Commits** — `942fb64` (commerce engine + migration + tests), `7525ddb` (docs 00-09 + log),
-   `__FIXCOMMIT__` (red-team fixes + docs 10), and this exit-report commit.
+   `34c1843` (red-team fixes + docs 10), and this exit-report commit.
 4. **Migrations** — `20261009000000_phase5_commerce.sql`: 9 tenant-scoped, FK'd, indexed tables with
    RLS + revoke; UPDATE granted wherever an upsert uses `ON CONFLICT DO UPDATE` (orders/lines also get
    DELETE for idempotent resync). Forward-only.
@@ -87,9 +87,10 @@ The 37-item final response:
 
 ## CI
 
-Final green run recorded below once the fix commit's run completes (all six lanes incl. real-Postgres
-cloud-db). Code run `37128676669` (commit `942fb64`) was already green on all six lanes before the
-red-team fixes.
+Final green run on HEAD `34c1843`: **run `37129306417`** — **all six lanes SUCCESS** (node, cloud-db
+real-Postgres [incl. the webhook-fail-closed + tenant-isolation DB tests], engine, upstream drift,
+infra, dependency + secret scanning). The pre-fix code run `37128676669` (commit `942fb64`) was also
+green on all six lanes.
 
 ## Safety attestation
 
