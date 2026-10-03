@@ -108,8 +108,22 @@ export interface SeedAccount {
   outcomes: SeedOutcome[];
   memory: SeedMemoryItem[];
   experiments: SeedExperiment[];
-  /** Explicit data-quality conditions seeded for the Data Quality Center. */
-  dataQuality: { staleSync?: boolean; mixedCurrency?: boolean; missingCogs?: boolean; attributionMismatch?: boolean };
+  /**
+   * Explicit data-quality conditions seeded for the Data Quality Center. The provider schema-drift
+   * fields (unsupportedFields / missingRequiredData / providerSchemaChanged) model what a LIVE provider
+   * report would attach to its metadata when the upstream API omits a requested field, cannot supply a
+   * required dimension, or returns a shape that no longer matches the pinned contract. They surface as
+   * visible safety states so a schema change is never silently mistaken for a performance change.
+   */
+  dataQuality: {
+    staleSync?: boolean;
+    mixedCurrency?: boolean;
+    missingCogs?: boolean;
+    attributionMismatch?: boolean;
+    unsupportedFields?: string[];
+    missingRequiredData?: string[];
+    providerSchemaChanged?: Array<{ field: string; noteEn: string; noteAr: string }>;
+  };
   /** Breakdown rows (placement/device/geography/audience_segment) for the breakdown engine. */
   breakdowns: Array<{ dimension: string; value: string; spend: number; conversions?: number; conversion_value?: number; currency?: string }>;
   /** Per-channel summaries for the cross-channel comparison engine. */
@@ -224,7 +238,16 @@ function healthyClientAccount(): SeedAccount {
     outcomes: [],
     memory: [{ key: 'target_roas', valueEn: 'Target ROAS 5.0', valueAr: 'هدف ROAS 5.0', source: 'owner', trust: 'EXPLICIT_HUMAN', dateIso: '2026-09-10' }],
     experiments: [],
-    dataQuality: { missingCogs: true },
+    dataQuality: {
+      missingCogs: true,
+      // This account exercises the provider schema-drift safety states end-to-end so the Data Quality
+      // Center renders them (in LIVE mode these come from the provider report's metadata, not the seed).
+      unsupportedFields: ['conversion_value_by_conversion_time'],
+      missingRequiredData: ['segments.conversion_action_category'],
+      providerSchemaChanged: [
+        { field: 'metrics.cost_micros', noteEn: 'Provider returned cost in a new field shape; mapped via contract adapter — verify totals.', noteAr: 'أعاد المزوّد التكلفة بشكل حقل جديد؛ تم التعيين عبر محوّل العقد — تحقّق من الإجماليات.' },
+      ],
+    },
     breakdowns: [],
     channels: [],
   };

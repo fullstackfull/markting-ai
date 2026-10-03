@@ -245,6 +245,17 @@ export function buildDataQuality(acc: SeedAccount): DataQualitySection {
   if (acc.dataQuality.staleSync || ageDays >= 3) issues.push({ code: 'STALE_SYNC', label: { en: `Data is ${ageDays}d old — refresh before acting.`, ar: `البيانات عمرها ${ageDays} يوم — حدّثها قبل اتخاذ إجراء.` }, severity: 'WARN' });
   if (acc.dataQuality.missingCogs || (acc.commerce && acc.commerce.cogsMinor == null)) issues.push({ code: 'MISSING_COGS', label: { en: 'COGS unknown — profit/margin withheld (never inferred).', ar: 'COGS غير معروف — يُحجب الربح/الهامش (لا يُستنتج).' }, severity: 'WARN' });
   if (acc.dataQuality.attributionMismatch) issues.push({ code: 'ATTRIBUTION_MISMATCH', label: { en: 'Platform-vs-merchant revenue variance present — review attribution.', ar: 'يوجد تباين بين إيراد المنصّة والمتجر — راجع الإسناد.' }, severity: 'WARN' });
+  if (acc.dataQuality.mixedCurrency) issues.push({ code: 'MIXED_CURRENCY', label: { en: 'Rows span more than one currency — totals/ratios withheld until normalized.', ar: 'الصفوف بعملات متعددة — تُحجب الإجماليات/النسب حتى التطبيع.' }, severity: 'WARN' });
+  // Provider schema-drift safety states — a schema change must never be read as a performance change.
+  for (const field of acc.dataQuality.unsupportedFields ?? []) {
+    issues.push({ code: 'UNSUPPORTED_FIELD', label: { en: `Requested field "${field}" is not supported by the provider — omitted, not zero-filled.`, ar: `الحقل المطلوب "${field}" غير مدعوم من المزوّد — محذوف وليس مملوءًا بصفر.` }, severity: 'WARN' });
+  }
+  for (const field of acc.dataQuality.missingRequiredData ?? []) {
+    issues.push({ code: 'MISSING_REQUIRED_DATA', label: { en: `Required data "${field}" is missing from the provider response — dependent metrics are UNKNOWN, never inferred.`, ar: `البيانات المطلوبة "${field}" مفقودة من استجابة المزوّد — المقاييس المعتمدة غير معروفة ولا تُستنتج.` }, severity: 'CRITICAL' });
+  }
+  for (const drift of acc.dataQuality.providerSchemaChanged ?? []) {
+    issues.push({ code: 'PROVIDER_SCHEMA_CHANGED', label: { en: `Schema drift on "${drift.field}": ${drift.noteEn}`, ar: `انحراف المخطّط في "${drift.field}": ${drift.noteAr}` }, severity: 'CRITICAL' });
+  }
   return { kind: 'dataQuality', issues, summary: { en: issues.length ? `${issues.length} data-quality issue(s) — these are data problems, not business-performance problems.` : 'No data-quality issues detected.', ar: issues.length ? `${issues.length} مشكلة جودة بيانات — هذه مشكلات بيانات وليست أداءً تجاريًا.` : 'لا مشكلات جودة بيانات.' } };
 }
 
