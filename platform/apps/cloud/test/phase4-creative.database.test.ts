@@ -56,6 +56,19 @@ describeDatabase('Phase 4 creative store (local database)', () => {
     expect((await saveAnalysis(a.organizationId, { creativeId: id, analysisType: 'visual', analysisVersion: 'v2', model: 'm', sourceHash: 'H1', result: { metadataOnly: false } })).stored).toBe(true);
   });
 
+  it('sourceless analysis (no sourceHash) is still idempotent — no duplicate rows (NULL-distinct bug)', async () => {
+    const id = `meta:act_1:${randomUUID().slice(0, 8)}`;
+    await upsertCreative(a.organizationId, creative(a.organizationId, id));
+    // fatigue/classification/lifecycle/rating carry no source hash. A NULL source_hash would be treated
+    // as DISTINCT by the unique index, so `on conflict` would never fire and re-runs would bloat rows.
+    expect((await saveAnalysis(a.organizationId, { creativeId: id, analysisType: 'fatigue', analysisVersion: 'v1', result: { state: 'WATCH' } })).stored).toBe(true);
+    expect((await saveAnalysis(a.organizationId, { creativeId: id, analysisType: 'fatigue', analysisVersion: 'v1', result: { state: 'NO_SIGNAL' } })).stored).toBe(false);
+    const counted = await admin<Array<{ count: number }>>`select count(*)::int as count from public.markting_creative_analysis where organization_id = ${a.organizationId} and creative_id = ${id} and analysis_type = 'fatigue' and analysis_version = 'v1'`;
+    expect(Number(counted[0]?.count ?? 0)).toBe(1);
+    // The first result is preserved (insert-only; not overwritten).
+    expect((await getAnalysis(a.organizationId, id, 'fatigue', 'v1') as { state: string }).state).toBe('WATCH');
+  });
+
   it('clusters + memberships + signals persist org-scoped', async () => {
     const id = `meta:act_1:${randomUUID().slice(0, 8)}`;
     await upsertCreative(a.organizationId, creative(a.organizationId, id));

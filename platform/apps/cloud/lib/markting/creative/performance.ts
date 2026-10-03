@@ -16,14 +16,21 @@ export type Comparability = 'COMPARABLE' | 'PARTIALLY_COMPARABLE' | 'NOT_COMPARA
 
 export interface CreativeShares {
   creativeId: string;
-  spendShare: number;
+  /** null when the set mixes currencies — a spend share across currencies is not meaningful. */
+  spendShare: number | null;
   impressionShare: number;
   clickShare: number;
   conversionShare: number;
 }
 
-/** Spend/impression/click/conversion shares across a comparable set (currency assumed uniform by caller). */
+/**
+ * Spend/impression/click/conversion shares across a set. Spend share is a MONETARY ratio, so it is
+ * only emitted when the set is single-currency; a mixed-currency set yields `spendShare: null` (never
+ * a blended-currency number). Impression/click/conversion shares are counts and stay currency-agnostic.
+ */
 export function creativeShares(creatives: Creative[]): CreativeShares[] {
+  const currencies = new Set(creatives.filter((c) => (c.performance.spend ?? 0) > 0).map((c) => c.performance.currency ?? 'unknown'));
+  const mixedCurrency = currencies.size > 1;
   const tot = (f: (c: Creative) => number) => creatives.reduce((a, c) => a + f(c), 0);
   const ts = tot((c) => c.performance.spend ?? 0);
   const ti = tot((c) => c.performance.impressions ?? 0);
@@ -31,7 +38,7 @@ export function creativeShares(creatives: Creative[]): CreativeShares[] {
   const tv = tot((c) => c.performance.conversions ?? 0);
   return creatives.map((c) => ({
     creativeId: c.id,
-    spendShare: ts ? Math.round(((c.performance.spend ?? 0) / ts) * 1000) / 10 : 0,
+    spendShare: mixedCurrency ? null : ts ? Math.round(((c.performance.spend ?? 0) / ts) * 1000) / 10 : 0,
     impressionShare: ti ? Math.round(((c.performance.impressions ?? 0) / ti) * 1000) / 10 : 0,
     clickShare: tc ? Math.round(((c.performance.clicks ?? 0) / tc) * 1000) / 10 : 0,
     conversionShare: tv ? Math.round(((c.performance.conversions ?? 0) / tv) * 1000) / 10 : 0,
@@ -90,7 +97,7 @@ export function creativeLifecycle(input: LifecycleInput): { state: CreativeLifec
   const reasons: string[] = [];
 
   if (input.creative.active === false) { reasons.push('inactive'); return { state: 'RETIRED', reasons }; }
-  if (recentDelivery === 0 || (impressions > 0 && recentDelivery === 0)) { reasons.push('no recent delivery'); return { state: 'DORMANT', reasons }; }
+  if (recentDelivery === 0) { reasons.push('no recent delivery'); return { state: 'DORMANT', reasons }; }
   if (impressions < 1000 || conv < 5) { reasons.push('little accumulated data'); return { state: ageDays != null && ageDays < 3 ? 'NEW' : 'LEARNING', reasons }; }
   // Declining if a trend engine says the recent CTR is a persistent down move.
   if (input.ctrSeries && input.ctrSeries.length >= 7) {
@@ -139,9 +146,15 @@ export function creativeContribution(current: Creative[], previous: Creative[], 
   for (const d of deltas) d.sharePct = totalAbs > 0 ? Math.round((Math.abs(d.metricDelta) / totalAbs) * 1000) / 10 : 0;
   deltas.sort((a, b) => Math.abs(b.metricDelta) - Math.abs(a.metricDelta));
 
+  // An efficiency metric (CPA/ROAS) can move purely because the auction got cheaper/dearer (CPM). We
+  // can only separate creative performance from media cost when CPM movement is KNOWN. If it is not
+  // supplied for an efficiency metric, we do NOT assert creative causation — evidence is insufficient.
+  const cpmKnown = cpmChangePct != null;
+  const efficiencyMetric = metric === 'cpa' || metric === 'roas';
   let attribution: ContributionResult['attribution'];
   if (totalAbs === 0) attribution = 'INSUFFICIENT_EVIDENCE';
-  else if (cpmChangePct != null && Math.abs(cpmChangePct) >= 15 && (metric === 'cpa' || metric === 'roas')) attribution = Math.abs(cpmChangePct) >= 30 ? 'MEDIA_COST_DRIVEN' : 'MIXED';
+  else if (cpmKnown && Math.abs(cpmChangePct as number) >= 15 && efficiencyMetric) attribution = Math.abs(cpmChangePct as number) >= 30 ? 'MEDIA_COST_DRIVEN' : 'MIXED';
+  else if (efficiencyMetric && !cpmKnown) attribution = 'INSUFFICIENT_EVIDENCE';
   else attribution = 'CREATIVE_DRIVEN';
 
   const note: BiText = attribution === 'MEDIA_COST_DRIVEN'
@@ -149,8 +162,12 @@ export function creativeContribution(current: Creative[], previous: Creative[], 
     : attribution === 'MIXED'
       ? { en: `Both a CPM (media-cost) change and creative performance contribute to the ${metric} move.`, ar: `يسهم كلٌّ من تغيّر تكلفة الوسائط وأداء الإعلان في تحرّك ${metric}.` }
       : attribution === 'CREATIVE_DRIVEN'
-        ? { en: `The ${metric} move is concentrated in specific creatives (media cost stable).`, ar: `يتركّز تحرّك ${metric} في إعلانات محددة (تكلفة الوسائط مستقرة).` }
-        : { en: 'No material creative-level movement to attribute.', ar: 'لا يوجد تحرّك جوهري على مستوى الإعلانات لإسناده.' };
+        ? (cpmKnown
+          ? { en: `The ${metric} move is concentrated in specific creatives (media cost stable).`, ar: `يتركّز تحرّك ${metric} في إعلانات محددة (تكلفة الوسائط مستقرة).` }
+          : { en: `The ${metric} move is concentrated in specific creatives (media-cost/CPM effect not assessed).`, ar: `يتركّز تحرّك ${metric} في إعلانات محددة (لم يُقيَّم أثر تكلفة الوسائط/CPM).` })
+        : totalAbs === 0
+          ? { en: 'No material creative-level movement to attribute.', ar: 'لا يوجد تحرّك جوهري على مستوى الإعلانات لإسناده.' }
+          : { en: `CPM (media-cost) movement is unknown, so the ${metric} move cannot be separated between creative performance and media cost.`, ar: `تغيّر تكلفة الوسائط (CPM) غير معروف، لذا لا يمكن فصل تحرّك ${metric} بين أداء الإعلان وتكلفة الوسائط.` };
   return { contributors: deltas, attribution, note };
 }
 

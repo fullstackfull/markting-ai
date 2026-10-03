@@ -46,11 +46,17 @@ export async function listCreatives(organizationId: string, filter: { accountId?
 
 export interface SaveAnalysisInput { creativeId: string; analysisType: 'text' | 'visual' | 'video' | 'fatigue' | 'classification' | 'lifecycle' | 'rating'; analysisVersion: string; model?: string; sourceHash?: string; result: unknown }
 
-/** Insert-only versioned analysis (cache + preserved history). Returns false if that version already existed. */
+/**
+ * Insert-only versioned analysis (cache + preserved history). Returns false if that version already
+ * existed. Sourceless analysis types (fatigue/classification/lifecycle/rating) store a '' sentinel
+ * rather than NULL for source_hash: Postgres treats NULLs as DISTINCT in a unique index, so a NULL
+ * source_hash would make `on conflict` never fire and every re-run would insert a duplicate row. The
+ * '' sentinel keeps the cache/idempotency contract intact for those types.
+ */
 export async function saveAnalysis(organizationId: string, a: SaveAnalysisInput): Promise<{ stored: boolean }> {
   const rows = await db()<Array<{ id: string }>>`
     insert into public.markting_creative_analysis (organization_id, creative_id, analysis_type, analysis_version, model, source_hash, result)
-    values (${organizationId}, ${a.creativeId}, ${a.analysisType}, ${a.analysisVersion}, ${a.model ?? 'none'}, ${a.sourceHash ?? null}, ${db().json(a.result as never)})
+    values (${organizationId}, ${a.creativeId}, ${a.analysisType}, ${a.analysisVersion}, ${a.model ?? 'none'}, ${a.sourceHash ?? ''}, ${db().json(a.result as never)})
     on conflict (organization_id, creative_id, analysis_type, analysis_version, source_hash) do nothing
     returning id`;
   return { stored: rows.length > 0 };
@@ -60,7 +66,7 @@ export async function getAnalysis(organizationId: string, creativeId: string, an
   const rows = await db()<Array<{ result: unknown }>>`
     select result from public.markting_creative_analysis
     where organization_id = ${organizationId} and creative_id = ${creativeId} and analysis_type = ${analysisType}
-      and analysis_version = ${analysisVersion} and source_hash is not distinct from ${sourceHash ?? null} limit 1`;
+      and analysis_version = ${analysisVersion} and source_hash is not distinct from ${sourceHash ?? ''} limit 1`;
   return rows[0]?.result ?? null;
 }
 

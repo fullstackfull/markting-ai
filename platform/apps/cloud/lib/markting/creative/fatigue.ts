@@ -55,29 +55,42 @@ export function assessFatigue(input: FatigueInput): FatigueResult {
   const roasP = pct(input.roas?.from, input.roas?.to);
   const cpmP = pct(input.cpm?.from, input.cpm?.to);
 
-  add('rising_frequency', (freqUp ?? 0) >= material || (input.frequency?.to ?? 0) >= 3.5, `frequency ${input.frequency?.from ?? '?'}→${input.frequency?.to ?? '?'}`);
+  // One signal covers BOTH a material rise AND absolute saturation (freq ≥ 3.5); named for what it
+  // means — audience pressure — rather than "rising", since a high-but-flat frequency also qualifies.
+  add('frequency_pressure', (freqUp ?? 0) >= material || (input.frequency?.to ?? 0) >= 3.5, `frequency ${input.frequency?.from ?? '?'}→${input.frequency?.to ?? '?'}`);
   add('falling_ctr', (ctrP ?? 0) <= -material, `CTR ${ctrP == null ? '?' : Math.round(ctrP)}%`);
   add('rising_cpc', (cpcP ?? 0) >= material, `CPC ${cpcP == null ? '?' : Math.round(cpcP)}%`);
   add('declining_cvr', (cvrP ?? 0) <= -material, `CVR ${cvrP == null ? '?' : Math.round(cvrP)}%`);
   add('declining_roas', (roasP ?? 0) <= -material, `ROAS ${roasP == null ? '?' : Math.round(roasP)}%`);
   // CPM stable/rising RULES OUT an auction-wide cheap-impression explanation for the CTR/CPC move.
-  add('cpm_not_falling', (cpmP ?? 0) >= -material, `CPM ${cpmP == null ? '?' : Math.round(cpmP)}%`);
+  // When CPM is UNKNOWN we cannot rule that out, so it does not count as "not falling".
+  add('cpm_not_falling', cpmP != null && cpmP >= -material, `CPM ${cpmP == null ? '?' : Math.round(cpmP)}%`);
   add('aged', (input.ageDays ?? 0) >= 21, `age ${input.ageDays ?? '?'}d`);
 
   const present = signals.filter((s) => s.present).map((s) => s.kind);
-  const core = ['rising_frequency', 'falling_ctr'].every((k) => present.includes(k));
+  const corePair = ['frequency_pressure', 'falling_ctr'].every((k) => present.includes(k));
   const corroborated = present.filter((k) => ['declining_cvr', 'declining_roas', 'rising_cpc'].includes(k)).length;
+  // cpmOk is a HARD GATE for any fatigue verdict: if CPM fell (or is unknown) the CTR/CPC decline may
+  // be an auction-wide cheap-impression effect, so we never confirm creative fatigue — we only WATCH.
   const cpmOk = present.includes('cpm_not_falling');
+  const fatigueShape = corePair || (present.includes('falling_ctr') && corroborated >= 1);
 
   let state: FatigueState;
   let confidence: 'LOW' | 'MEDIUM' | 'HIGH';
-  if (core && cpmOk && corroborated >= 1) { state = 'STRONG_FATIGUE_SIGNAL'; confidence = corroborated >= 2 ? 'HIGH' : 'MEDIUM'; }
-  else if ((core || (present.includes('falling_ctr') && present.includes('rising_frequency'))) || (present.includes('falling_ctr') && corroborated >= 1)) { state = 'FATIGUE_SIGNAL'; confidence = 'MEDIUM'; }
-  else if (present.includes('falling_ctr') || present.includes('rising_frequency')) { state = 'WATCH'; confidence = 'LOW'; }
-  else { state = 'NO_SIGNAL'; confidence = 'LOW'; }
+  if (!fatigueShape) {
+    state = present.includes('falling_ctr') || present.includes('frequency_pressure') ? 'WATCH' : 'NO_SIGNAL';
+    confidence = 'LOW';
+  } else if (!cpmOk) {
+    // Fatigue-shaped, but an auction-wide cause is not ruled out → do not confirm fatigue.
+    state = 'WATCH'; confidence = 'LOW';
+  } else if (corePair && corroborated >= 1) {
+    state = 'STRONG_FATIGUE_SIGNAL'; confidence = corroborated >= 2 ? 'HIGH' : 'MEDIUM';
+  } else {
+    state = 'FATIGUE_SIGNAL'; confidence = 'MEDIUM';
+  }
 
   reasons.push(`signals present: ${present.join(', ') || 'none'}`);
-  if (state !== 'NO_SIGNAL' && !cpmOk) reasons.push('CPM fell — CTR/CPC move may be auction-driven, not fatigue (downgraded)');
+  if (fatigueShape && !cpmOk) reasons.push('CPM fell or is unknown — CTR/CPC move may be auction-driven, not fatigue; held at WATCH');
   return { state, confidence, signals, reasons, label: LBL[state] };
 }
 

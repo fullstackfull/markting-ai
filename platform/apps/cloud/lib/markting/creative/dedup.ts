@@ -45,30 +45,37 @@ export function relationBetween(a: Creative, b: Creative): { relation: DedupRela
 
   // EXACT: identical media AND identical normalized text.
   if (sameMedia && sameText) { reasons.push('identical media hash + identical normalized text'); return { relation: 'EXACT_DUPLICATE', reasons }; }
-  // LIKELY_VARIANT: same media, different copy (a copy test of the same asset), or same text + same account/campaign + same media type.
+  // LIKELY_VARIANT: the ONLY merge path is a CONFIRMED same media asset with different copy (a copy
+  // test of one asset). We NEVER promote to a variant on copy alone: without a matching media hash we
+  // cannot prove the media is the same, so two different images that happen to share copy must not be
+  // merged. (This is the Phase-4 rule: distinct creatives are never merged solely because copy matches.)
   if (sameMedia) { reasons.push('same media asset, different copy'); return { relation: 'LIKELY_VARIANT', reasons }; }
-  if (sameText && a.accountId === b.accountId && a.mediaType === b.mediaType) { reasons.push('same normalized text, same account + media type'); return { relation: 'LIKELY_VARIANT', reasons }; }
-  // RELATED: similar copy but DIFFERENT media — never merged into a duplicate.
+  // Media differs or is unconfirmed → at most RELATED, never merged.
+  if (sameText) { reasons.push('identical copy but media not confirmed identical — related, not merged'); return { relation: 'RELATED', reasons }; }
   if (sim >= 0.6) { reasons.push(`similar copy (jaccard ${sim.toFixed(2)}) but different media — related, not duplicate`); return { relation: 'RELATED', reasons }; }
   reasons.push('no strong media/text relation');
   return { relation: 'DISTINCT', reasons };
 }
 
-/** Group creatives into dedup sets without merging DISTINCT/RELATED ones. Returns duplicate/variant sets. */
+/**
+ * Group creatives into dedup sets without merging DISTINCT/RELATED ones. The only merge key is a shared
+ * MEDIA content hash (EXACT = same media + same copy; LIKELY_VARIANT = same media, different copy), so
+ * grouping is a single pass bucketing by media hash — O(N), not the old O(N²) pairwise scan. Creatives
+ * with no media hash are never grouped (media identity cannot be confirmed).
+ */
 export function dedupGroups(creatives: Creative[]): Array<{ representative: string; members: string[]; relation: DedupRelation }> {
+  const buckets = new Map<string, Creative[]>();
+  for (const c of creatives) {
+    const mh = firstMediaHash(c);
+    if (!mh) continue; // no confirmable media identity → never merged
+    (buckets.get(mh) ?? buckets.set(mh, []).get(mh)!).push(c);
+  }
   const groups: Array<{ representative: string; members: string[]; relation: DedupRelation }> = [];
-  const assigned = new Set<string>();
-  for (let i = 0; i < creatives.length; i++) {
-    const a = creatives[i]!;
-    if (assigned.has(a.id)) continue;
-    const members = [a.id];
-    for (let j = i + 1; j < creatives.length; j++) {
-      const b = creatives[j]!;
-      if (assigned.has(b.id)) continue;
-      const { relation } = relationBetween(a, b);
-      if (relation === 'EXACT_DUPLICATE' || relation === 'LIKELY_VARIANT') { members.push(b.id); assigned.add(b.id); }
-    }
-    if (members.length > 1) { assigned.add(a.id); groups.push({ representative: a.id, members, relation: 'LIKELY_VARIANT' }); }
+  for (const items of buckets.values()) {
+    if (items.length < 2) continue;
+    const textHashes = new Set(items.map((c) => { const t = textCorpus(c); return t ? normalizedTextHash(t) : ''; }));
+    const relation: DedupRelation = textHashes.size === 1 ? 'EXACT_DUPLICATE' : 'LIKELY_VARIANT';
+    groups.push({ representative: items[0]!.id, members: items.map((c) => c.id), relation });
   }
   return groups;
 }

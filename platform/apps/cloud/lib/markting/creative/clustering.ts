@@ -15,7 +15,8 @@ export interface CreativeCluster {
   definingFeatures: string[];
   creativeIds: string[];
   sampleSize: number;        // total conversions behind the cluster (evidence)
-  performance: { spend: number; conversions: number; ctr?: number; cpa?: number; roas?: number; currency?: string; mixedCurrency: boolean };
+  // spend is null when the cluster mixes currencies — a cross-currency spend SUM is meaningless.
+  performance: { spend: number | null; conversions: number; ctr?: number; cpa?: number; roas?: number; currency?: string; mixedCurrency: boolean };
   trustTier: DataTier;
 }
 
@@ -62,10 +63,12 @@ export function clusterCreatives(creatives: Creative[]): CreativeCluster[] {
       definingFeatures: b.features,
       creativeIds: b.items.map((c) => c.id),
       sampleSize,
-      performance: { spend: Math.round((agg.base.spend ?? 0) * 100) / 100, conversions: sampleSize, ctr: agg.derived.ctr, cpa: agg.derived.cpa, roas: agg.derived.roas, currency: agg.currency, mixedCurrency: agg.mixedCurrency },
+      performance: { spend: agg.mixedCurrency ? null : Math.round((agg.base.spend ?? 0) * 100) / 100, conversions: sampleSize, ctr: agg.derived.ctr, cpa: agg.derived.cpa, roas: agg.derived.roas, currency: agg.currency, mixedCurrency: agg.mixedCurrency },
       trustTier: agg.worstTier as DataTier,
     });
   }
-  // Largest spend first.
-  return clusters.sort((a, b) => b.performance.spend - a.performance.spend);
+  // Order by currency-agnostic materiality (conversions) first, then spend as a tie-break within it —
+  // never sort primarily by a spend number that may not be comparable across currencies (and spend is
+  // null for mixed-currency clusters).
+  return clusters.sort((a, b) => b.sampleSize - a.sampleSize || (b.performance.spend ?? 0) - (a.performance.spend ?? 0));
 }
