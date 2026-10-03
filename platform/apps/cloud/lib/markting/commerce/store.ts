@@ -43,14 +43,25 @@ export async function upsertOrders(organizationId: string, orders: Order[]): Pro
         stage = excluded.stage, payment_status = excluded.payment_status, fulfillment_status = excluded.fulfillment_status,
         refunded_minor = excluded.refunded_minor, net_minor = excluded.net_minor, paid_at = excluded.paid_at, fulfilled_at = excluded.fulfilled_at,
         cancelled_at = excluded.cancelled_at, trust = excluded.trust, ingested_at = now()`;
-    // Replace lines (idempotent resync).
+    // Replace lines (idempotent resync). N+1 fix: the per-order line inserts are batched into a single
+    // multi-row insert (postgres.js bulk helper) instead of one round-trip per line.
     await db()`delete from public.markting_order_lines where organization_id = ${organizationId} and order_id = ${o.orderId}`;
-    for (const l of o.lines) {
-      await db()`
-        insert into public.markting_order_lines
-          (organization_id, order_id, line_id, product_id, variant_id, sku, quantity, unit_price_minor, discount_minor, net_minor, cogs_minor, currency)
-        values
-          (${organizationId}, ${o.orderId}, ${l.lineId}, ${l.productId ?? null}, ${l.variantId ?? null}, ${l.sku ?? null}, ${l.quantity}, ${l.unitPrice.minorUnits}, ${l.discountAllocated?.minorUnits ?? null}, ${l.netRevenue?.minorUnits ?? null}, ${l.cogs?.minorUnits ?? null}, ${l.unitPrice.currency})`;
+    if (o.lines.length > 0) {
+      const lineRows = o.lines.map((l) => ({
+        organization_id: organizationId,
+        order_id: o.orderId,
+        line_id: l.lineId,
+        product_id: l.productId ?? null,
+        variant_id: l.variantId ?? null,
+        sku: l.sku ?? null,
+        quantity: l.quantity,
+        unit_price_minor: l.unitPrice.minorUnits,
+        discount_minor: l.discountAllocated?.minorUnits ?? null,
+        net_minor: l.netRevenue?.minorUnits ?? null,
+        cogs_minor: l.cogs?.minorUnits ?? null,
+        currency: l.unitPrice.currency,
+      }));
+      await db()`insert into public.markting_order_lines ${db()(lineRows)}`;
     }
   }
   return orders.length;
