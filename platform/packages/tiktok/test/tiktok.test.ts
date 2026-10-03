@@ -245,6 +245,21 @@ describe('TikTokAdsProvider writes', () => {
     expect(body.campaign_ids).toEqual(['1700000000000001']);
   });
 
+  it('R0-A: rejects a status change to a campaign not in the advertiser before any mutation', async () => {
+    const { impl, calls } = fakeFetch([
+      { match: (url) => url.includes('/campaign/get/'), reply: campaignGetReply }, // returns 1700000000000001 only
+    ]);
+    const provider = new TikTokAdsProvider(new TikTokClient(CREDS, impl), APP);
+    await expect(provider.previewWrite(
+      {
+        tool: 'tiktok_set_campaign_status', provider: 'tiktok', accountId: '7000000001', kind: 'update',
+        payload: { campaign_ids: ['1700000000000001', '9999999999999999'], operation_status: 'DISABLE' },
+      },
+      { forcePausedCreation: true },
+    )).rejects.toThrow(/not found in advertiser/);
+    expect(calls.some((c) => c.url.includes('/campaign/status/update/'))).toBe(false);
+  });
+
   it('exposes pauseCampaign as a standard action for the audit harness', () => {
     const provider = new TikTokAdsProvider(new TikTokClient(CREDS), APP);
     const action = provider.standardActions().pauseCampaign!('7000000001', '17');

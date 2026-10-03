@@ -364,6 +364,12 @@ export class TikTokAdsProvider implements AdProvider {
     payload: { campaign_ids: string[]; operation_status: 'ENABLE' | 'DISABLE' },
   ): Promise<WritePlan> {
     const campaigns = await this.listCampaigns(accountId, payload.campaign_ids);
+    // Assert every requested campaign belongs to this advertiser before mutating (R0-A). Match the
+    // explicit ownership check in planSetBudget rather than relying only on advertiser_id scoping.
+    const missing = payload.campaign_ids.filter((id) => !campaigns.some((c) => c.campaign_id === id));
+    if (missing.length > 0) {
+      throw new AdportError('INVALID_INPUT', `tiktok: campaign(s) ${missing.join(', ')} not found in advertiser ${accountId}`);
+    }
     const changes = payload.campaign_ids.map((id) => {
       const campaign = campaigns.find((c) => c.campaign_id === id);
       return `~ campaign ${id} ("${campaign?.campaign_name ?? '?'}") operation_status ${campaign?.operation_status ?? '?'} → ${payload.operation_status}`;
