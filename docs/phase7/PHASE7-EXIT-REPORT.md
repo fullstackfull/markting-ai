@@ -7,9 +7,9 @@ optimization DISABLED**.
 The 45-item final response:
 
 1. **Branch** — `claude/amazing-heisenberg-0unnak`.
-2. **HEAD** — `__HEAD__` (built on Phase-6 exit `7ee23e6`).
+2. **HEAD** — `d5dd788` + this docs-only commit (built on Phase-6 exit `7ee23e6`).
 3. **Commits** — `b3a5f62` (ops engine + migration + tests), `d26f75b` (docs 00-09,11,12 + log),
-   `__FIXCOMMIT__` (red-team fixes + docs 10), and this exit-report commit.
+   `d5dd788` (red-team fixes + docs 10), and this exit-report commit.
 4. **Migrations** — `20261011000000_phase7_governance.sql`: 8 tenant-scoped tables (operations ledger,
    operation approvals, kill switches, change records, service accounts, reconciliation jobs,
    encryption-key metadata, provider health). RLS + revoke; UPDATE granted only where a writer upserts;
@@ -89,8 +89,10 @@ The 45-item final response:
 
 ## CI
 
-Final green run recorded below. Code run `37132169294` (commit `b3a5f62`) was already green on all six
-lanes before the red-team fixes.
+Final green run on HEAD `d5dd788`: **run `37132770553`** — **all six lanes SUCCESS** (node, cloud-db
+real-Postgres [atomic-claim single-winner, CAS concurrent-transition, UNKNOWN_RESULT evidence gate,
+write-time SoD, cross-tenant isolation, cluster-safe kill switch], engine, upstream drift, infra,
+dependency + secret scanning). The pre-fix code run `37132169294` (commit `b3a5f62`) was also green.
 
 ## Safety attestation
 
