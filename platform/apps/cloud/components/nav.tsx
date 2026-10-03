@@ -43,6 +43,7 @@ const PRIMARY_ITEMS: NavItem[] = [
 
 const UTILITY_ITEMS: NavItem[] = [
   { label: 'nav.dataQuality', href: '/dashboard/data-quality', icon: icon.findings },
+  { label: 'nav.governance', href: '/dashboard/governance', icon: icon.policies },
   { label: 'nav.agents', href: '/dashboard/agents', icon: icon.agents },
   { label: 'nav.policies', href: '/dashboard/policies', icon: icon.policies },
   { label: 'nav.team', href: '/dashboard/team', icon: icon.team },
