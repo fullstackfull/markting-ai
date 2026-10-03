@@ -48,8 +48,9 @@ Minor also fixed: the outcome engine now gates the BEFORE baseline sample too (a
   typecheck clean. **DB-gated** `phase3-stores.database` (tenant isolation across all Phase-3 tables,
   lifecycle, dedup'd atomic job claim, org-mismatch rejection) runs in CI.
 - CI (GitHub Actions, dispatched): migration `20261006000000` applies forward-only in the `cloud-db`
-  lane; all six lanes green. Pre-fix green run id 37122913556; **final green run id recorded on the
-  closing commit** (the RLS/memory-store changes re-validated in the DB lane).
+  lane; all six lanes green. Pre-fix green run id 37122913556; **final green run id 37123622764 on the
+  closing commit `94ee00e` — all six lanes `success`, the RLS/memory-store changes re-validated in the
+  real-Postgres DB lane.**
 
 ## Performance
 
