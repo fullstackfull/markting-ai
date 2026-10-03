@@ -6,9 +6,9 @@ review only — no autonomous execution, no approval bypass, autonomous optimiza
 The 41-item final response:
 
 1. **Branch** — `claude/amazing-heisenberg-0unnak`.
-2. **HEAD** — `__HEAD__` (built on Phase-5 exit `d19dbe9`).
+2. **HEAD** — `15400e3` + this docs-only commit (built on Phase-5 exit `d19dbe9`).
 3. **Commits** — `9cd2ebe` (engine + migration + tests), `38a3fa7` (docs 00-09 + log),
-   `__FIXCOMMIT__` (red-team fixes + docs 10), and this exit-report commit.
+   `15400e3` (red-team fixes + docs 10), and this exit-report commit.
 4. **Migrations** — `20261010000000_phase6_optimization.sql`: extends `markting_experiments`
    forward-only (new columns + widened status check) and adds `markting_experiment_assignments`,
    `markting_experiment_observations`, `markting_optimization_scenarios`, `markting_scenario_constraints`,
@@ -91,8 +91,10 @@ The 41-item final response:
 
 ## CI
 
-Final green run recorded below. Code run `37130429725` (commit `9cd2ebe`) was already green on all six
-lanes before the red-team fixes.
+Final green run on HEAD `15400e3`: **run `37131003252`** — **all six lanes SUCCESS** (node, cloud-db
+real-Postgres [tenant isolation + widened experiment status + scenario/decision persistence], engine,
+upstream drift, infra, dependency + secret scanning). The pre-fix code run `37130429725` (commit
+`9cd2ebe`) was also green on all six lanes.
 
 ## Safety attestation
 
