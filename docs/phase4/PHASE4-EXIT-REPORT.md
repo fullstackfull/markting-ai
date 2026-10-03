@@ -6,9 +6,9 @@ Creative Intelligence, Multimodal Analysis, Fatigue Detection & Creative Learnin
 The 36-item final response required by the mandate:
 
 1. **Branch** — `claude/amazing-heisenberg-0unnak`.
-2. **HEAD** — `5a51cc6` (built on Phase-3 exit `299460c`).
-3. **Commits** — `5344357` (creative engine + migration + tests) and `5a51cc6` (expert red-team fixes +
-   grants-fixup migration + docs 01-10 + log + this report).
+2. **HEAD** — `1a7d2ac` (green code tip; built on Phase-3 exit `299460c`) + this docs-only commit.
+3. **Commits** — `5344357` (creative engine + migration + tests), `5a51cc6` (expert red-team fixes +
+   docs 01-10 + log), `1a7d2ac` (UPDATE-grant fix for the asset upsert), and this exit-report commit.
 4. **Migrations** — `20261007000000_phase4_creative.sql` (6 tenant-scoped tables, FK'd, indexed, grants,
    RLS + revoke) and `20261008000000_phase4_creative_grants_fixup.sql` (grants the missing UPDATE on
    `markting_creative_assets` — its upsert uses `ON CONFLICT DO UPDATE`, which needs UPDATE, not just
@@ -107,9 +107,11 @@ The 36-item final response required by the mandate:
 
 ## CI
 
-Final validating run on HEAD `5a51cc6`: **run `37125729756`** (workflow_dispatch, all six lanes —
-node, cloud-db real-Postgres, engine, drift, infra, security). _Verdict confirmed green below once the
-run completes._
+Final green run on HEAD `1a7d2ac`: **run `37126229895`** — **all six lanes SUCCESS**: node
+(typecheck/build/package + cloud tests), cloud-db (tenant isolation, authz, concurrency on a real
+Postgres — validates migrations `20261007000000` + `20261008000000`, the versioned insert-only
+analysis, NULL-source_hash idempotency, and tenant isolation), engine, upstream drift, infra, and
+dependency + secret scanning.
 
 ## Safety attestation
 
