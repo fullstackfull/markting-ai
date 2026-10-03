@@ -16,8 +16,8 @@ function translate(error: unknown): unknown {
 export async function GET(request: Request) {
   try {
     const organizationId = new URL(request.url).searchParams.get('organizationId') ?? undefined;
-    await sessionPrincipal(organizationId);
-    return noStoreJson(await engineClient().listReports());
+    const principal = await sessionPrincipal(organizationId);
+    return noStoreJson(await engineClient().listReports(principal.organizationId));
   } catch (error) {
     return apiError(translate(error));
   }
@@ -32,7 +32,7 @@ export async function POST(request: Request) {
     if (!(await enforceRateLimit(`markting:reports:${principal.organizationId}`))) throw new HttpError('Rate limit exceeded.', 429);
     const cadence = body.cadence === 'monthly' ? 'monthly' : 'weekly';
     const end = typeof body.end === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(body.end) ? body.end : undefined;
-    return noStoreJson(await engineClient().runReport(cadence, end));
+    return noStoreJson(await engineClient().runReport(principal.organizationId, cadence, end));
   } catch (error) {
     return apiError(translate(error));
   }

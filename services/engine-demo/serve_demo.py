@@ -265,7 +265,12 @@ def _save_index(runtime: SelfHostedRuntime, entries: list[dict[str, Any]]) -> No
 
 
 async def run_report(
-    runtime: SelfHostedRuntime, *, cadence: str, end: date | None, requested_by: str
+    runtime: SelfHostedRuntime,
+    *,
+    cadence: str,
+    end: date | None,
+    requested_by: str,
+    organization: str,
 ) -> dict[str, Any]:
     settings = runtime.settings
     resolved_end = end or fixture_anchor(settings.paid_media_fixture_anchor)
@@ -293,6 +298,7 @@ async def run_report(
         },
         "created_at": datetime.now(UTC).isoformat(),
         "requested_by": requested_by,
+        "organization": organization,
         "reconciled": run.reconciled,
         "analysis_artifact_id": run.analysis_artifact_id,
         "payload_artifact_id": report.get("payload_artifact_id"),
@@ -305,6 +311,29 @@ async def run_report(
     entries.insert(0, entry)
     _save_index(runtime, entries[:50])
     return entry
+
+
+def _org_file_names(entries: list[dict[str, Any]], organization: str) -> set[str]:
+    """All artifact file names referenced by one org's report entries (for per-org download scoping)."""
+    names: set[str] = set()
+
+    def collect(value: Any) -> None:
+        if isinstance(value, str):
+            names.add(value)
+        elif isinstance(value, dict):
+            path = value.get("path") or value.get("name")
+            if isinstance(path, str):
+                names.add(path)
+        elif isinstance(value, list):
+            for item in value:
+                collect(item)
+
+    for entry in entries:
+        if entry.get("organization") != organization:
+            continue
+        for key in ("files", "pdf", "analysis_artifact_id", "payload_artifact_id"):
+            collect(entry.get(key))
+    return names
 
 
 def attach_report_routes(app: Any, runtime: SelfHostedRuntime) -> None:
@@ -320,6 +349,14 @@ def attach_report_routes(app: Any, runtime: SelfHostedRuntime) -> None:
         if resolved is None:
             raise HTTPException(status_code=401, detail="invalid bearer token")
         return resolved
+
+    def require_org(organization: str | None) -> str:
+        # Tenant identity is asserted by the trusted cloud via X-Markting-Org (the engine is reached
+        # by a single bridge token for all tenants). Fail closed if it is missing so a report surface
+        # can never serve cross-tenant data (R0-07 / SEC-01).
+        if not organization or not re.fullmatch(r"[A-Za-z0-9._:-]{1,128}", organization):
+            raise HTTPException(status_code=400, detail="missing or invalid X-Markting-Org")
+        return organization
 
     lock = asyncio.Lock()
 
@@ -339,12 +376,14 @@ def attach_report_routes(app: Any, runtime: SelfHostedRuntime) -> None:
     async def reports_run(
         body: Annotated[ReportRunIn, Body()],
         authorization: str | None = Header(default=None),
+        x_markting_org: str | None = Header(default=None),
     ) -> dict[str, Any]:
         who = caller(authorization)
+        org = require_org(x_markting_org)
         async with lock:
             try:
                 return await run_report(
-                    runtime, cadence=body.cadence, end=body.end, requested_by=who
+                    runtime, cadence=body.cadence, end=body.end, requested_by=who, organization=org
                 )
             except Exception as exc:  # the engine's own errors are informative and secret-free
                 log.exception("report run failed")
@@ -353,15 +392,28 @@ def attach_report_routes(app: Any, runtime: SelfHostedRuntime) -> None:
                 ) from None
 
     @app.get("/reports")
-    def reports_list(authorization: str | None = Header(default=None)) -> dict[str, Any]:
+    def reports_list(
+        authorization: str | None = Header(default=None),
+        x_markting_org: str | None = Header(default=None),
+    ) -> dict[str, Any]:
         caller(authorization)
-        return {"reports": _load_index(runtime)}
+        org = require_org(x_markting_org)
+        scoped = [entry for entry in _load_index(runtime) if entry.get("organization") == org]
+        return {"reports": scoped}
 
     @app.get("/reports/files/{name}")
-    def reports_file(name: str, authorization: str | None = Header(default=None)) -> Response:
+    def reports_file(
+        name: str,
+        authorization: str | None = Header(default=None),
+        x_markting_org: str | None = Header(default=None),
+    ) -> Response:
         caller(authorization)
+        org = require_org(x_markting_org)
         if not re.fullmatch(r"(rpt|art)_[A-Za-z0-9]+\.(html|pdf|json)", name):
             raise HTTPException(status_code=400, detail="invalid artifact name")
+        if name not in _org_file_names(_load_index(runtime), org):
+            # Not one of this org's artifacts: 404 without disclosing whether it exists for another org.
+            raise HTTPException(status_code=404, detail="artifact not found")
         try:
             receipt = bridge.validate(runtime.profile.workspace_root / "out" / name)
             data = bridge.open_bytes(receipt)

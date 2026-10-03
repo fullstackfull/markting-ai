@@ -11,8 +11,8 @@ export async function GET(request: Request, { params }: { params: Promise<{ name
   try {
     const { name } = await params;
     const organizationId = new URL(request.url).searchParams.get('organizationId') ?? undefined;
-    await sessionPrincipal(organizationId);
-    const upstream = await engineClient().fetchReportFile(name);
+    const principal = await sessionPrincipal(organizationId);
+    const upstream = await engineClient().fetchReportFile(principal.organizationId, name);
     const type = upstream.headers.get('content-type') ?? 'application/octet-stream';
     if (!/^(text\/html|application\/pdf|application\/json)/.test(type)) throw new HttpError('Unexpected report file type.', 502);
     return new Response(upstream.body, {

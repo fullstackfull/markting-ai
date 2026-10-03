@@ -154,27 +154,57 @@ async def test_proposal_only_provider_raises(host):
         await provider.call_mutation(Entry(), {"campaign_id": "g-103", "daily_budget": 240})
 
 
+ORG_A = {"X-Markting-Org": "org-aaaa"}
+ORG_B = {"X-Markting-Org": "org-bbbb"}
+
+
 async def test_reports_run_list_and_download(client):
     http, _, _ = client
+    # No auth -> 401; authed but no org header -> 400 (fail closed, R0-07/SEC-01).
     assert (await http.get("/reports")).status_code == 401
-    run = await http.post("/reports/run", json={"cadence": "weekly"}, headers=AUTH)
+    assert (await http.get("/reports", headers=AUTH)).status_code == 400
+    run = await http.post("/reports/run", json={"cadence": "weekly"}, headers={**AUTH, **ORG_A})
     assert run.status_code == 200, run.text
     body = run.json()
     assert body["cadence"] == "weekly"
     assert body["reconciled"] is True
+    assert body["organization"] == "org-aaaa"
     names = [f["path"] for f in body["files"]]
     assert any(name.endswith(".html") for name in names)
-    listing = (await http.get("/reports", headers=AUTH)).json()
+    listing = (await http.get("/reports", headers={**AUTH, **ORG_A})).json()
     assert listing["reports"][0]["id"] == body["id"]
-    html = await http.get(f"/reports/files/{names[0]}", headers=AUTH)
+    html = await http.get(f"/reports/files/{names[0]}", headers={**AUTH, **ORG_A})
     assert html.status_code == 200
     assert html.headers["content-type"].startswith("text/html")
     assert html.headers["content-disposition"].startswith("attachment")
     assert (
-        await http.get("/reports/files/..%2Fmarkting-reports.json", headers=AUTH)
+        await http.get("/reports/files/..%2Fmarkting-reports.json", headers={**AUTH, **ORG_A})
     ).status_code in (400, 404)
-    assert (await http.get("/reports/files/rpt_missing.html", headers=AUTH)).status_code == 404
-    assert (await http.get("/reports/files/missing.html", headers=AUTH)).status_code == 400
+    assert (
+        await http.get("/reports/files/rpt_missing.html", headers={**AUTH, **ORG_A})
+    ).status_code == 404
+    assert (
+        await http.get("/reports/files/missing.html", headers={**AUTH, **ORG_A})
+    ).status_code == 400
+
+
+async def test_reports_are_tenant_isolated(client):
+    """Org B cannot list or download org A's report run (R0-07 / SEC-01 regression)."""
+    http, _, _ = client
+    run = await http.post("/reports/run", json={"cadence": "weekly"}, headers={**AUTH, **ORG_A})
+    assert run.status_code == 200, run.text
+    body = run.json()
+    names = [f["path"] for f in body["files"]]
+    # Org B's listing never contains org A's run.
+    listing_b = (await http.get("/reports", headers={**AUTH, **ORG_B})).json()
+    assert all(entry["id"] != body["id"] for entry in listing_b["reports"])
+    # Org B cannot download org A's artifact by name: 404 without existence disclosure.
+    cross = await http.get(f"/reports/files/{names[0]}", headers={**AUTH, **ORG_B})
+    assert cross.status_code == 404
+    # Org A still can.
+    assert (
+        await http.get(f"/reports/files/{names[0]}", headers={**AUTH, **ORG_A})
+    ).status_code == 200
 
 
 async def test_bad_token_is_rejected(client):

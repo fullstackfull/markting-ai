@@ -73,7 +73,7 @@ export class EngineClient {
     this.timeoutMs = options.timeoutMs ?? 240_000;
   }
 
-  private async request<T>(method: 'GET' | 'POST', path: string, body?: unknown, raw = false): Promise<T> {
+  private async request<T>(method: 'GET' | 'POST', path: string, body?: unknown, raw = false, organization?: string): Promise<T> {
     if (FORBIDDEN_PATHS.some((pattern) => pattern.test(path))) {
       throw new EngineError('The adport bridge never approves or edits engine proposals.', 403, 'invalid');
     }
@@ -87,6 +87,9 @@ export class EngineClient {
         headers: {
           ...(this.token ? { authorization: `Bearer ${this.token}` } : {}),
           ...(body !== undefined ? { 'content-type': 'application/json' } : {}),
+          // Tenant identity for the engine's per-org report scoping (R0-07). The engine fails closed
+          // without it on the report surface.
+          ...(organization ? { 'x-markting-org': organization } : {}),
           accept: raw ? '*/*' : 'application/json',
         },
         body: body === undefined ? undefined : JSON.stringify(body),
@@ -124,15 +127,15 @@ export class EngineClient {
     return this.request('POST', `/proposals/${encodeURIComponent(proposalId)}/reject`, { message: message.slice(0, 500) });
   }
 
-  runReport(cadence: 'weekly' | 'monthly', end?: string): Promise<EngineReportRun> {
-    return this.request('POST', '/reports/run', { cadence, ...(end ? { end } : {}) });
+  runReport(organization: string, cadence: 'weekly' | 'monthly', end?: string): Promise<EngineReportRun> {
+    return this.request('POST', '/reports/run', { cadence, ...(end ? { end } : {}) }, false, organization);
   }
 
-  listReports(): Promise<{ reports: EngineReportRun[] }> { return this.request('GET', '/reports'); }
+  listReports(organization: string): Promise<{ reports: EngineReportRun[] }> { return this.request('GET', '/reports', undefined, false, organization); }
 
   /** Raw file response (HTML/PDF/JSON); the caller streams it to the browser as an attachment. */
-  async fetchReportFile(name: string): Promise<Response> {
+  async fetchReportFile(organization: string, name: string): Promise<Response> {
     if (!/^[A-Za-z0-9_.-]{1,120}$/.test(name) || name.startsWith('.')) throw new EngineError('Invalid report file name.', 400, 'invalid');
-    return this.request('GET', `/reports/files/${encodeURIComponent(name)}`, undefined, true);
+    return this.request('GET', `/reports/files/${encodeURIComponent(name)}`, undefined, true, organization);
   }
 }

@@ -46,7 +46,7 @@ describe('EngineClient', () => {
     for (const [status, code] of codes) {
       const { impl } = stubFetch(() => new Response('nope', { status }));
       const client = new EngineClient({ baseUrl: 'http://engine:8080', token: 'secret-token-123', fetchImpl: impl });
-      await expect(client.listReports()).rejects.toMatchObject({ status, code });
+      await expect(client.listReports('org-1')).rejects.toMatchObject({ status, code });
     }
     const { impl } = stubFetch(() => { throw new TypeError('fetch failed'); });
     await expect(new EngineClient({ baseUrl: 'http://engine:8080', token: 'secret-token-123', fetchImpl: impl }).health()).rejects.toMatchObject({ code: 'unreachable' });
@@ -55,13 +55,15 @@ describe('EngineClient', () => {
   it('refuses authenticated calls without a token and validates report file names', async () => {
     const { impl, calls } = stubFetch(() => new Response('{}', { status: 200 }));
     const client = new EngineClient({ baseUrl: 'http://engine:8080', fetchImpl: impl });
-    await expect(client.listReports()).rejects.toMatchObject({ code: 'unauthorized' });
+    await expect(client.listReports('org-1')).rejects.toMatchObject({ code: 'unauthorized' });
     const withToken = new EngineClient({ baseUrl: 'http://engine:8080', token: 'secret-token-123', fetchImpl: impl });
     for (const name of ['../x.html', '.hidden', 'a/b.pdf', 'name with spaces.html', '']) {
-      await expect(withToken.fetchReportFile(name)).rejects.toMatchObject({ code: 'invalid' });
+      await expect(withToken.fetchReportFile('org-1', name)).rejects.toMatchObject({ code: 'invalid' });
     }
     expect(calls).toHaveLength(0);
-    await withToken.fetchReportFile('rpt_4f13815d2f40.pdf');
+    await withToken.fetchReportFile('org-1', 'rpt_4f13815d2f40.pdf');
     expect(calls[0]!.url).toBe('http://engine:8080/reports/files/rpt_4f13815d2f40.pdf');
+    // The tenant identity must travel to the engine so its report surface can scope per-org (SEC-01).
+    expect((calls[0]!.init.headers as Record<string, string>)['x-markting-org']).toBe('org-1');
   });
 });
