@@ -32,8 +32,8 @@ Phase 2 turns the Phase-1 primitives into a senior media-buyer intelligence syst
   safety 3, injection 4, eval 20, service 6). Core 58. All package suites green.
 - CI (GitHub Actions, dispatched on this branch): node, engine, drift, infra, security, and the
   **cloud-db** lane (real Postgres + Auth: tenant isolation, authz, concurrency, replay/idempotency,
-  atomic claim, thread CAS, recommendation-store lifecycle). Final green run: **run #7 (id
-  37121153137) — to be confirmed in the final report once it completes.**
+  atomic claim, thread CAS, recommendation-store lifecycle). **Final green run: run #8 (id 37121774729),
+  all six lanes `success` on the final code (b701585), including the real-Postgres DB lane.**
 
 ## Exit questions (answered with evidence, not architecture)
 
