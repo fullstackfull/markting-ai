@@ -7,6 +7,7 @@
  * account or the target: the tool is picked from a fixed allowlist and the account from the map.
  */
 import { z } from 'zod';
+import { microsToMinorUnits, AdportError } from '@adport/core';
 
 /** Engine `Platform` enum values (engine/src/paid_media_agent/domain/common.py). */
 export const ENGINE_PLATFORMS = [
@@ -100,11 +101,18 @@ function normalizeStatus(value: unknown): 'ACTIVE' | 'PAUSED' | undefined {
   return undefined;
 }
 
-function budgetInput(provider: BridgeProvider, campaignId: string, micros: number): { tool: string; input: Record<string, unknown>; note: string } {
+function budgetInput(provider: BridgeProvider, campaignId: string, micros: number, currency?: string): { tool: string; input: Record<string, unknown>; note: string } {
   switch (provider) {
     case 'sandbox': return { tool: 'sandbox_set_budget', input: { campaign_id: campaignId, daily_budget_micros: micros }, note: `${micros / 1e6} → ${micros} micros` };
     case 'google': return { tool: 'google_set_budget', input: { campaign_id: campaignId, daily_budget_micros: micros }, note: `${micros / 1e6} → ${micros} micros` };
-    case 'meta': return { tool: 'meta_set_budget', input: { object_id: campaignId, daily_budget_cents: Math.round(micros / 10_000) }, note: `${micros / 1e6} → ${Math.round(micros / 10_000)} cents` };
+    case 'meta': {
+      // Meta budgets are the account currency's MINOR unit; convert with the currency exponent, not
+      // a fixed /10_000 (which 100×-inflates JPY/KRW and 10×-understates KWD). Fail closed if the
+      // account currency is unknown (R0-04).
+      if (!currency) throw new AdportError('INVALID_INPUT', 'meta budget conversion requires the account currency; alias binding has none');
+      const minor = microsToMinorUnits(micros, currency);
+      return { tool: 'meta_set_budget', input: { object_id: campaignId, daily_budget_cents: minor }, note: `${micros / 1e6} ${currency} → ${minor} minor units` };
+    }
     case 'reddit': return { tool: 'reddit_set_budget', input: { campaign_id: campaignId, budget_micros: micros, budget_type: 'DAILY_SPEND' }, note: `${micros / 1e6} → ${micros} micros (DAILY_SPEND)` };
     case 'snapchat': return { tool: 'snapchat_set_budget', input: { campaign_id: campaignId, field: 'daily_budget_micro', budget_micros: micros }, note: `${micros / 1e6} → ${micros} micros (daily_budget_micro)` };
     case 'tiktok': return { tool: 'tiktok_set_budget', input: { campaign_id: campaignId, budget: micros / 1e6 }, note: `${micros / 1e6} whole currency units` };
@@ -149,7 +157,12 @@ export function translateProposal(raw: unknown, aliases: AliasMap): Translation 
     if (!after) return { status: 'unsupported', reason: 'budget proposal has no daily_budget field' };
     const micros = toMicros(after.value);
     if (micros === undefined) return { status: 'unsupported', reason: `daily_budget "${String(after.value)}" is not a positive amount within range` };
-    const mapped = budgetInput(binding.provider, campaignId, micros);
+    let mapped: { tool: string; input: Record<string, unknown>; note: string };
+    try {
+      mapped = budgetInput(binding.provider, campaignId, micros, binding.currency);
+    } catch (error) {
+      return { status: 'unsupported', reason: error instanceof Error ? error.message : 'budget conversion failed' };
+    }
     return { status: 'ok', provider: binding.provider, accountId: binding.accountId, tool: mapped.tool, kind: 'update', input: mapped.input, notes: [...notes, mapped.note] };
   }
   const after = proposal.after.find((entry) => entry.field === 'status');

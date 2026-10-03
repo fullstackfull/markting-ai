@@ -18,7 +18,12 @@ function fakeFetch(
     const body = String(init?.body ?? '');
     calls.push({ url: urlStr, init: init ?? {} });
     const route = routes.find((r) => r.match(urlStr, body));
-    if (!route) throw new Error(`Unmatched fetch: ${urlStr}\n${body}`);
+    if (!route) {
+      // Harness default: the currency-exponent lookup for budget writes (R0-04). Tests that care
+      // about a specific currency add their own `fields=currency` route before this fallback.
+      if (urlStr.includes('fields=currency')) return new Response(JSON.stringify({ currency: 'EUR' }), { status: 200 });
+      throw new Error(`Unmatched fetch: ${urlStr}\n${body}`);
+    }
     const reply = typeof route.reply === 'function' ? (route.reply as () => unknown)() : route.reply;
     return new Response(JSON.stringify(reply), { status: route.status ?? 200 });
   });
@@ -291,7 +296,9 @@ describe('MetaAdsProvider writes', () => {
       },
       { forcePausedCreation: true },
     );
-    const body = new URLSearchParams(String(calls[0]!.init.body));
+    // The currency-exponent lookup (R0-04) precedes the create POST, so select the mutating call.
+    const createCall = calls.find((c) => new URL(c.url).pathname.endsWith('/campaigns'))!;
+    const body = new URLSearchParams(String(createCall.init.body));
     expect(body.get('daily_budget')).toBe('5000');
     expect(body.get('is_adset_budget_sharing_enabled')).toBeNull();
   });
@@ -337,6 +344,7 @@ describe('MetaAdsProvider writes', () => {
     );
     expect(preview.budgetDeltas[0]).toEqual({
       target: '"Prospecting DE" daily budget',
+      currency: 'EUR',
       fromMicros: 5000 * CENTS_TO_MICROS,
       toMicros: 6000 * CENTS_TO_MICROS,
     });
@@ -377,7 +385,8 @@ describe('MetaAdsProvider writes', () => {
       { forcePausedCreation: true },
     );
     expect(result.resourceIds).toEqual(['120210000001']);
-    const body = new URLSearchParams(String(calls[0]!.init.body));
+    const createCall = calls.find((c) => new URL(c.url).pathname.endsWith('/adsets'))!;
+    const body = new URLSearchParams(String(createCall.init.body));
     expect(JSON.parse(body.get('targeting')!)).toEqual({ geo_locations: { countries: ['DE'] } });
     expect(body.get('optimization_goal')).toBe('LINK_CLICKS');
     expect(body.get('billing_event')).toBe('IMPRESSIONS');

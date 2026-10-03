@@ -49,6 +49,7 @@ export { AuditLog, type AuditEntry, type AuditEntryStore } from './policy/audit.
 export { PolicyEngine, hashOperation, previewDigest, type ApplyOutcome, type ApplyApproval, type ValidationOutcome } from './policy/engine.js';
 export { isHumanApprover, sameActor, LOCAL_OPERATOR, type ApplyActor, type ActorType } from './policy/actor.js';
 export { classifyWriteRisk, isGenericApiTool, type RiskClass } from './policy/risk.js';
+export { type Money, CURRENCY_EXPONENTS, MICROS_PER_UNIT, currencyExponent, isKnownCurrency, moneyFromMinor, moneyToMicros, moneyFromMicros, minorUnitsToMicros, microsToMinorUnits } from './money.js';
 export {
   ToolRegistry,
   defineTool,

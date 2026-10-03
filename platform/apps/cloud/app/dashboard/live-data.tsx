@@ -5,7 +5,7 @@ import { Empty, Metric, Provider, formatNumber } from '@/components/ui';
 import { useI18n } from '@/components/i18n-provider';
 
 interface Summary {
-  rows: Array<{ provider: string; accountId: string; entity: { id: string; name: string; status?: string }; metrics: Record<string, number> }>;
+  rows: Array<{ provider: string; accountId: string; currency?: string; entity: { id: string; name: string; status?: string }; metrics: Record<string, number> }>;
   truncated?: boolean;
   warnings?: Array<{ provider: string; message: string }>;
 }
@@ -31,14 +31,31 @@ export function LiveData({ organizationId, connected }: { organizationId: string
   }, [connected, organizationId]);
 
   const rows = summary?.rows ?? [];
+  // Counts are currency-free and safe to sum. Money (spend, conversion_value) must NOT be summed
+  // across currencies, and ROAS must not blend currencies — we never invent an FX rate (R0-04).
   const totals = rows.reduce((sum, row) => ({
-    spend: sum.spend + (row.metrics.spend ?? 0),
     impressions: sum.impressions + (row.metrics.impressions ?? 0),
     clicks: sum.clicks + (row.metrics.clicks ?? 0),
     conversions: sum.conversions + (row.metrics.conversions ?? 0),
-    value: sum.value + (row.metrics.conversion_value ?? 0),
-  }), { spend: 0, impressions: 0, clicks: 0, conversions: 0, value: 0 });
-  const roas = totals.spend > 0 ? totals.value / totals.spend : 0;
+  }), { impressions: 0, clicks: 0, conversions: 0 });
+  const byCurrency = new Map<string, { spend: number; value: number }>();
+  for (const row of rows) {
+    const ccy = row.currency ?? '';
+    const acc = byCurrency.get(ccy) ?? { spend: 0, value: 0 };
+    acc.spend += row.metrics.spend ?? 0;
+    acc.value += row.metrics.conversion_value ?? 0;
+    byCurrency.set(ccy, acc);
+  }
+  const currencies = [...byCurrency.entries()];
+  const singleCurrency = currencies.length === 1 ? currencies[0]! : undefined;
+  // One currency: show its total and a real ROAS. Multiple: show each currency's spend and suppress
+  // a blended ROAS (would require FX). Zero rows: blank.
+  const spendDisplay = singleCurrency
+    ? `${fmt(singleCurrency[1].spend)}${singleCurrency[0] ? ` ${singleCurrency[0]}` : ''}`
+    : currencies.map(([ccy, m]) => `${fmt(m.spend)}${ccy ? ` ${ccy}` : ''}`).join(' · ') || fmt(0);
+  const roasDisplay = singleCurrency && singleCurrency[1].spend > 0
+    ? `${fmt(singleCurrency[1].value / singleCurrency[1].spend)}×`
+    : '—';
   const loading = connected && !summary && !error;
 
   return (
@@ -48,10 +65,10 @@ export function LiveData({ organizationId, connected }: { organizationId: string
         <div className="error-callout" key={`${warning.provider}:${warning.message}`}>{t('overview.partialRead', { message: warning.message })}</div>
       ))}
       <section className="metrics" aria-label={t('overview.performanceSummary')} aria-busy={loading}>
-        <Metric label={t('overview.spend')} value={loading ? '…' : fmt(totals.spend)} foot={t('overview.spendFoot')} />
+        <Metric label={t('overview.spend')} value={loading ? '…' : spendDisplay} foot={t('overview.spendFoot')} />
         <Metric label={t('overview.clicks')} value={loading ? '…' : fmt(totals.clicks)} foot={loading ? t('common.loading') : t('overview.impressionsFoot', { impressions: fmt(totals.impressions) })} />
         <Metric label={t('overview.conversions')} value={loading ? '…' : fmt(totals.conversions)} foot={t('overview.conversionsFoot')} />
-        <Metric label="ROAS" value={loading ? '…' : `${fmt(roas)}×`} foot={t('overview.roasFoot')} />
+        <Metric label="ROAS" value={loading ? '…' : roasDisplay} foot={t('overview.roasFoot')} />
       </section>
       <section className="card">
         <div className="card-head"><h2>{t('overview.campaignActivity')}</h2><span className="card-note">{t('overview.activityNote')}{summary?.truncated ? t('overview.truncated') : ''}</span></div>

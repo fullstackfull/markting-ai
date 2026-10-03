@@ -119,3 +119,24 @@ describe('translateProposal: synthetic engine proposals → adport guarded write
     });
   });
 });
+
+describe('R0-04: bridge meta budget uses the account currency exponent (no 100× inflation)', () => {
+  const META_JPY: AliasMap = { 'acme-meta-jp': { alias: 'acme-meta-jp', provider: 'meta', accountId: 'act_900', currency: 'JPY' } };
+  const META_NOCCY: AliasMap = { 'acme-meta-x': { alias: 'acme-meta-x', provider: 'meta', accountId: 'act_901' } };
+
+  it('converts a 240 JPY daily budget to 240 minor units, not 24_000', () => {
+    const result = translateProposal(
+      syntheticProposal({ platform: 'meta_ads', account_ref: 'acme-meta-jp', tool_name: 'meta_ads__update_campaign_budget', target_ref: 'c-1', after: [{ field: 'daily_budget', value: 240 }] }),
+      META_JPY,
+    );
+    expect(result).toMatchObject({ status: 'ok', tool: 'meta_set_budget', input: { object_id: 'c-1', daily_budget_cents: 240 } });
+  });
+
+  it('fails closed when the meta alias has no currency', () => {
+    const result = translateProposal(
+      syntheticProposal({ platform: 'meta_ads', account_ref: 'acme-meta-x', tool_name: 'meta_ads__update_campaign_budget', target_ref: 'c-1', after: [{ field: 'daily_budget', value: 240 }] }),
+      META_NOCCY,
+    );
+    expect(result).toMatchObject({ status: 'unsupported', reason: expect.stringContaining('currency') });
+  });
+});

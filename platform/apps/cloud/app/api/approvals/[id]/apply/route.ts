@@ -4,6 +4,7 @@ import { apiError, HttpError, noStoreJson } from '@/lib/http';
 import { applyPending } from '@/lib/markting/bridge';
 import { markPendingOutcome } from '@/lib/markting/repository';
 import { createBridgeRuntime } from '@/lib/markting/runtime';
+import { assertApplyAllowed } from '@/lib/markting/runtime-mode';
 
 /**
  * Apply a previewed operation from the dashboard. This is the exact "second call" of adport's
@@ -16,6 +17,10 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     const principal = await sessionPrincipal(body.organizationId);
     requireScope(principal, 'tools:write');
     if (principal.role === 'viewer' || principal.role === 'member') throw new HttpError('Only owners and admins can apply changes.', 403);
+    // Fail closed on the runtime safety state: real provider writes stay disabled until the operator
+    // explicitly opts up to LIVE_WRITE_APPROVAL_ONLY (gated behind the Phase 0 exit). DEMO applies to
+    // the sandbox only. Phase 0 has no autonomous-write state at all (R0-12).
+    assertApplyAllowed();
     const row = (await listPendingOperations(principal.organizationId, 200)).find((candidate) => candidate.id === id);
     if (!row) throw new HttpError('Pending operation not found, expired, or already applied.', 404);
     // Four-eyes (human approver, requester≠approver) is enforced in the single policy-engine seam

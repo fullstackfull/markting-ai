@@ -15,8 +15,14 @@ import {
   type WriteResult,
 } from '@adport/core';
 import { ACCOUNT_STATUS, MetaGraphClient, normalizeAccountId } from './client.js';
+import { minorUnitsToMicros } from '@adport/core';
 
-/** Meta budgets are minor currency units (cents); the policy engine speaks micros. */
+/**
+ * Meta budgets are in the account currency's MINOR unit (cents for 2-decimal currencies, whole
+ * yen for JPY, fils for KWD). Convert to the engine's micros with the currency's exponent via the
+ * canonical money module — never a fixed factor. CENTS_TO_MICROS remains only for the generic
+ * api_create preview collector (which is itself gated off the sanctioned path by policy).
+ */
 export const CENTS_TO_MICROS = 10_000;
 
 const INSIGHTS_LEVEL = {
@@ -321,18 +327,20 @@ export class MetaAdsProvider implements AdProvider {
     const current = await this.client.get<{ name?: string; lifetime_budget?: string }>(payload.object_id, {
       fields: 'name,lifetime_budget',
     });
-    const fromCents = current.lifetime_budget !== undefined ? Number(current.lifetime_budget) : undefined;
-    if (fromCents === undefined) {
+    const fromMinor = current.lifetime_budget !== undefined ? Number(current.lifetime_budget) : undefined;
+    if (fromMinor === undefined) {
       throw new AdportError('PROVIDER_ERROR', `meta: object ${payload.object_id} has no lifetime_budget`);
     }
+    const currency = await this.accountCurrency(act);
     return {
-      summary: `Change "${current.name ?? payload.object_id}" lifetime budget ${fromCents} → ${payload.lifetime_budget_cents} minor units`,
-      changes: [`~ ${payload.object_id} lifetime_budget ${fromCents} → ${payload.lifetime_budget_cents}`],
+      summary: `Change "${current.name ?? payload.object_id}" lifetime budget ${fromMinor} → ${payload.lifetime_budget_cents} minor units`,
+      changes: [`~ ${payload.object_id} lifetime_budget ${fromMinor} → ${payload.lifetime_budget_cents}`],
       coercions: [],
       budgetDeltas: [{
         target: `"${current.name ?? payload.object_id}" lifetime budget`,
-        fromMicros: fromCents * CENTS_TO_MICROS,
-        toMicros: payload.lifetime_budget_cents * CENTS_TO_MICROS,
+        currency,
+        fromMicros: minorUnitsToMicros(fromMinor, currency),
+        toMicros: minorUnitsToMicros(payload.lifetime_budget_cents, currency),
       }],
       execute: async (validateOnly) => {
         await this.client.post(payload.object_id, this.withExecutionOptions({ lifetime_budget: payload.lifetime_budget_cents }, validateOnly));
@@ -406,6 +414,15 @@ export class MetaAdsProvider implements AdProvider {
     };
   }
 
+  /** Fetch the ad account's currency so budget minor units convert with the correct exponent (R0-04). */
+  private async accountCurrency(act: string): Promise<string> {
+    const account = await this.client.get<{ currency?: string }>(`act_${act}`, { fields: 'currency' });
+    if (!account.currency) {
+      throw new AdportError('PROVIDER_ERROR', `meta: could not determine the currency for ad account ${act}; refusing a budget conversion with an unknown exponent`);
+    }
+    return account.currency;
+  }
+
   private async assertObjectOwnedByAccount(objectId: string, act: string): Promise<void> {
     if (!/^\d+$/.test(objectId)) throw new AdportError('INVALID_INPUT', 'meta: object_id must be numeric');
     const object = await this.client.get<{ account_id?: string }>(objectId, { fields: 'account_id' });
@@ -446,11 +463,13 @@ export class MetaAdsProvider implements AdProvider {
     const budgetDeltas: WritePreview['budgetDeltas'] = [];
     const changes = [`+ campaign "${payload.name}" objective=${payload.objective} status=${status}`];
     if (payload.daily_budget_cents) {
+      const currency = await this.accountCurrency(act);
       fields.daily_budget = payload.daily_budget_cents;
       changes.push(`+ campaign-level (Advantage/CBO) daily budget ${payload.daily_budget_cents} minor units`);
       budgetDeltas.push({
         target: `new campaign "${payload.name}" daily budget`,
-        toMicros: payload.daily_budget_cents * CENTS_TO_MICROS,
+        currency,
+        toMicros: minorUnitsToMicros(payload.daily_budget_cents, currency),
       });
     } else {
       // Required by Marketing API v25 when the campaign does not own a budget.
@@ -508,23 +527,25 @@ export class MetaAdsProvider implements AdProvider {
     const current = await this.client.get<{ name?: string; daily_budget?: string }>(payload.object_id, {
       fields: 'name,daily_budget',
     });
-    const fromCents = current.daily_budget !== undefined ? Number(current.daily_budget) : undefined;
-    if (fromCents === undefined) {
+    const fromMinor = current.daily_budget !== undefined ? Number(current.daily_budget) : undefined;
+    if (fromMinor === undefined) {
       throw new AdportError(
         'PROVIDER_ERROR',
         `meta: object ${payload.object_id} ("${current.name ?? '?'}") has no daily_budget — ` +
           'the budget may live on the other level (campaign vs ad set) or be a lifetime budget.',
       );
     }
+    const currency = await this.accountCurrency(act);
     return {
-      summary: `Change "${current.name ?? payload.object_id}" daily budget ${fromCents} → ${payload.daily_budget_cents} minor units`,
-      changes: [`~ ${payload.object_id} daily_budget ${fromCents} → ${payload.daily_budget_cents}`],
+      summary: `Change "${current.name ?? payload.object_id}" daily budget ${fromMinor} → ${payload.daily_budget_cents} minor units`,
+      changes: [`~ ${payload.object_id} daily_budget ${fromMinor} → ${payload.daily_budget_cents}`],
       coercions: [],
       budgetDeltas: [
         {
           target: `"${current.name ?? payload.object_id}" daily budget`,
-          fromMicros: fromCents * CENTS_TO_MICROS,
-          toMicros: payload.daily_budget_cents * CENTS_TO_MICROS,
+          currency,
+          fromMicros: minorUnitsToMicros(fromMinor, currency),
+          toMicros: minorUnitsToMicros(payload.daily_budget_cents, currency),
         },
       ],
       execute: async (validateOnly) => {
@@ -566,10 +587,12 @@ export class MetaAdsProvider implements AdProvider {
     };
     const budgetDeltas: WritePreview['budgetDeltas'] = [];
     if (payload.daily_budget_cents) {
+      const currency = await this.accountCurrency(act);
       fields.daily_budget = payload.daily_budget_cents;
       budgetDeltas.push({
         target: `new ad set "${payload.name}" daily budget`,
-        toMicros: payload.daily_budget_cents * CENTS_TO_MICROS,
+        currency,
+        toMicros: minorUnitsToMicros(payload.daily_budget_cents, currency),
       });
     }
     return {
@@ -615,6 +638,9 @@ function collectMetaCreateBudgets(fields: Record<string, unknown>): WritePreview
       if (/budget/i.test(key)) {
         const cents = Number(child);
         if (Number.isFinite(cents) && cents > 0) {
+          // Generic api_create is gated off the sanctioned path by policy (allow_generic_api_writes);
+          // this preview-only estimate assumes a 2-decimal currency. Typed creates use the
+          // currency-aware path above.
           deltas.push({ target: childPath, toMicros: Math.round(cents * CENTS_TO_MICROS) });
         }
       }
