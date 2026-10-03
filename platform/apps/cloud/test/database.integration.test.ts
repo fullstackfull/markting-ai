@@ -296,7 +296,9 @@ describeDatabase('Supabase tenant boundary', () => {
     `;
     expect(events).toHaveLength(1);
     await pending.delete(id);
-    expect(await pending.get(id)).toBeUndefined();
+    // Phase 0 made delete a SOFT reject (state='rejected', consumed_at set) so the record is preserved
+    // for the audit trail rather than hard-deleted; get() therefore returns the terminal rejected row.
+    expect((await pending.get(id))?.state).toBe('rejected');
   });
 
   it('administers tenant members and settings atomically with audit events', async () => {
@@ -379,6 +381,8 @@ describeDatabase('Supabase tenant boundary', () => {
       where organization_id = ${firstOrgId} and pending_id = ${preview.pending_operation_id}
       order by created_at asc
     `;
-    expect(events.map((event) => event.event)).toEqual(['validated', 'applied']);
+    // Phase 0 (SEC-08) writes a pre-write 'applying' intent event before the provider call, so a
+    // crash after the external write stays reconstructable. The sequence is validated → applying → applied.
+    expect(events.map((event) => event.event)).toEqual(['validated', 'applying', 'applied']);
   });
 });
