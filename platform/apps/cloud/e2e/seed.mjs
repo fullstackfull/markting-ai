@@ -61,7 +61,7 @@ async function ensureMembership(orgId, userId, role) {
 async function completeOnboarding(orgId) {
   await sql`
     insert into public.organization_onboarding (organization_id, current_step, selected_agent, completed_at)
-    values (${orgId}, 'done', 'media_buyer', now())
+    values (${orgId}, 'complete', 'claude', now())
     on conflict (organization_id) do update set completed_at = now()`;
 }
 
