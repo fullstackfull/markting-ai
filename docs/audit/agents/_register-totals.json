@@ -1,0 +1,237 @@
+{
+  "generated_by": "K10 \u2014 Findings register writer",
+  "agents_total": 104,
+  "agents_AJ": 96,
+  "agents_K": 8,
+  "no_report": [],
+  "absent_by_design": [
+    "K9"
+  ],
+  "team_subtotals": {
+    "A": {
+      "P0": 5,
+      "P1": 16,
+      "P2": 56,
+      "P3": 93,
+      "GAP": 34,
+      "agents": 16,
+      "total": 204
+    },
+    "B": {
+      "P0": 0,
+      "P1": 1,
+      "P2": 34,
+      "P3": 21,
+      "GAP": 21,
+      "agents": 9,
+      "total": 77
+    },
+    "C": {
+      "P0": 1,
+      "P1": 14,
+      "P2": 57,
+      "P3": 60,
+      "GAP": 21,
+      "agents": 14,
+      "total": 153
+    },
+    "D": {
+      "P0": 0,
+      "P1": 12,
+      "P2": 58,
+      "P3": 93,
+      "GAP": 16,
+      "agents": 12,
+      "total": 179
+    },
+    "E": {
+      "P0": 0,
+      "P1": 13,
+      "P2": 21,
+      "P3": 44,
+      "GAP": 6,
+      "agents": 11,
+      "total": 84
+    },
+    "F": {
+      "P0": 0,
+      "P1": 3,
+      "P2": 37,
+      "P3": 59,
+      "GAP": 27,
+      "agents": 9,
+      "total": 126
+    },
+    "G": {
+      "P0": 0,
+      "P1": 10,
+      "P2": 34,
+      "P3": 37,
+      "GAP": 9,
+      "agents": 7,
+      "total": 90
+    },
+    "H": {
+      "P0": 0,
+      "P1": 16,
+      "P2": 30,
+      "P3": 22,
+      "GAP": 4,
+      "agents": 7,
+      "total": 72
+    },
+    "I": {
+      "P0": 0,
+      "P1": 9,
+      "P2": 24,
+      "P3": 13,
+      "GAP": 7,
+      "agents": 5,
+      "total": 53
+    },
+    "J": {
+      "P0": 0,
+      "P1": 14,
+      "P2": 34,
+      "P3": 31,
+      "GAP": 5,
+      "agents": 6,
+      "total": 84
+    },
+    "K": {
+      "P0": 1,
+      "P1": 38,
+      "P2": 58,
+      "P3": 34,
+      "GAP": 19,
+      "agents": 8,
+      "total": 150
+    }
+  },
+  "raw_grand_total": {
+    "P0": 7,
+    "P1": 146,
+    "P2": 443,
+    "P3": 507,
+    "GAP": 169,
+    "total": 1272
+  },
+  "raw_grand_total_AJ_only": {
+    "P0": 6,
+    "P1": 108,
+    "P2": 385,
+    "P3": 473,
+    "GAP": 150,
+    "total": 1122
+  },
+  "deduplicated_grand_total": {
+    "P0": 6,
+    "P1": 52,
+    "P2": 166,
+    "P3": 254,
+    "GAP": 94,
+    "total": 572
+  },
+  "dedup_method": "A-J connected components over shared path:line tokens with same-severity linking (conservative lower bound on duplication); K council layer excluded as re-adjudication folded onto canonical A-J ids",
+  "council_adjudicated_P0_today": "0-1 (K4 security seat rules P0=0 today; K1 keeps 1 latent: zero-decimal currency)",
+  "dedup_clusters": [
+    {
+      "defect": "Engine report memory is one global index shared by every tenant (cross-tenant report list/download)",
+      "evidence": "`reports/engine/route.ts:16-20`, `[name]/route.ts:10`, `serve_demo.py:355`",
+      "agents": "C4,D4,D7,D8,D9,D10,D11,E4,E10,F4,F9,G1,G2,H4,H7,J1,J3,J5",
+      "plus_K": "K1-13, K7-12, K8-B9, K6-06",
+      "canonical": "J2 (VERIFIED_RUNTIME) / 05 SEC report-index",
+      "severity": "P2 today / P0 live"
+    },
+    {
+      "defect": "Dashboard self-approval guard skipped for pending rows with null created_by (API-key/engine path)",
+      "evidence": "`apply/route.ts:22`",
+      "agents": "C7,C13,C14,D0,D7,D8,D10,D11,E10,F3,F4,F8,F9,G2,G7,J2,J3,J5",
+      "plus_K": "K4 SEC-26, K2-P2-07",
+      "canonical": "C13-03 / K4 SEC-26",
+      "severity": "P2"
+    },
+    {
+      "defect": "Apply is not atomic across concurrent approvers; double provider write possible",
+      "evidence": "`apply/route.ts:20`, `reject/route.ts:13`",
+      "agents": "D1,D2,D4,D5,D7,D8,D9,D10,D11,E10,E11,F1,F4,F6,F7,F8,F9,J1",
+      "plus_K": "K6-01",
+      "canonical": "K6-01 (reproduced 4x) / F6",
+      "severity": "P1"
+    },
+    {
+      "defect": "Engine reasons over bundled synthetic fixtures in BOTH demo and live mode (core product promise unbacked)",
+      "evidence": "`serve_demo.py:163,383`, `config.py:158`, `runtime.ts:18`",
+      "agents": "C1,C3,C8,D0,D1,D3,D7,D8,D10,D11,E4,F1,F2,F9,G2,G7,J1,J2,J3,J5,J6",
+      "plus_K": "K1-01, K2-P1-03, K7-01",
+      "canonical": "C3-01 / K2-P1-03",
+      "severity": "P1"
+    },
+    {
+      "defect": "No per-org identity/quota/cost reaches the model; one shared engine token/bridge caller for all tenants",
+      "evidence": "`docker-compose.yml:49`, `serve_demo.py:324`",
+      "agents": "C1,C2,C4,D1,D3,D5,D8,D11,E4,E11,F1,J2,J5",
+      "plus_K": "K3-08, K2-P2-01",
+      "canonical": "C4 / K3-08",
+      "severity": "P1/P2"
+    },
+    {
+      "defect": "No usage metering; only a flat 120 req/min rate limit, plan-independent (unbounded AI/engine cost)",
+      "evidence": "`repository.ts:355`",
+      "agents": "C2,C10,C14,D1,D4,D8,F4,H7,I3,I5,J1",
+      "plus_K": "K2-P2-01, K7-16, K8-B3",
+      "canonical": "I3-01 / K8-B3",
+      "severity": "P1"
+    },
+    {
+      "defect": "Zero-decimal currency (JPY/KRW) produces a 100x budget via hard-coded 2-decimal assumption",
+      "evidence": "`meta/src/provider.ts:20` (CENTS_TO_MICROS=10_000), `translate.ts:107`",
+      "agents": "A1,A12,A15,A16",
+      "plus_K": "K1-05, K5-10",
+      "canonical": "A16 F-01",
+      "severity": "P0 raw / P1 adjudicated"
+    },
+    {
+      "defect": "Budget rails checked at validate time only; apply re-plans against fresh budget, cap bypassable",
+      "evidence": "`policy/policy.ts:19`, `policy/engine.ts:87,110`",
+      "agents": "A6,A10,C4,C13,D7,D9,G1,G2,G6,G7,J5",
+      "plus_K": "K4 SEC-07",
+      "canonical": "C13 / SEC-07",
+      "severity": "P2"
+    },
+    {
+      "defect": "Model failures masked as HTTP-200 prose; all errors retried; no run deadline; client abort orphans run",
+      "evidence": "`assistant/messages/route.ts:7`",
+      "agents": "C2,C10,D1,D4,D7,D9,D11,F7,G2,H3,J1,J4",
+      "plus_K": "K2-P2-03",
+      "canonical": "C11 / K2-P2-03",
+      "severity": "P2"
+    },
+    {
+      "defect": "Demo engine host replays a canned Google budget-cut proposal for any matching message (on prod approval path)",
+      "evidence": "`serve_demo.py:63`",
+      "agents": "A14,C3,C6,C8,C9,C14,D3,F1,J1,J3,J4",
+      "plus_K": "K1-12, K2-P2-05",
+      "canonical": "C3-04 / K1-12",
+      "severity": "P2"
+    },
+    {
+      "defect": "Deep Agents summarization offloads evicted chat prose to shared filesystem root readable cross-thread/org",
+      "evidence": "`deepagents/graph.py:886-889`, `summarization.py:607-611,689-700` (vendored .venv)",
+      "agents": "C5,C14 (+J2 report-path)",
+      "plus_K": "K2-P1-04",
+      "canonical": "C5-01 (VERIFIED_RUNTIME)",
+      "severity": "P0 raw / P1 adjudicated"
+    },
+    {
+      "defect": "Stray engine/workspace/KILL_SWITCH makes 19 upstream engine tests fail in-checkout; make test never runs them",
+      "evidence": "`serve_demo.py:173` / `engine/workspace/KILL_SWITCH`",
+      "agents": "C1,C4,C6,C10,C14,D0,D3,D4,D11,F1,F2,F4,F9,H4,J1,J4",
+      "plus_K": "K6-05",
+      "canonical": "F1 / K6-05",
+      "severity": "P2"
+    }
+  ],
+  "multi_agent_pathline_tokens": 2628,
+  "multi_agent_components": 119
+}
