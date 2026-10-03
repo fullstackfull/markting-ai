@@ -37,14 +37,17 @@ const DASHBOARD = ['/dashboard/workspace', '/dashboard/commerce', '/dashboard/cr
 for (const route of DASHBOARD) {
   test(`A11Y ${route} (en) has no critical/serious axe violations`, async ({ page }) => {
     await page.goto(route);
-    await expect(page.locator('main')).toBeVisible();
+    // `.first()` avoids a strict-mode match when the route-group loading.tsx <main> briefly coexists
+    // with the page <main> during streaming under parallel CI load.
+    await expect(page.locator('main').first()).toBeVisible();
     const { describe } = await scan(page);
     expect(describe).toEqual([]);
   });
 }
 
 test('A11Y workspace (ar / RTL) has no critical/serious axe violations', async ({ page, context, baseURL }) => {
-  await context.addCookies([{ name: 'locale', value: 'ar', url: baseURL ?? 'http://localhost:3100' }]);
+  // The locale cookie is `markting_locale` (lib/i18n/config.ts LOCALE_COOKIE), not `locale`.
+  await context.addCookies([{ name: 'markting_locale', value: 'ar', url: baseURL ?? 'http://localhost:3100' }]);
   await page.goto('/dashboard/workspace');
   await expect(page.locator('html[dir="rtl"]')).toBeAttached();
   const { describe } = await scan(page);

@@ -69,8 +69,10 @@ test.describe('authenticated media-buyer journeys', () => {
     await expect(page.locator('main')).toBeVisible();
   });
 
-  test('E2E-07 Arabic / RTL workspace', async ({ page, context }) => {
-    await context.addCookies([{ name: 'locale', value: 'ar', url: page.url() || 'http://127.0.0.1:3100' }]);
+  test('E2E-07 Arabic / RTL workspace', async ({ page, context, baseURL }) => {
+    // Cookie is `markting_locale` (not `locale`); set it against a concrete origin (page.url() is
+    // about:blank before the first navigation, which addCookies rejects).
+    await context.addCookies([{ name: 'markting_locale', value: 'ar', url: baseURL ?? 'http://localhost:3100' }]);
     await page.goto('/dashboard/workspace');
     await expect(page.locator('html[dir="rtl"]')).toBeAttached();
   });
