@@ -36,6 +36,8 @@ export interface CreateContextOptions {
   writeActor?: ApplyActor;
   /** Permit requester==approver. Defaults true for the local operator; hosted sets it from config. */
   allowSelfApproval?: boolean;
+  /** Read-only capability: the registry refuses any non-read tool when true (Phase 1B). */
+  readOnly?: boolean;
 }
 
 export interface AdportRuntime {
@@ -76,6 +78,7 @@ export async function createContext(options: CreateContextOptions = {}): Promise
     findings: options.findings,
     writeActor: options.writeActor ?? LOCAL_OPERATOR,
     allowSelfApproval: options.allowSelfApproval ?? (options.writeActor ? false : true),
+    readOnly: options.readOnly ?? false,
   };
   ctx.registry = registry;
   return { ctx, registry, policySource: source };

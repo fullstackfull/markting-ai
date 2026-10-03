@@ -30,6 +30,7 @@ import {
 import type { ProviderCredentialMap, TenantPrincipal } from './types';
 import { isSyntheticReviewer } from './synthetic-reviewer';
 import { HttpError } from '@/lib/http';
+import { isReadOnlyMode } from '@/lib/markting/engine-context';
 
 export interface TenantRuntimeOptions {
   /** Used only immediately after OAuth exchange to discover provider accounts. */
@@ -157,5 +158,7 @@ export async function createTenantRuntime(principal: TenantPrincipal, options: T
     // the dashboard path is set by createBridgeRuntime. Self-approval is off here regardless.
     writeActor: principalToActor(principal),
     allowSelfApproval: false,
+    // Live read-only / recommendations modes expose only read tools at the registry (Phase 1B).
+    readOnly: isReadOnlyMode(),
   });
 }

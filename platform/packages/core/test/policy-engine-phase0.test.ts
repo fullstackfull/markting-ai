@@ -202,3 +202,18 @@ describe('R0-06: apply-time revalidation + immutable preview', () => {
     expect((await pending.get(pendingOperationId))?.state).toBe('superseded');
   });
 });
+
+describe('R0/Phase1: read-only capability refuses non-read tools', () => {
+  it('a write tool call throws WRITE_FORBIDDEN_READ_ONLY in a read-only runtime', async () => {
+    const { createContext } = await import('../src/context.js');
+    const { MockProvider, mockTools } = await import('../src/testing/mock-provider.js');
+    const provider = new MockProvider();
+    const rt = await createContext({ providerModules: [{ provider, tools: mockTools() }], readOnly: true });
+    // A guarded write tool (even just the preview/validate branch) is refused at the registry.
+    await expect(rt.registry.call('mock_set_budget', { account_id: 'mock-1', campaign_id: 'c1', daily_budget_micros: 11_000_000 }, rt.ctx))
+      .rejects.toMatchObject({ code: 'WRITE_FORBIDDEN_READ_ONLY' });
+    // A read tool still works.
+    const read = await rt.registry.call('report', { level: 'account', metrics: ['spend'], dateRange: 'last_7_days' }, rt.ctx);
+    expect(read).toBeDefined();
+  });
+});

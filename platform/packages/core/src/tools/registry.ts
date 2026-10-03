@@ -31,6 +31,12 @@ export interface ToolContext {
   writeActor?: ApplyActor;
   /** Permit requester==approver (single-operator demos only). Default false in hosted runtimes. */
   allowSelfApproval?: boolean;
+  /**
+   * READ-ONLY capability (Phase 1B). When true, the registry refuses ANY non-read tool call
+   * deterministically — the model cannot preview or apply a mutation, enforced at registration/call,
+   * not by prompt prose. Hosted analysis runtimes set this in live read-only modes.
+   */
+  readOnly?: boolean;
 }
 
 export interface AnyToolDefinition {
@@ -94,6 +100,9 @@ export class ToolRegistry {
     const parsed = tool.input.safeParse(rawInput ?? {});
     if (!parsed.success) {
       throw new AdportError('INVALID_INPUT', `Invalid input for ${name}`, parsed.error.issues);
+    }
+    if (ctx.readOnly && tool.annotations.readOnly !== true) {
+      throw new AdportError('WRITE_FORBIDDEN_READ_ONLY', `Tool "${name}" is not read-only; this runtime is in a read-only capability mode and cannot preview or apply mutations.`);
     }
     await ctx.authorizeToolCall?.(tool, parsed.data as Record<string, unknown>);
     return tool.handler(parsed.data as never, ctx);
