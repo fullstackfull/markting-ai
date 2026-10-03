@@ -369,7 +369,10 @@ describeDatabase('Supabase tenant boundary', () => {
       ctx,
     )) as { status: string };
     expect(applied.status).toBe('applied');
-    expect(await new PostgresPendingStore(principal).get(preview.pending_operation_id)).toBeUndefined();
+    // Phase 0 made applied operations TERMINAL and RETAINED (not deleted) so an idempotent retry
+    // returns the stored result rather than re-executing. The row therefore remains, in state 'applied'.
+    const afterApply = await new PostgresPendingStore(principal).get(preview.pending_operation_id);
+    expect(afterApply?.state).toBe('applied');
 
     const events = await db()<Array<{ event: string }>>`
       select event from public.audit_events
