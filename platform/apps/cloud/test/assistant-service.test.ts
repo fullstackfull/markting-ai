@@ -16,7 +16,8 @@ describe('Program 3 — question → intent routing (deterministic, bilingual)',
   });
   it('routes attention/today questions to DAILY_REVIEW; account/campaign to ACCOUNT_DIAGNOSIS', () => {
     expect(routeIntent('what needs my attention today?')).toBe('DAILY_REVIEW');
-    expect(routeIntent('diagnose this campaign')).toBe('ACCOUNT_DIAGNOSIS');
+    expect(routeIntent('diagnose this campaign')).toBe('CAMPAIGN_DIAGNOSIS');
+    expect(routeIntent('diagnose this account')).toBe('ACCOUNT_DIAGNOSIS');
     expect(routeIntent('hello')).toBe('DAILY_REVIEW');
   });
 });

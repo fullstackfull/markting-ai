@@ -43,6 +43,23 @@ export const INTELLIGENCE_INTENTS = [
   'PROFITABILITY_DECLINE', // "why did profitability decline and what should I do"
   'ACCOUNT_DIAGNOSIS',     // "what is wrong with this account"
   'CAMPAIGN_DIAGNOSIS',
+  'SPEND_REPORT',          // "what did I spend / blended ROAS"
+  'PACING',                // "is my budget pacing on track"
+  'FORECAST',              // "will I over/underspend by month end"
+  'ANOMALY',               // "any spend spikes / conversion drops"
+  'TREND',                 // "spend/CPA trend over time"
+  'SATURATION',            // "which campaigns are saturated / marginal ROAS"
+  'SCALING',               // "which campaigns can I scale safely"
+  'BUDGET_SCENARIO',       // "where should I put another $1,000"
+  'CREATIVE_REVIEW',       // "which creatives are fatiguing / refresh / cluster"
+  'COMMERCE_PROFIT',       // "true profit / MER / refunds / platform-vs-merchant"
+  'OUTCOMES_HISTORY',      // "what happened after my last recommendation"
+  'EXPERIMENT_SUGGEST',    // "design an experiment"
+  'PORTFOLIO_ATTENTION',   // "which client needs attention first"
+  'DATA_QUALITY',          // "is this a data problem"
+  'MEMORY_CONTEXT',        // "what are my targets / business context"
+  'BREAKDOWN',             // "placement/device/geo/audience breakdown"
+  'CROSS_CHANNEL',         // "compare Meta vs Google"
   'OPEN_QUESTION',         // a free-text buyer question, routed deterministically where possible
 ] as const;
 export type IntelligenceIntent = (typeof INTELLIGENCE_INTENTS)[number];

@@ -14,6 +14,8 @@ import type { IntelligenceGatherer, GatheredIntelligence } from './assistant-ser
 import type { Diagnosis } from '../intelligence/decision-model';
 import type { CommerceDiagnosis, CommerceRecommendation } from '../commerce/diagnostics';
 import type { CreativeRecommendation } from '../creative/recommendations';
+import { sectionForIntent } from './sections';
+import { seedClientForAccount, SEED_PORTFOLIO } from './seed';
 
 export const emptyGatherer: IntelligenceGatherer = {
   async gather() {
@@ -27,6 +29,9 @@ export const emptyGatherer: IntelligenceGatherer = {
 };
 
 export const demoGatherer: IntelligenceGatherer = {
+  sections(context, intent) {
+    return sectionForIntent(intent, seedClientForAccount(context.accountId).account, SEED_PORTFOLIO);
+  },
   async gather(context) {
     const org = context.organizationId;
     const accountId = context.accountId ?? 'sandbox:acc:1';
