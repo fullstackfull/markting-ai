@@ -20,7 +20,7 @@ Phase-0 governed write chain is unchanged.
 - **G — Executive workflow:** READY.
 - **H — Assistant/orchestrator:** READY (42/50 via one orchestrator; honest answer source).
 - **I — Browser E2E:** NOT READY (no Playwright; build + unit/integration verified instead).
-- **J — Provider replay contracts:** NOT READY (documented-shape fixtures only; no replay/edge harness added).
+- **J — Provider replay contracts:** PARTIAL (Meta edge-case replay suite added: pagination, missing fields, schema drift, provider error; Google + live cassettes NOT_STARTED).
 - **K — Data-science correctness:** READY for surfaced engines (four material P1s fixed + tested); remaining P2s NOT_STARTED.
 - **L — Scale readiness:** PARTIAL (orchestrator path benchmarked O(n); DB read-path refactors NOT_STARTED).
 - **M — Security:** READY (P0 closed, proven; hardening slices remain).
