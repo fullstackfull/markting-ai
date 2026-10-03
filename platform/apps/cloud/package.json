@@ -9,7 +9,9 @@
     "start": "next start",
     "typecheck": "next typegen && tsc --noEmit",
     "test": "vitest run",
-    "clean": "rm -rf .next coverage"
+    "clean": "rm -rf .next coverage",
+    "e2e": "playwright test",
+    "e2e:list": "E2E_NO_SERVER=1 playwright test --list"
   },
   "dependencies": {
     "@adport/core": "workspace:*",
@@ -40,6 +42,7 @@
     "zod": "^4.4.3"
   },
   "devDependencies": {
+    "@playwright/test": "^1.63.0",
     "@types/node": "^26.1.2",
     "@types/react": "^19.2.14",
     "@types/react-dom": "^19.2.3",
