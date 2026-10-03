@@ -44,5 +44,13 @@ describe('Program 29 — executable 50-question media-buyer benchmark (>=40 ANSW
     // No assistant question may silently fail its check (that would be an inflated mapping).
     expect(failedAssistant, failedAssistant.map((v) => `#${v.n}`).join(',')).toEqual([]);
     expect(answerable.length).toBeGreaterThanOrEqual(40);
+
+    // Program 27 — every NOT-answerable-now question must carry an honest classification; none may be
+    // silently missing. The classification distribution is printed for the exit report.
+    const notNow = BENCHMARK.filter((b) => b.via === 'agent-only' || b.via === 'none');
+    for (const b of notNow) expect(b.notNow, `#${b.n} missing notNow class`).toBeDefined();
+    const dist = notNow.reduce<Record<string, number>>((acc, b) => { acc[b.notNow!] = (acc[b.notNow!] ?? 0) + 1; return acc; }, {});
+    // eslint-disable-next-line no-console
+    console.log(`BENCHMARK NOT_NOW (${notNow.length}) classification:`, JSON.stringify(dist));
   });
 });

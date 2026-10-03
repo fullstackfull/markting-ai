@@ -14,6 +14,18 @@ import type { AnswerSection } from './sections';
 
 export type ReachVia = 'surface' | 'assistant' | 'agent-only' | 'none';
 
+/**
+ * Program 27 — honest classification for every question that is NOT answerable now. A not-now question
+ * is never silently "missing"; it carries exactly why, and none of these reasons is removable without a
+ * live provider, a provider capability we do not have, or a deliberately-held write path. Faking an
+ * intent to convert one of these into ANSWERABLE_NOW is explicitly out of scope.
+ */
+export type NotNowClass =
+  | 'REQUIRES_LIVE_PROVIDER'        // needs a connected provider account + live data (no credentials here)
+  | 'REQUIRES_PROVIDER_CAPABILITY'  // needs a provider read we don't normalize (GAQL search terms, IS, PMax)
+  | 'NOT_SUPPORTED_BY_PRODUCT'      // would need a new intelligence capability (out of scope this program)
+  | 'INTENTIONALLY_UNSUPPORTED';    // a write/mutation deliberately held (Mode B / autonomous disabled)
+
 export interface BenchmarkQuestion {
   n: number;
   q: string;
@@ -23,6 +35,8 @@ export interface BenchmarkQuestion {
   check?: (a: AssistantAnswerWithSection) => boolean;
   /** For 'surface'/'agent-only'/'none': the reachable surface or the honest reason. */
   note: string;
+  /** Required for 'agent-only'/'none': the honest reason this is not answerable now. */
+  notNow?: NotNowClass;
 }
 
 const hasSection = (kind: AnswerSection['kind']) => (a: AssistantAnswerWithSection) => a.section?.kind === kind;
@@ -51,20 +65,20 @@ export const BENCHMARK: BenchmarkQuestion[] = [
   { n: 20, q: 'Which creative should I refresh/kill?', via: 'assistant', ask: 'which creative should I refresh or kill', check: (a) => a.section?.kind === 'creative' && (a.section).rows.length > 0, note: 'creative section' },
   { n: 21, q: "What's my frequency / am I over-saturating audiences?", via: 'assistant', ask: 'am I over-saturating / is frequency too high (saturation)', check: (a) => a.section?.kind === 'response' && (a.section).saturation.state.length > 0, note: 'saturation (frequency-aware) section' },
   { n: 22, q: 'Which placements perform best (Meta)?', via: 'assistant', ask: 'which placements perform best', check: (a) => a.section?.kind === 'breakdown' && (a.section).analyses.some((x) => x.dimension === 'placement' && x.supported), note: 'breakdown engine (placement)' },
-  { n: 23, q: 'What are my top search terms (Google)?', via: 'agent-only', note: 'GAQL search_term_view via MCP agent only' },
-  { n: 24, q: 'What negatives should I add?', via: 'agent-only', note: 'no negative-keyword suggestion engine in-product' },
-  { n: 25, q: "What's my Search impression share / lost IS?", via: 'agent-only', note: 'GAQL metric via MCP agent only; not normalized' },
-  { n: 26, q: 'How is my PMax doing by asset group?', via: 'agent-only', note: 'no PMax asset-group read in-product' },
+  { n: 23, q: 'What are my top search terms (Google)?', via: 'agent-only', note: 'GAQL search_term_view via MCP agent only', notNow: 'REQUIRES_PROVIDER_CAPABILITY' },
+  { n: 24, q: 'What negatives should I add?', via: 'agent-only', note: 'no negative-keyword suggestion engine in-product', notNow: 'NOT_SUPPORTED_BY_PRODUCT' },
+  { n: 25, q: "What's my Search impression share / lost IS?", via: 'agent-only', note: 'GAQL metric via MCP agent only; not normalized', notNow: 'REQUIRES_PROVIDER_CAPABILITY' },
+  { n: 26, q: 'How is my PMax doing by asset group?', via: 'agent-only', note: 'no PMax asset-group read in-product', notNow: 'REQUIRES_PROVIDER_CAPABILITY' },
   { n: 27, q: 'Pause this wasteful campaign', via: 'assistant', ask: 'which wasteful campaign should I review pausing', check: (a) => a.recommendationIds.length > 0 || decisive(a), note: 'review recommendation (apply via governed path)' },
   { n: 28, q: 'Raise budget on my best campaign', via: 'assistant', ask: 'where should I allocate extra budget to scale my best campaign', check: (a) => a.section?.kind === 'scenario' && (a.section).balanced.totalMovedMinor + (a.section).balanced.unallocatedMinor === (a.section).extraMinor, note: 'scenario review (apply via governed path)' },
-  { n: 29, q: 'Change bid strategy to target ROAS (Google)', via: 'agent-only', note: 'bid-strategy change via MCP agent→approval only' },
-  { n: 30, q: 'Create a new campaign', via: 'agent-only', note: 'campaign creation via MCP agent→approval only' },
-  { n: 31, q: 'Launch a responsive search ad', via: 'agent-only', note: 'RSA creation via MCP agent→approval only' },
+  { n: 29, q: 'Change bid strategy to target ROAS (Google)', via: 'agent-only', note: 'bid-strategy change via MCP agent→approval only', notNow: 'INTENTIONALLY_UNSUPPORTED' },
+  { n: 30, q: 'Create a new campaign', via: 'agent-only', note: 'campaign creation via MCP agent→approval only', notNow: 'INTENTIONALLY_UNSUPPORTED' },
+  { n: 31, q: 'Launch a responsive search ad', via: 'agent-only', note: 'RSA creation via MCP agent→approval only', notNow: 'INTENTIONALLY_UNSUPPORTED' },
   { n: 32, q: 'Show spend trend over time', via: 'assistant', ask: 'show my spend trend over time', check: (a) => a.section?.kind === 'trend', note: 'trend section (chart on surface)' },
   { n: 33, q: 'Compare this week vs last week', via: 'surface', note: 'Reports engine weekly report (spend+CPA deltas)' },
   { n: 34, q: 'Break performance down by device/age/geo', via: 'assistant', ask: 'break performance down by device and geography', check: (a) => a.section?.kind === 'breakdown' && (a.section).analyses.some((x) => x.supported), note: 'breakdown engine (device/geo)' },
   { n: 35, q: 'Which audiences convert best?', via: 'assistant', ask: 'which audience segments convert best', check: (a) => a.section?.kind === 'breakdown' && (a.section).analyses.some((x) => x.dimension === 'audience_segment' && x.supported), note: 'breakdown engine (audience_segment)' },
-  { n: 36, q: 'Attribution window sensitivity?', via: 'none', note: 'attribution window not a surfaced control' },
+  { n: 36, q: 'Attribution window sensitivity?', via: 'none', note: 'attribution window not a surfaced control', notNow: 'REQUIRES_PROVIDER_CAPABILITY' },
   { n: 37, q: 'Cross-channel view (Meta vs Google) with comparability?', via: 'assistant', ask: 'compare Meta vs Google cross-channel', check: (a) => a.section?.kind === 'crossChannel' && !!(a.section).roas.comparability.state && (((a.section).roas.ranking?.length ?? 0) > 0 || (a.section).roas.comparability.reasons.length > 0), note: 'cross-channel comparison engine' },
   { n: 38, q: 'Portfolio spend across all clients/currencies', via: 'assistant', ask: 'portfolio across all my clients', check: (a) => a.section?.kind === 'portfolio' && (a.section).rows.length >= 2, note: 'portfolio (no fake currency blend)' },
   { n: 39, q: 'Anomaly alerts (spend spike, conv drop)', via: 'assistant', ask: 'any anomaly or spend spike', check: (a) => a.section?.kind === 'anomaly' && (a.section).report.points.length > 0, note: 'anomaly section' },

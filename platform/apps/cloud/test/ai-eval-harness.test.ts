@@ -15,7 +15,7 @@ describe('Program 28 — AI evaluation harness (deterministic layer; live model 
     console.log(`AI-EVAL ${report.passed}/${report.total} passed (mode=${report.mode})`);
     expect(report.failures, JSON.stringify(report.failures)).toEqual([]);
     expect(report.passed).toBe(report.total);
-    expect(report.total).toBeGreaterThanOrEqual(20);
+    expect(report.total).toBeGreaterThanOrEqual(50); // Program 24 expanded the dataset to ≥50
   });
 
   it('is honest about the live model: unavailable here, and a LIVE_MODEL run does not fake it', () => {
