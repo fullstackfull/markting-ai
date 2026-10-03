@@ -6,7 +6,7 @@ governed write path is unchanged.
 The 28-item final response:
 
 1. **Branch** — `claude/amazing-heisenberg-0unnak`.
-2. **HEAD** — `__HEAD__` (built on Phase-7 exit `72661f7`).
+2. **HEAD** — `09b1d1c` (code) + this docs commit (built on Phase-7 exit `72661f7`).
 3. **Deployment environment** — none provisioned in this container (no managed hosting/TLS/queue/KMS);
    real Postgres available via the CI `cloud-db` lane. Full contract in `docs/launch/00`.
 4. **Live services actually provisioned** — real Postgres (CI only). No live provider/model/commerce/
@@ -85,8 +85,9 @@ The 28-item final response:
 
 ## CI
 
-Final green run recorded below (all six lanes incl. the real-Postgres `cloud-db` lane that executes the
-launch restore/kill-switch/pilot drills).
+Final green run: **`37133539094`** on code HEAD `09b1d1c` — all six lanes SUCCESS, incl. the
+real-Postgres `cloud-db` lane that executed the Stage-5 restore drill, Stage-15 kill-switch drill, and
+the Stage-12 controlled pilot with the real atomic claim + CAS + evidence-gated reconciliation.
 
 ## Safety attestation
 
