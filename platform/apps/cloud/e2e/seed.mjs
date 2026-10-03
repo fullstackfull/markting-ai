@@ -82,6 +82,18 @@ try {
 
   for (const org of [orgA, orgB, agency]) await completeOnboarding(org);
 
+  // Each auth user also gets a PERSONAL organization auto-provisioned on signup, created BEFORE the
+  // orgs above — and requireDashboardTenant() resolves a user's FIRST org by `created_at asc`, so the
+  // dashboard reads that personal org, not orgA. Complete onboarding for EVERY org the seeded users
+  // belong to (personal orgs included) so the authenticated journeys land on the dashboard, not /onboarding.
+  await sql`
+    update public.organization_onboarding o
+    set completed_at = now(), current_step = 'complete'
+    from public.organization_memberships m
+    where m.organization_id = o.organization_id
+      and m.user_id in ${sql([buyer, agencyAdmin, viewer])}
+  `;
+
   console.log(`e2e seed OK: users(buyer=${buyer.slice(0, 8)}, agencyAdmin=${agencyAdmin.slice(0, 8)}, viewer=${viewer.slice(0, 8)}) orgs(A=${orgA.slice(0, 8)}, B=${orgB.slice(0, 8)}, agency=${agency.slice(0, 8)})`);
 
   // Diagnostic: read back exactly what requireDashboardTenant() sees, under the SAME backend role the
