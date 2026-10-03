@@ -3,7 +3,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import postgres from 'postgres';
 import { closeDbForTests } from '@/lib/db';
 import {
-  claimThread, findEngineProposal, loadAliasMap, markPendingOutcome, PostgresSandboxStore, provenanceForPending,
+  beginThreadTurn, claimThread, endThreadTurn, findEngineProposal, loadAliasMap, markPendingOutcome, PostgresSandboxStore, provenanceForPending,
   recordEngineProposal, resetSandboxState, threadIdFor, upsertAlias,
 } from '@/lib/markting/repository';
 import { sandboxSeed } from '@/lib/markting/sandbox-provider';
@@ -87,5 +87,19 @@ describeDatabase('markting bridge tables (local database)', () => {
     expect((await store.load()).find((c) => c.id === 'g-103')?.dailyBudgetMicros).toBe(240_000_000);
     await expect(store.save(loaded, next)).rejects.toMatchObject({ code: 'PENDING_MISMATCH' });
     expect((await new PostgresSandboxStore(other.organizationId).load()).find((c) => c.id === 'g-103')?.dailyBudgetMicros).toBe(300_000_000);
+  });
+  it('serializes turns per thread: a second concurrent turn is rejected (Phase 1N)', async () => {
+    const threadId = threadIdFor(principal.organizationId, principal.userId!, 'turnlock');
+    expect(await claimThread(principal, threadId, 'q')).toBe(true);
+    expect(await beginThreadTurn(principal, threadId, 'req-A')).toBe(true);
+    // A second in-flight turn on the same thread cannot claim it.
+    expect(await beginThreadTurn(principal, threadId, 'req-B')).toBe(false);
+    // Another org's thread is unaffected (parallelizable).
+    const otherThread = threadIdFor(other.organizationId, other.userId!, 'turnlock');
+    expect(await claimThread(other, otherThread, 'q')).toBe(true);
+    expect(await beginThreadTurn(other, otherThread, 'req-C')).toBe(true);
+    // Releasing lets the next turn claim it.
+    await endThreadTurn(principal, threadId, 'req-A');
+    expect(await beginThreadTurn(principal, threadId, 'req-D')).toBe(true);
   });
 });

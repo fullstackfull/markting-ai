@@ -6,7 +6,7 @@ import { HttpError } from '@/lib/http';
 import { bridgeProposal, BridgeAccessError, type BridgeResult } from './bridge';
 import { EngineClient, EngineError } from './engine-client';
 import { isDemoMode, marktingEnv } from './env';
-import { claimThread, loadAliasMap, recordEngineProposal, threadIdFor } from './repository';
+import { beginThreadTurn, claimThread, endThreadTurn, loadAliasMap, recordEngineProposal, threadIdFor } from './repository';
 import { createBridgeRuntime } from './runtime';
 
 export function engineClient(): EngineClient {
@@ -37,16 +37,23 @@ export async function runAssistantTurn(principal: TenantPrincipal, input: { thre
   if (!threadId.startsWith(`org_${principal.organizationId}__u_${principal.userId}__`)) throw new HttpError('Thread belongs to another user.', 403);
   if (!(await claimThread(principal, threadId, text.slice(0, 80)))) throw new HttpError('Thread belongs to another user.', 403);
 
-  const client = engineClient();
-  let outcome;
-  try {
-    outcome = await client.sendMessage(threadId, text);
-  } catch (error) {
-    if (error instanceof EngineError) throw new HttpError(error.code === 'unreachable' ? 'The analysis engine is not reachable right now.' : error.message, error.status >= 500 ? 503 : error.status);
-    throw error;
+  // Per-thread serialization (Phase 1N): one in-flight turn per thread so concurrent requests cannot
+  // corrupt the same conversation/checkpoint. Different threads/orgs proceed in parallel.
+  const requestId = randomUUID();
+  if (!(await beginThreadTurn(principal, threadId, requestId))) {
+    throw new HttpError('This conversation is already processing a message. Please wait for it to finish.', 409);
   }
 
+  const client = engineClient();
+  let outcome;
   let bridge: BridgeResult | null = null;
+  try {
+    try {
+      outcome = await client.sendMessage(threadId, text);
+    } catch (error) {
+      if (error instanceof EngineError) throw new HttpError(error.code === 'unreachable' ? 'The analysis engine is not reachable right now.' : error.message, error.status >= 500 ? 503 : error.status);
+      throw error;
+    }
   const proposal = outcome.proposal;
   if (proposal && proposal.state === 'awaiting_approval') {
     const demoMode = isDemoMode();
@@ -68,11 +75,14 @@ export async function runAssistantTurn(principal: TenantPrincipal, input: { thre
       throw error;
     }
   }
-  return {
-    threadId,
-    text: outcome.text,
-    bridge,
-    engine: { interrupted: outcome.interrupted, available_actions: outcome.available_actions, receipt: outcome.receipt },
-    demoMode: isDemoMode(),
-  };
+    return {
+      threadId,
+      text: outcome.text,
+      bridge,
+      engine: { interrupted: outcome.interrupted, available_actions: outcome.available_actions, receipt: outcome.receipt },
+      demoMode: isDemoMode(),
+    };
+  } finally {
+    await endThreadTurn(principal, threadId, requestId).catch(() => {}); // release the per-thread turn
+  }
 }

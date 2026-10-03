@@ -26,6 +26,31 @@ export async function claimThread(principal: TenantPrincipal, threadId: string, 
   return rows.length === 1;
 }
 
+/**
+ * Claim the single in-flight turn for a thread (Phase 1N). Compare-and-set: succeeds only when no
+ * turn is in flight (or a prior claim is stale > 5 min). Different threads/orgs are unaffected, so
+ * they run in parallel. Returns false when another request already holds the thread.
+ */
+export async function beginThreadTurn(principal: TenantPrincipal, threadId: string, requestId: string): Promise<boolean> {
+  const rows = await db()<Array<{ id: string }>>`
+    update public.markting_threads
+      set processing_request_id = ${requestId}, processing_at = now()
+    where id = ${threadId} and organization_id = ${principal.organizationId}
+      and (user_id is null or user_id = ${principal.userId ?? null})
+      and (processing_request_id is null or processing_at < now() - interval '5 minutes')
+    returning id
+  `;
+  return rows.length === 1;
+}
+
+/** Release the thread turn (only if we still hold it). Safe to call in a finally block. */
+export async function endThreadTurn(principal: TenantPrincipal, threadId: string, requestId: string): Promise<void> {
+  await db()`
+    update public.markting_threads set processing_request_id = null, processing_at = null
+    where id = ${threadId} and organization_id = ${principal.organizationId} and processing_request_id = ${requestId}
+  `;
+}
+
 export async function listThreads(principal: TenantPrincipal, limit = 20): Promise<ThreadRow[]> {
   return db()<ThreadRow[]>`
     select id, organization_id, user_id, title, created_at, last_message_at
