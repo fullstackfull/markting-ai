@@ -1,0 +1,80 @@
+{
+  "artifact": "markting-ai CODE-RC",
+  "productionReady": false,
+  "generatedAt": "2026-10-03T21:09:06.296Z",
+  "commit": "0fa07794b09d4c3aa12445f1b813c716ca510552",
+  "branch": "claude/amazing-heisenberg-0unnak",
+  "schema": {
+    "migrationCount": 21,
+    "latestMigration": "20261012000000_phase1_rls_fixup.sql"
+  },
+  "gates": {
+    "benchmark": {
+      "answerableNow": 42,
+      "total": 50,
+      "gate": "regression ≥42",
+      "verifiedBy": "node lane: test/benchmark.test.ts"
+    },
+    "aiEval": {
+      "scenarios": 50,
+      "passed": 50,
+      "liveModel": "BLOCKED_EXTERNAL",
+      "verifiedBy": "node lane: test/ai-eval-harness.test.ts"
+    },
+    "authenticatedE2E": {
+      "verifiedBy": "e2e lane (seeded Supabase, DEMO runtime)",
+      "note": "public journeys run unseeded; authed journeys run on a seeded session"
+    },
+    "accessibility": {
+      "tool": "axe-core",
+      "gate": "no critical/serious WCAG2 A/AA",
+      "verifiedBy": "e2e lane"
+    },
+    "security": {
+      "checks": [
+        "pnpm audit high+",
+        "pip-audit",
+        "gitleaks",
+        "migration-RLS"
+      ],
+      "verifiedBy": "security lane"
+    },
+    "dbIsolation": {
+      "verifiedBy": "cloud-db lane (real Postgres, RLS + tenant isolation)"
+    },
+    "dbScale": {
+      "nPlusOneFixed": [
+        "commerce order-line ingestion"
+      ],
+      "budgets": "per-surface, size-independent",
+      "perf": "RUN_PERF job for p50/p95"
+    },
+    "providerContracts": {
+      "covered": [
+        "meta",
+        "google",
+        "tiktok",
+        "snapchat"
+      ],
+      "fixtures": [
+        "DOCUMENTATION_DERIVED",
+        "SYNTHETIC"
+      ],
+      "liveCaptured": false
+    },
+    "sourceIsolation": {
+      "productionReachableDemoFallback": false,
+      "guard": "assertResultPostureAllowed (fail-closed)"
+    }
+  },
+  "held": {
+    "modeBProviderWrites": "HELD",
+    "autonomousOptimization": "DISABLED"
+  },
+  "externalBlockers": [
+    "Live-captured provider cassettes (Meta/Google/TikTok/Snapchat) — need real credentials.",
+    "Live model AI-eval grading — BLOCKED_EXTERNAL (harness ready, falls back to DETERMINISTIC_ONLY).",
+    "Large-dataset DB p50/p95 profiling — RUN_PERF job against a seeded Postgres.",
+    "Human sign-off before any live provider write (Phase-0 ceiling; Mode B stays HELD)."
+  ]
+}
