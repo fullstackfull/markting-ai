@@ -28,3 +28,18 @@ RSS webhooks, OUTBOUND_ALLOWED_HOSTS) are recorded NOT-APPLICABLE with evidence 
   route. Data-trust floor `data-trust.ts` (tiers + INSUFFICIENT_EVIDENCE; synthetic isolated).
 - Four read-only audits captured (provider ownership, money, tenant isolation, infra facts) — drive
   the remaining A-close, C (engine reports IDOR SEC-01 confirmed), self-approval default, CI, docs.
+- C DONE: engine report IDOR (SEC-01) fixed — per-org X-Markting-Org scoping on run/list/file, fail
+  closed; cross-tenant regression test. Tenant-isolation audit: all cloud queries org-scoped, no cache
+  leak. R0-08 decision: shared engine + strict tenant-scoped persistence (per-org engine identity
+  staged for Phase 1). Docs P0-C.
+- A-close DONE: tiktok_set_campaign_status foreign-id rejection; X verified account-scoped; Apple
+  generic gated. Docs P0-A-EXIT.
+- D DONE (doc + path): data-ownership map (adport=business truth, engine pma_*=execution); forward-only
+  `make migrate`; db reset marked LOCAL ONLY; CI applies migrations. Docs P0-D.
+- E DONE: root CI (.github/workflows/ci.yml) incl DB-gated lane + drift + scanners; self-approval
+  default false; kill-switch pinned (F1 fixed, engine suite 177 green clean); data-trust + live-state
+  modules; Next.js reachability recorded (blocker, same-origin only); outbound N/A documented. Docs P0-E.
+- F DONE (doc + path): no browser->model path (holds); gateway deferred to Phase 1 with rationale;
+  metering is request-count-only today (honest), ledger designed. Docs P0-F.
+- Docs: P0-A..F exit, PRODUCTION-VERIFICATION-RUNBOOK, RELEASE-NOTES written. Adversarial red-team pass
+  running; PHASE0-EXIT-REPORT + gates to follow its findings.
