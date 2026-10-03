@@ -129,6 +129,10 @@ jobs:
           echo "MARKTING_DEMO_MODE=true" >> "$GITHUB_ENV"
           echo "MARKTING_E2E_TEST_AUTH=1" >> "$GITHUB_ENV"
           echo "E2E_SEEDED_SESSION=1" >> "$GITHUB_ENV"
+          # Align the browser origin with the server's self-referential origin so the Supabase session
+          # cookie (host-only) set by the test-login route applies on the dashboard navigation — avoids
+          # the 127.0.0.1-vs-localhost cookie split.
+          echo "E2E_BASE_URL=http://localhost:3100" >> "$GITHUB_ENV"
       - name: Install deps + build packages + standalone server
         working-directory: platform
         run: |
