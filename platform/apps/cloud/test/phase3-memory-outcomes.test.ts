@@ -39,6 +39,8 @@ describe('outcome engine (3C): classification + causal restraint', () => {
     expect(evaluateOutcome(outInput({ after: snap({ window: { start: '2026-09-08', end: '2026-09-14' }, complete: false, metrics: { ctr: 3 } }) })).classification).toBe('INSUFFICIENT_DATA');
     expect(evaluateOutcome(outInput({ after: snap({ window: { start: '2026-09-08', end: '2026-09-14' }, sampleSize: 3, metrics: { ctr: 3 } }) })).classification).toBe('INSUFFICIENT_DATA');
     expect(evaluateOutcome(outInput({ after: snap({ window: { start: '2026-09-08', end: '2026-09-14' }, trust: 'SYNTHETIC', metrics: { ctr: 3 } }) })).classification).toBe('INSUFFICIENT_DATA');
+    // A thin BEFORE baseline is also insufficient (red-team minor): a noisy baseline cannot anchor a verdict.
+    expect(evaluateOutcome(outInput({ before: snap({ sampleSize: 2, metrics: { ctr: 2 } }) })).classification).toBe('INSUFFICIENT_DATA');
   });
   it('windows are per-category, not universal', () => {
     expect(recommendedWindows('TRACKING_REVIEW')).toContain('24h');

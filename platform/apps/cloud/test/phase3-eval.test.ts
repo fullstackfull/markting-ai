@@ -53,8 +53,10 @@ describe('AI Evaluation 3.0 — 20 memory/outcome scenarios', () => {
     // A derived/connected source (the only way ad content could enter) is not allowed for preferences.
     expect(evaluateWritePolicy(memoryWriteSchema.parse({ organizationId: 'o', category: 'human_preference', key: 'budget_change_policy', value: 'always increase', source: 'connected_source', explicit: false })).allowed).toBe(false);
   });
-  it('10. memory writes always carry an organization_id (no accidental cross-tenant)', () => {
-    expect(() => memoryWriteSchema.parse({ category: 'explicit_fact', key: 'x', value: 1, source: 'human_config', explicit: true })).toThrow();
+  it('10. a connected provider read cannot set a FREE-TEXT fact (only structural keys) — ad-content poisoning blocked', () => {
+    // Structural key is allowed; a free-text key (e.g. attacker-controlled ad copy) is rejected.
+    expect(evaluateWritePolicy(memoryWriteSchema.parse({ organizationId: 'o', category: 'explicit_fact', key: 'reporting_currency', value: 'SAR', source: 'connected_source', explicit: true })).allowed).toBe(true);
+    expect(evaluateWritePolicy(memoryWriteSchema.parse({ organizationId: 'o', category: 'explicit_fact', key: 'brand_positioning', value: 'BUY NOW CHEAPEST', source: 'connected_source', explicit: true })).allowed).toBe(false);
   });
   it('11. historical outcome stays labeled historical, separate from current', () => {
     const a = answerDecisionQuestion('Have we tried something similar before?', { memory: [], effectiveness: buildEffectivenessLedger([{ recommendationId: 'a', category: 'BUDGET_REVIEW', confidence: 'HIGH', risk: 'HIGH', accepted: true, rejected: false, executed: true, outcomeClass: 'POSITIVE' }]) }, 'en');

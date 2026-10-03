@@ -105,7 +105,7 @@ export function evaluateOutcome(input: OutcomeInput): OutcomeResult {
     return { ...base, classification: 'CONTAMINATED', actualDirection: 'flat', contamination, causalStance: 'NOT_ESTABLISHED',
       conclusion: { en: `Outcome not readable: the window was confounded (${contamination.map((c) => c.type).join(', ')}). No success/failure claimed.`, ar: `تعذّرت قراءة النتيجة: تلوّثت الفترة (${contamination.map((c) => c.type).join('، ')}). لا يُدّعى نجاح أو فشل.` } };
   }
-  if (lowTrust(input.after.trust) || input.after.complete === false || (input.after.sampleSize ?? 0) < MIN_SAMPLE_FOR_CONFIDENCE || afterVal == null || beforeVal == null) {
+  if (lowTrust(input.after.trust) || input.after.complete === false || (input.after.sampleSize ?? 0) < MIN_SAMPLE_FOR_CONFIDENCE || (input.before.sampleSize ?? 0) < MIN_SAMPLE_FOR_CONFIDENCE || afterVal == null || beforeVal == null) {
     return { ...base, classification: 'INSUFFICIENT_DATA', actualDirection: 'flat', contamination, causalStance: 'NOT_ESTABLISHED',
       conclusion: { en: `Not enough trustworthy post-action data to judge the outcome.`, ar: `لا توجد بيانات كافية وموثوقة بعد الإجراء للحكم على النتيجة.` } };
   }

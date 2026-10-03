@@ -42,13 +42,15 @@ describeDatabase('Phase 3 stores (local database)', () => {
     await closeDbForTests();
   });
 
-  it('memory is tenant-scoped; derived cannot override explicit; revoke works', async () => {
-    expect((await writeMemory({ organizationId: a.organizationId, category: 'explicit_fact', key: 'target_roas', value: 3, source: 'human_config', explicit: true })).ok).toBe(true);
-    // Org B cannot see org A memory.
+  it('memory is tenant-scoped; derived cannot override explicit; revoke works; payload org is ignored', async () => {
+    expect((await writeMemory(a.organizationId, { category: 'explicit_fact', key: 'target_roas', value: 3, source: 'human_config', explicit: true })).ok).toBe(true);
+    // A payload org that differs from the authenticated org is rejected (no cross-tenant write).
+    expect((await writeMemory(a.organizationId, { organizationId: b.organizationId, category: 'explicit_fact', key: 'x', value: 1, source: 'human_config', explicit: true })).ok).toBe(false);
     expect((await listMemory(b.organizationId)).length).toBe(0);
+    // Org B cannot see org A memory.
     expect((await listMemory(a.organizationId)).length).toBe(1);
     // Derived cannot overwrite the explicit human value.
-    expect((await writeMemory({ organizationId: a.organizationId, category: 'explicit_fact', key: 'target_roas', value: 99, source: 'derived_analysis', explicit: false })).ok).toBe(false);
+    expect((await writeMemory(a.organizationId, { category: 'explicit_fact', key: 'target_roas', value: 99, source: 'derived_analysis', explicit: false })).ok).toBe(false);
     expect((await getMemory(a.organizationId, 'explicit_fact', 'target_roas'))!.value).toBe(3);
     // Human correction succeeds; revoke invalidates.
     expect((await correctMemory(a.organizationId, 'explicit_fact', 'target_roas', 4, 'human_confirmation')).ok).toBe(true);

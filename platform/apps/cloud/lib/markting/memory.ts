@@ -43,7 +43,8 @@ export const HIGH_IMPACT_PREFERENCE_KEYS = new Set<string>([
 ]);
 
 /** Which sources are trusted for which categories. Provider/connected data can only be operational
- *  context or a derived (low-authority) signal — never a human preference or an explicit fact. */
+ *  context or a derived (low-authority) signal — never a human preference, and for an explicit fact
+ *  ONLY for the structural keys below (never free-text). */
 const SOURCE_RULES: Record<MemoryCategory, MemorySource[]> = {
   explicit_fact: ['human_config', 'human_confirmation', 'system_verification', 'connected_source'],
   human_preference: ['human_config', 'human_confirmation'],
@@ -52,8 +53,20 @@ const SOURCE_RULES: Record<MemoryCategory, MemorySource[]> = {
   operational_context: ['system_verification', 'connected_source', 'derived_analysis'],
 };
 
+/**
+ * The ONLY explicit-fact keys a `connected_source` (a verified structured provider API read) may set.
+ * These are structural, non-free-text fields. This is the CODE gate (not just a comment) that stops
+ * attacker-controlled ad text (a campaign name / headline) from ever becoming a trusted fact (3T).
+ */
+export const CONNECTED_SOURCE_FACT_KEYS = new Set<string>([
+  'reporting_currency', 'account_currency', 'account_timezone', 'account_status', 'attribution_basis',
+  'market_country', 'ad_account_id', 'ad_account_name',
+]);
+
 export const memoryWriteSchema = z.object({
-  organizationId: z.string().min(1),
+  // Optional in the payload: the store OVERRIDES it with the server-derived org (never trusts a
+  // client/model-supplied org). Present here only so the pure policy function can be unit-tested.
+  organizationId: z.string().min(1).optional(),
   category: z.enum(MEMORY_CATEGORIES),
   key: z.string().min(1).max(128),
   value: z.unknown(),
@@ -91,6 +104,12 @@ export function evaluateWritePolicy(req: MemoryWriteRequest, existing?: Existing
   // is a verified provider API read, NOT free-text ad content).
   if (!SOURCE_RULES[req.category].includes(req.source)) {
     return { allowed: false, reason: `source ${req.source} is not allowed for category ${req.category}`, trust };
+  }
+
+  // Content gate (3T): a connected provider read may set an explicit fact ONLY for structural keys —
+  // never a free-text key — so attacker-controlled ad content cannot become a trusted fact.
+  if (req.category === 'explicit_fact' && req.source === 'connected_source' && !CONNECTED_SOURCE_FACT_KEYS.has(req.key)) {
+    return { allowed: false, reason: `connected_source may only set structural fact keys, not "${req.key}" (prevents ad-content poisoning)`, trust };
   }
 
   // High-impact preferences require explicit human confirmation (not derived, not a single behavior).

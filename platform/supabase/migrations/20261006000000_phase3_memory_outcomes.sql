@@ -183,3 +183,23 @@ grant select, insert, update on public.markting_memory to adport_backend;
 grant select, insert, update on public.markting_playbooks to adport_backend;
 grant select, insert, update on public.markting_experiments to adport_backend;
 grant select, insert on public.markting_timeline_events to adport_backend;
+
+-- Row-level security + revoke, matching the markting_bridge house convention (belt-and-suspenders:
+-- browser roles get no grant AND are blocked by a restrictive policy; the cloud server is adport_backend).
+-- Also applied to the Phase-2 recommendation tables, which predated this convention on the branch.
+do $$
+declare t text;
+begin
+  foreach t in array array[
+    'markting_decision_events', 'markting_recommendation_outcomes', 'markting_observation_jobs',
+    'markting_memory', 'markting_playbooks', 'markting_experiments', 'markting_timeline_events',
+    'markting_recommendations', 'markting_recommendation_events'
+  ] loop
+    execute format('alter table public.%I enable row level security', t);
+    execute format('drop policy if exists %I on public.%I', t || '_server_only', t);
+    execute format('create policy %I on public.%I as restrictive for all to authenticated using (false) with check (false)', t || '_server_only', t);
+    execute format('drop policy if exists %I on public.%I', t || '_backend_all', t);
+    execute format('create policy %I on public.%I for all to adport_backend using (true) with check (true)', t || '_backend_all', t);
+    execute format('revoke all on public.%I from anon, authenticated', t);
+  end loop;
+end $$;
