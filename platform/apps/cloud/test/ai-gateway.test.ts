@@ -35,12 +35,26 @@ describe('AI gateway (1I/1J)', () => {
 
   it('enforces the per-org request quota and records the rejection', async () => {
     const ledger = new InMemoryUsageLedger();
+    ledger.now = () => NOW; // align the ledger clock with the gateway's injected `now` so rows land in-window
     const cfg: GatewayConfig = { ...DEMO_GATEWAY_CONFIG, quota: { windowMs: 3600_000, maxRequests: 2, maxCostMicros: 1e12 } };
     const gw = new AiGateway(cfg, ledger);
     for (const id of ['a', 'b']) await gw.invoke({ ctx: ctx({ requestId: id }), role: 'FAST_ANALYSIS', feature: 'f', now: NOW, run: async () => ({ value: id, usage: { tokensAvailable: false } }) });
     await expect(gw.invoke({ ctx: ctx({ requestId: 'c' }), role: 'FAST_ANALYSIS', feature: 'f', now: NOW, run: async () => ({ value: 'c', usage: { tokensAvailable: false } }) }))
       .rejects.toMatchObject({ code: 'POLICY_VIOLATION' });
     expect(ledger.rows.some((r) => r.status === 'quota_exceeded')).toBe(true);
+  });
+
+  it('usageSince honors the trailing window (rows older than `since` are excluded)', async () => {
+    const ledger = new InMemoryUsageLedger();
+    let clock = 1_000_000;
+    ledger.now = () => clock;
+    await ledger.record({ organizationId: 'org-1', requestId: 'old', feature: 'f', model: 'm', provider: 'p', status: 'ok', estimatedCostMicros: 100, tokensAvailable: true });
+    clock += 10_000;
+    await ledger.record({ organizationId: 'org-1', requestId: 'new', feature: 'f', model: 'm', provider: 'p', status: 'ok', estimatedCostMicros: 200, tokensAvailable: true });
+    const all = await ledger.usageSince('org-1', new Date(1_000_000 - 1).toISOString());
+    expect(all).toEqual({ requests: 2, costMicros: 300 });
+    const recent = await ledger.usageSince('org-1', new Date(1_005_000).toISOString());
+    expect(recent).toEqual({ requests: 1, costMicros: 200 }); // 'old' row falls outside the window
   });
 
   it('estimates cost from tokens only when tokens are available and a price is configured', () => {

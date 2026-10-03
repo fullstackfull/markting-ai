@@ -57,7 +57,10 @@ export const MIN_SAMPLE_FOR_CONFIDENCE = 30;
  * by runtime mode). Live data must be at least PLATFORM_REPORTED, from a closed window, with enough
  * sample behind any ratio it relies on.
  */
-export function evaluateEvidence(trust: DataTrust, opts: { ratioBased?: boolean } = {}): EvidenceVerdict {
+export function evaluateEvidence(
+  trust: DataTrust,
+  opts: { ratioBased?: boolean; asOf?: string; maxAgeMs?: number } = {},
+): EvidenceVerdict {
   const reasons: string[] = [];
   if (trust.tier === 'SYNTHETIC') {
     return { actionable: false, code: 'INSUFFICIENT_EVIDENCE', reasons: ['synthetic/demo data is not live evidence'], tier: trust.tier };
@@ -66,6 +69,18 @@ export function evaluateEvidence(trust: DataTrust, opts: { ratioBased?: boolean 
   if (trust.complete === false) reasons.push('reporting window is still open (partial data)');
   if (opts.ratioBased && (trust.sampleSize ?? 0) < MIN_SAMPLE_FOR_CONFIDENCE) {
     reasons.push(`sample size ${trust.sampleSize ?? 0} is below the ${MIN_SAMPLE_FOR_CONFIDENCE}-observation floor for a ratio-based recommendation`);
+  }
+  // Staleness floor: old-but-complete data is not current evidence. When a bound is supplied, the data's
+  // age is measured from its freshness timestamp, else the inclusive end of its reporting window.
+  if (opts.maxAgeMs != null) {
+    const asOf = opts.asOf ? Date.parse(opts.asOf) : Date.now();
+    const dataAtIso = trust.freshnessAt ?? (trust.dateRange ? `${trust.dateRange.end}T23:59:59.999Z` : undefined);
+    const dataAt = dataAtIso ? Date.parse(dataAtIso) : NaN;
+    if (!Number.isFinite(dataAt)) {
+      reasons.push('data freshness is unknown; cannot confirm the figures are current');
+    } else if (Number.isFinite(asOf) && asOf - dataAt > opts.maxAgeMs) {
+      reasons.push(`data is stale (older than ${Math.round(opts.maxAgeMs / 86_400_000)}d); refresh before acting`);
+    }
   }
   const actionable = reasons.length === 0;
   return actionable

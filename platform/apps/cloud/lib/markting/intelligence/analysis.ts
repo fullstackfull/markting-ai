@@ -60,17 +60,21 @@ export function aggregate(obs: MetricObservation[]): Aggregate {
   const clicks = base.clicks ?? 0;
   const conv = base.conversions ?? 0;
   const value = base.conversion_value ?? 0;
+  const mixedCurrency = currencies.size > 1;
+  // Money-based ratios (cpc/cpm/cpa/roas) are meaningless across blended currencies — leave them
+  // undefined so no consumer that ignores the evidence flag can read a fabricated cross-currency
+  // number. CTR is currency-free and stays. (ctr = clicks/impressions.)
   const derived: Partial<Record<CanonicalMetric, number>> = {
     ctr: impressions ? (clicks / impressions) * 100 : 0,
-    cpc: clicks ? spend / clicks : 0,
-    cpm: impressions ? (spend / impressions) * 1000 : 0,
-    cpa: conv ? spend / conv : 0,
-    roas: spend ? value / spend : 0,
+    cpc: mixedCurrency ? undefined : clicks ? spend / clicks : 0,
+    cpm: mixedCurrency ? undefined : impressions ? (spend / impressions) * 1000 : 0,
+    cpa: mixedCurrency ? undefined : conv ? spend / conv : 0,
+    roas: mixedCurrency ? undefined : spend ? value / spend : 0,
   };
   return {
     currency: currencies.size === 1 ? [...currencies][0] : undefined,
     base, derived, sampleSize, complete, worstTier: worst,
-    currencies: [...currencies], mixedCurrency: currencies.size > 1,
+    currencies: [...currencies], mixedCurrency,
   };
 }
 
@@ -96,6 +100,10 @@ export interface MetricChange {
 
 export interface EvidenceNote { actionable: boolean; code?: 'INSUFFICIENT_EVIDENCE'; reasons: string[] }
 
+/** Optional staleness bound threaded to the evidence floor: data older than this (measured from
+ *  freshness/window end) is not current evidence. Omitted ⇒ no staleness check (back-compat). */
+export interface StalenessOpts { maxAgeMs?: number; asOf?: string }
+
 function trustFor(agg: Aggregate, dateRange: { start: string; end: string }): DataTrust {
   return {
     tier: agg.worstTier, source: 'aggregate', complete: agg.complete,
@@ -120,6 +128,7 @@ export function comparePeriods(
   current: MetricObservation[],
   previous: MetricObservation[],
   period: { current: { start: string; end: string }; previous: { start: string; end: string } },
+  opts: StalenessOpts = {},
 ): PerformanceChange {
   const cur = aggregate(current);
   const prev = aggregate(previous);
@@ -132,9 +141,17 @@ export function comparePeriods(
   const reasons: string[] = [];
   if (cur.mixedCurrency || prev.mixedCurrency) reasons.push('observations span multiple currencies; totals are not comparable without FX');
   if (!cur.currency && !cur.mixedCurrency) reasons.push('reporting currency unknown');
-  // Ratio-based confidence rests on the evidence floor applied to the current window.
-  const ev = evaluateEvidence(trustFor(cur, period.current), { ratioBased: true });
-  if (!ev.actionable) reasons.push(...ev.reasons);
+  // A period-over-period delta across two different single currencies is not comparable without FX
+  // either — each window is internally clean, but the subtraction mixes units.
+  if (cur.currency && prev.currency && cur.currency !== prev.currency) {
+    reasons.push(`current (${cur.currency}) and previous (${prev.currency}) windows use different currencies; totals/deltas are not comparable without FX`);
+  }
+  // Ratio-based confidence rests on the evidence floor applied to BOTH windows: a thin/partial/
+  // synthetic/stale baseline is just as disqualifying as a thin current window.
+  const evCur = evaluateEvidence(trustFor(cur, period.current), { ratioBased: true, ...opts });
+  if (!evCur.actionable) reasons.push(...evCur.reasons);
+  const evPrev = evaluateEvidence(trustFor(prev, period.previous), { ratioBased: true, ...opts });
+  if (!evPrev.actionable) reasons.push(...evPrev.reasons.map((r) => `previous window: ${r}`));
   const headline = [...changes].filter((c) => c.metric === 'roas' || c.metric === 'cpa').sort((a, b) => Math.abs(b.pct ?? 0) - Math.abs(a.pct ?? 0))[0];
   return {
     currency: cur.currency, mixedCurrency: cur.mixedCurrency, changes,
@@ -152,7 +169,8 @@ export interface FunnelDecomposition { stages: FunnelStageChange[]; worst?: Funn
 export function funnelDecomposition(
   current: MetricObservation[],
   previous: MetricObservation[],
-  period: { current: { start: string; end: string } },
+  period: { current: { start: string; end: string }; previous?: { start: string; end: string } },
+  opts: StalenessOpts = {},
 ): FunnelDecomposition {
   const cur = aggregate(current);
   const prev = aggregate(previous);
@@ -168,8 +186,12 @@ export function funnelDecomposition(
     stages.push({ from, to, label: { en: `${from}→${to}`, ar: `${from}←${to}` }, rateFrom, rateTo, deltaPct: pctChange(rateFrom, rateTo) });
   }
   const worst = [...stages].sort((a, b) => (a.deltaPct ?? 0) - (b.deltaPct ?? 0))[0];
-  const ev = evaluateEvidence(trustFor(cur, period.current), { ratioBased: true });
-  return { stages, worst: worst && (worst.deltaPct ?? 0) < 0 ? worst : undefined, evidence: ev.actionable ? { actionable: true, reasons: [] } : { actionable: false, code: 'INSUFFICIENT_EVIDENCE', reasons: ev.reasons } };
+  const reasons: string[] = [];
+  const evCur = evaluateEvidence(trustFor(cur, period.current), { ratioBased: true, ...opts });
+  if (!evCur.actionable) reasons.push(...evCur.reasons);
+  const evPrev = evaluateEvidence(trustFor(prev, period.previous ?? period.current), { ratioBased: true, ...opts });
+  if (!evPrev.actionable) reasons.push(...evPrev.reasons.map((r) => `previous window: ${r}`));
+  return { stages, worst: worst && (worst.deltaPct ?? 0) < 0 ? worst : undefined, evidence: reasons.length ? { actionable: false, code: 'INSUFFICIENT_EVIDENCE', reasons } : { actionable: true, reasons: [] } };
 }
 
 export interface PacingResult { expectedFraction: number; actualFraction: number; status: 'under' | 'over' | 'on_track'; label: BiLabel; spend: number; plannedBudget: number; currency?: string; evidence: EvidenceNote }
@@ -235,11 +257,21 @@ export interface Contributor { entityId: string; name: string; metricDelta: numb
  * campaign's absolute delta over the sum of absolute deltas (so it is well-defined even when some
  * campaigns moved opposite the account).
  */
+const MONETARY_METRICS = new Set<CanonicalMetric>(['spend', 'conversion_value', 'cpa', 'cpc', 'cpm', 'roas']);
+
 export function campaignContribution(
   currentByCampaign: MetricObservation[],
   previousByCampaign: MetricObservation[],
   metric: CanonicalMetric,
 ): { contributors: Contributor[]; evidence: EvidenceNote } {
+  // Contribution share sums absolute deltas across campaigns; for a monetary metric that is only
+  // meaningful when every campaign reports the same currency — otherwise the share blends units.
+  if (MONETARY_METRICS.has(metric)) {
+    const currencies = new Set([...currentByCampaign, ...previousByCampaign].map((o) => o.currency).filter((c): c is string => !!c));
+    if (currencies.size > 1) {
+      return { contributors: [], evidence: { actionable: false, code: 'INSUFFICIENT_EVIDENCE', reasons: [`campaigns span multiple currencies (${[...currencies].join(', ')}); ${metric} contribution is not comparable without FX`] } };
+    }
+  }
   const prevMap = new Map(previousByCampaign.map((o) => [o.entity.id, o]));
   const deltas: Contributor[] = currentByCampaign.map((o) => {
     const prev = prevMap.get(o.entity.id);

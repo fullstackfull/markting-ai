@@ -33,16 +33,22 @@ export interface UsageLedger {
 
 export class InMemoryUsageLedger implements UsageLedger {
   rows: UsageRecord[] = [];
+  /** Insertion time per row (parallel to `rows`), so usageSince can honor the trailing window. */
+  private times: number[] = [];
+  /** Overridable clock for deterministic window tests. */
+  now: () => number = () => Date.now();
   async record(entry: UsageRecord): Promise<void> {
     const i = this.rows.findIndex((r) => r.organizationId === entry.organizationId && r.requestId === entry.requestId && r.feature === entry.feature);
-    if (i >= 0) this.rows[i] = entry; else this.rows.push(entry);
+    if (i >= 0) { this.rows[i] = entry; this.times[i] = this.now(); } else { this.rows.push(entry); this.times.push(this.now()); }
   }
   async has(organizationId: string, requestId: string, feature: string): Promise<boolean> {
     return this.rows.some((r) => r.organizationId === organizationId && r.requestId === requestId && r.feature === feature);
   }
-  async usageSince(organizationId: string): Promise<UsageWindow> {
-    const rows = this.rows.filter((r) => r.organizationId === organizationId && r.status !== 'local_fallback');
-    return { requests: rows.length, costMicros: rows.reduce((a, r) => a + r.estimatedCostMicros, 0) };
+  async usageSince(organizationId: string, sinceIso: string): Promise<UsageWindow> {
+    const since = Date.parse(sinceIso);
+    const matched = this.rows.filter((r, i) =>
+      r.organizationId === organizationId && r.status !== 'local_fallback' && (!Number.isFinite(since) || this.times[i]! >= since));
+    return { requests: matched.length, costMicros: matched.reduce((a, r) => a + r.estimatedCostMicros, 0) };
   }
 }
 

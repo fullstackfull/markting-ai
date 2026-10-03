@@ -99,6 +99,51 @@ describe('funnel, pacing, anomaly, contribution', () => {
   });
 });
 
+describe('evidence/currency gating hardening (red-team PARTIALs)', () => {
+  const cur = () => normalizeReportRows([row('acc', { spend: 1000, clicks: 40, impressions: 10000, conversions: 40, conversion_value: 2000 })], liveCtx());
+
+  it('aggregate nulls money-based ratios when currencies are mixed (no fabricated cross-currency ROAS)', () => {
+    const agg = aggregate(normalizeReportRows([row('a', { spend: 100, conversion_value: 400, clicks: 10, impressions: 1000 }, 'SAR'), row('b', { spend: 100, conversion_value: 400, clicks: 10, impressions: 1000 }, 'USD')], liveCtx()));
+    expect(agg.mixedCurrency).toBe(true);
+    expect(agg.derived.roas).toBeUndefined();
+    expect(agg.derived.cpc).toBeUndefined();
+    expect(agg.derived.ctr).toBeCloseTo(1, 5); // currency-free ratio stays
+  });
+
+  it('comparePeriods: a SYNTHETIC previous baseline is not actionable even with a clean current window', () => {
+    const prevSynthetic = normalizeReportRows([row('acc', { spend: 1000, conversions: 60, conversion_value: 4000 })], liveCtx({ dateRange: PERIOD.previous, tier: 'SYNTHETIC' }));
+    const r = comparePeriods(cur(), prevSynthetic, PERIOD);
+    expect(r.evidence.actionable).toBe(false);
+    expect(r.evidence.reasons.join(' ')).toMatch(/previous window:.*synthetic/i);
+  });
+
+  it('comparePeriods: two different single currencies across periods are not comparable without FX', () => {
+    const curUsd = normalizeReportRows([row('acc', { spend: 1000, conversions: 40, conversion_value: 2000 }, 'USD')], liveCtx());
+    const prevSar = normalizeReportRows([row('acc', { spend: 1000, conversions: 60, conversion_value: 4000 }, 'SAR')], liveCtx({ dateRange: PERIOD.previous }));
+    const r = comparePeriods(curUsd, prevSar, PERIOD);
+    expect(r.evidence.actionable).toBe(false);
+    expect(r.evidence.reasons.join(' ')).toMatch(/different currencies/i);
+  });
+
+  it('comparePeriods: stale-but-complete data is not current evidence when a staleness bound is supplied', () => {
+    // cur/prev are complete, high-tier, sample≥30 but dated 2026-09; asOf is a year later.
+    const r = comparePeriods(cur(), normalizeReportRows([row('acc', { spend: 1000, conversions: 60, conversion_value: 4000 })], liveCtx({ dateRange: PERIOD.previous })), PERIOD,
+      { asOf: '2027-09-15T00:00:00Z', maxAgeMs: 30 * 86_400_000 });
+    expect(r.evidence.actionable).toBe(false);
+    expect(r.evidence.reasons.join(' ')).toMatch(/stale/i);
+  });
+
+  it('campaignContribution refuses a monetary metric when campaigns span currencies', () => {
+    const curC = normalizeReportRows([row('c1', { spend: 100, conversions: 10 }, 'SAR', 'campaign'), row('c2', { spend: 900, conversions: 90 }, 'USD', 'campaign')], liveCtx());
+    const prevC = normalizeReportRows([row('c1', { spend: 100, conversions: 10 }, 'SAR', 'campaign'), row('c2', { spend: 300, conversions: 30 }, 'USD', 'campaign')], liveCtx({ dateRange: PERIOD.previous }));
+    const c = campaignContribution(curC, prevC, 'spend');
+    expect(c.evidence.actionable).toBe(false);
+    expect(c.evidence.reasons.join(' ')).toMatch(/currenc/i);
+    // a currency-free metric (conversions) is still comparable across currencies
+    expect(campaignContribution(curC, prevC, 'conversions').evidence.actionable).toBe(true);
+  });
+});
+
 describe('context builder budgeting (1H)', () => {
   it('keeps top-N campaigns by spend-delta share and reports the summarized remainder', () => {
     const mk = (n: number, base: number, dr = PERIOD.current, tier: NormalizeContext['tier'] = 'PLATFORM_REPORTED') =>

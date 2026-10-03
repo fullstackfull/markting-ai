@@ -14,7 +14,20 @@ engine stays byte-identical (Phase-1 engine behavior lives in the host + cloud).
 - 1G + eval `a4cbe71`: business context with KNOWN/CONFIGURED/DERIVED/UNKNOWN provenance (+migration,
   4 tests); AI media-buyer evaluation suite (10 questions + 2 safety, 12 tests).
 - 1N `3385a25`: per-thread turn serialization (+migration, DB-gated test); thread history pre-existed.
-- Docs 01–08 + this log; red-team pass; exit report to follow.
+- Docs 01–08 + this log `9c26aa7`.
+- Red-team hardening: adversarial reviewer confirmed read-only enforcement, tenant isolation, thread
+  serialization, and the model-gateway controls HOLD, and that no Phase-0 invariant was weakened. It
+  surfaced three defense-in-depth gaps in the evidence/currency gating, all now fixed (analysis.ts +
+  data-trust.ts + usage-ledger.ts), +6 tests:
+  - comparePeriods/funnelDecomposition now gate BOTH windows through the evidence floor (a
+    synthetic/partial/thin PREVIOUS baseline is no longer surfaced as actionable).
+  - comparePeriods flags a cross-period currency mismatch (two internally-clean but different single
+    currencies are not comparable without FX); aggregate() now leaves money-based ratios
+    (cpc/cpm/cpa/roas) undefined when currencies are mixed so no consumer can read a blended number;
+    campaignContribution refuses a monetary metric across currencies.
+  - evaluateEvidence accepts an optional staleness bound (asOf/maxAgeMs) so an old-but-complete window
+    is not read as current evidence; threaded through the compare/funnel callers.
+  - InMemoryUsageLedger.usageSince now honors the trailing window (was ignoring it; test-only path).
 
 ## Honest gaps (see 01, 03, 08, exit)
 - Live OAuth / real Supabase / GitHub CI / Next.js bump / KMS / TLS / backups: external-blocked in the
