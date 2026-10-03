@@ -2,6 +2,7 @@ import Link from 'next/link';
 import type { Locale } from '@/lib/i18n/config';
 import type { BiText } from '@/lib/markting/intelligence/decision-model';
 import type { AnswerSection } from '@/lib/markting/orchestrator/sections';
+import { TrustBadge, StatusChip } from './kit';
 
 /**
  * Coherence-2 — a reusable server component that renders any orchestrator AnswerSection consistently
@@ -19,8 +20,16 @@ export function SectionView({ section, locale }: { section: AnswerSection; local
   switch (section.kind) {
     case 'pacing':
       return <div><KV label={L(locale, 'Status', 'الحالة')} value={<span className="status neutral">{section.result.status}</span>} /><KV label={L(locale, 'Expected %', 'المتوقع %')} value={`${Math.round(section.result.expectedFraction * 100)}%`} /><KV label={L(locale, 'Actual %', 'الفعلي %')} value={`${Math.round(section.result.actualFraction * 100)}%`} /><KV label={L(locale, 'Projected', 'المتوقع')} value={section.result.projectedOverUnderPct == null ? L(locale, 'withheld (too early)', 'محجوب (مبكر جدًا)') : `${Math.round(section.result.projectedOverUnderPct)}%`} /></div>;
-    case 'forecast':
-      return <div><KV label={L(locale, 'Horizon', 'الأفق')} value={`${section.horizonDays}d`} /><KV label={L(locale, 'Spend', 'الإنفاق')} value={`${section.spend.estimate} (${section.spend.low}–${section.spend.high}, ${section.spend.confidence})`} /><KV label={L(locale, 'Conversions', 'التحويلات')} value={`${section.conversions.estimate}`} /><KV label="CPA" value={`${section.cpa.estimate}`} /></div>;
+    case 'forecast': {
+      const lims = [...new Set([...section.spend.limitations, ...section.conversions.limitations, ...section.cpa.limitations])];
+      return <div>
+        <KV label={L(locale, 'Method', 'الطريقة')} value={`${section.spend.method} · ${L(locale, 'window', 'نافذة')} ${section.spend.windowDays}d · ${L(locale, 'horizon', 'أفق')} ${section.horizonDays}d`} />
+        <KV label={L(locale, 'Spend', 'الإنفاق')} value={`${section.spend.estimate} (${section.spend.low}–${section.spend.high}, ${section.spend.confidence})`} />
+        <KV label={L(locale, 'Conversions', 'التحويلات')} value={`${section.conversions.estimate} (${section.conversions.low}–${section.conversions.high})`} />
+        <KV label="CPA" value={`${section.cpa.estimate} (${section.cpa.low}–${section.cpa.high})`} />
+        <p className="cell-sub">{L(locale, 'Transparent method only — no hidden model. The band is the uncertainty, not a promise.', 'طريقة شفافة فقط — لا نموذج خفي. النطاق هو عدم اليقين وليس وعدًا.')}{lims.length ? ` ${L(locale, 'Limitations', 'قيود')}: ${lims.join('; ')}.` : ''}</p>
+      </div>;
+    }
     case 'anomaly':
       return <div><KV label={L(locale, 'Actionable', 'قابل للتنفيذ')} value={section.report.actionable ? L(locale, 'yes', 'نعم') : L(locale, 'no', 'لا')} />{section.report.top && <KV label={L(locale, 'Top point', 'أبرز نقطة')} value={`idx ${section.report.top.index}, z=${section.report.top.z}, ${section.report.top.pct ?? '—'}%`} />}</div>;
     case 'trend':
@@ -74,10 +83,10 @@ export function SectionView({ section, locale }: { section: AnswerSection; local
 /** A standard header strip for a surface: freshness + currency + trust + demo marker. */
 export function IntelMeta({ locale, trustTier, live, source }: { locale: Locale; trustTier: string; live: boolean; source?: string }) {
   return (
-    <div className="cell-sub" style={{ display: 'flex', gap: 10, flexWrap: 'wrap', marginBottom: 10 }}>
-      <span>{L(locale, 'Trust', 'الموثوقية')}: {trustTier}</span>
+    <div className="cell-sub" style={{ display: 'flex', gap: 10, flexWrap: 'wrap', marginBottom: 10, alignItems: 'center' }}>
+      <TrustBadge tier={trustTier} locale={locale} />
       {source && <span>{L(locale, 'Answer source', 'مصدر الإجابة')}: {source}</span>}
-      {!live && <span className="status neutral">{L(locale, 'Demo / synthetic data', 'بيانات تجريبية')}</span>}
+      {!live && <StatusChip tone="neutral" label={L(locale, 'Demo / synthetic data', 'بيانات تجريبية')} />}
     </div>
   );
 }

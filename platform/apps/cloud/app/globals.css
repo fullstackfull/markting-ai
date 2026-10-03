@@ -744,3 +744,19 @@ a:focus-visible, button:focus-visible, summary:focus-visible, [tabindex]:focus-v
   .chart svg { min-width: 280px; }
   .card-head { flex-wrap: wrap; gap: 6px; }
 }
+
+/* Hardening Program 31/32 — design-system kit primitives. Status 'ok' (success) completes the tone
+   scale; every status already shows a text label + a currentColor dot (secondary cue), so identity is
+   never color-alone. */
+.status.ok { color: var(--success); }
+.metric-card { border: 1px solid var(--line-soft); border-radius: 0.6rem; padding: 0.75rem 0.9rem; }
+.metric-card .metric-value { font: 650 1.35rem/1.1 var(--font-sans, inherit); margin-top: 0.15rem; }
+.evidence-card { border-inline-start: 2px solid var(--line-soft); padding: 0.4rem 0.75rem; margin: 0.4rem 0; }
+.insight-card { border: 1px solid var(--line-soft); border-radius: 0.6rem; padding: 0.75rem 0.9rem; margin: 0.4rem 0; }
+.blocked-state { border: 1px dashed var(--warning); background: var(--warning-soft); border-radius: 0.6rem; padding: 0.75rem 0.9rem; }
+.entity-link { color: var(--accent, #2563eb); text-decoration: none; }
+.entity-link:hover { text-decoration: underline; }
+.chart-card { border: 1px solid var(--line-soft); border-radius: 0.6rem; padding: 0.5rem 0.75rem; margin: 0.4rem 0; }
+.timeline { list-style: none; margin: 0; padding: 0; }
+.timeline-item { border-inline-start: 2px solid var(--line-soft); padding: 0.3rem 0 0.3rem 0.75rem; margin-inline-start: 0.3rem; }
+.filter-bar { display: flex; gap: 0.6rem; flex-wrap: wrap; align-items: center; margin-bottom: 0.75rem; }
