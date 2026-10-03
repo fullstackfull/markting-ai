@@ -12,6 +12,19 @@ import type { CommerceMoney, Order, AcquisitionRef } from './model';
 
 export type ReconciliationState = 'ALIGNED' | 'EXPECTED_VARIANCE' | 'MATERIAL_VARIANCE' | 'NOT_COMPARABLE' | 'INSUFFICIENT_DATA';
 
+/** How reliable the variance classification is given the order count behind it. */
+export type SampleSufficiency = 'LOW' | 'ADEQUATE' | 'UNKNOWN';
+
+/**
+ * Platform-vs-merchant variance is inherently noisier at low order volume (attribution windows,
+ * view-through, modelling — all enumerated below — swamp a handful of orders). Below this count a
+ * large % gap is weak evidence of a SYSTEMATIC variance, so the classification is marked LOW-sample so
+ * consumers can caveat it rather than alarm on it (reassessment data-science P1 #4).
+ */
+export const MIN_ORDERS_FOR_RELIABLE_VARIANCE = 25;
+/** Below this count the thresholds themselves widen (a 3-order account must not read as MATERIAL). */
+const MIN_ORDERS_BEFORE_WIDENING = 5;
+
 export interface ReconciliationResult {
   state: ReconciliationState;
   platformRevenue?: CommerceMoney;
@@ -19,6 +32,9 @@ export interface ReconciliationResult {
   differenceMinor?: number;         // merchant − platform (same currency only)
   differencePct?: number;
   currency?: string;
+  /** Order count behind the comparison, and whether it is enough to trust the classification. */
+  merchantOrderCount?: number;
+  sampleSufficiency: SampleSufficiency;
   possibleExplanations: string[];
   reasons: string[];
 }
@@ -40,23 +56,37 @@ export function reconcile(input: {
   expectedVariancePct?: number;     // default 15% is "expected"
   materialVariancePct?: number;     // default 35% is "material"
 }): ReconciliationResult {
-  const expected = input.expectedVariancePct ?? 15;
-  const material = input.materialVariancePct ?? 35;
+  const baseExpected = input.expectedVariancePct ?? 15;
+  const baseMaterial = input.materialVariancePct ?? 35;
   if (!input.platformRevenue || !input.merchantRevenue) {
-    return { state: 'INSUFFICIENT_DATA', possibleExplanations: [], reasons: ['missing platform or merchant revenue for the window'] };
+    return { state: 'INSUFFICIENT_DATA', sampleSufficiency: 'UNKNOWN', possibleExplanations: [], reasons: ['missing platform or merchant revenue for the window'] };
   }
   if (input.platformRevenue.currency !== input.merchantRevenue.currency) {
-    return { state: 'NOT_COMPARABLE', possibleExplanations: ['currency differences'], reasons: ['platform and merchant revenue are in different currencies (no governed FX)'], currency: undefined };
+    return { state: 'NOT_COMPARABLE', sampleSufficiency: 'UNKNOWN', possibleExplanations: ['currency differences'], reasons: ['platform and merchant revenue are in different currencies (no governed FX)'], currency: undefined };
   }
-  if ((input.merchantOrderCount ?? 1) === 0) {
-    return { state: 'INSUFFICIENT_DATA', possibleExplanations: [], reasons: ['no merchant orders in the window'] };
+  const orderCount = input.merchantOrderCount;
+  if ((orderCount ?? 1) === 0) {
+    return { state: 'INSUFFICIENT_DATA', sampleSufficiency: 'LOW', merchantOrderCount: 0, possibleExplanations: [], reasons: ['no merchant orders in the window'] };
   }
+  // Widen the thresholds for very small samples so a handful of orders with a large % gap is not
+  // classified MATERIAL on noise alone. The widening is 0 at/above MIN_ORDERS_BEFORE_WIDENING, so the
+  // normal (n ≥ 5) classification is unchanged; it grows as the count falls below it.
+  const widen = orderCount != null && orderCount < MIN_ORDERS_BEFORE_WIDENING
+    ? 1 + (MIN_ORDERS_BEFORE_WIDENING - orderCount) / MIN_ORDERS_BEFORE_WIDENING
+    : 1;
+  const expected = Math.round(baseExpected * widen * 10) / 10;
+  const material = Math.round(baseMaterial * widen * 10) / 10;
+  const sampleSufficiency: SampleSufficiency = orderCount == null ? 'UNKNOWN'
+    : orderCount < MIN_ORDERS_FOR_RELIABLE_VARIANCE ? 'LOW' : 'ADEQUATE';
+
   const p = input.platformRevenue.minorUnits;
   const m = input.merchantRevenue.minorUnits;
   const diff = m - p;
   const base = Math.max(Math.abs(p), Math.abs(m), 1);
   const pct = Math.round((Math.abs(diff) / base) * 1000) / 10;
   const state: ReconciliationState = pct <= expected ? (pct <= expected / 3 ? 'ALIGNED' : 'EXPECTED_VARIANCE') : pct <= material ? 'EXPECTED_VARIANCE' : 'MATERIAL_VARIANCE';
+  const reasons = [`|Δ| = ${pct}% of the larger figure (expected ≤ ${expected}%, material > ${material}%)`];
+  if (sampleSufficiency === 'LOW') reasons.push(`low sample (${orderCount} orders < ${MIN_ORDERS_FOR_RELIABLE_VARIANCE}) — variance classification is weak evidence; caveat before acting`);
   return {
     state,
     platformRevenue: input.platformRevenue,
@@ -64,8 +94,10 @@ export function reconcile(input: {
     differenceMinor: diff,
     differencePct: Math.round((diff / base) * 1000) / 10,
     currency: input.merchantRevenue.currency,
+    merchantOrderCount: orderCount,
+    sampleSufficiency,
     possibleExplanations: state === 'ALIGNED' ? [] : EXPLANATIONS,
-    reasons: [`|Δ| = ${pct}% of the larger figure (expected ≤ ${expected}%, material > ${material}%)`],
+    reasons,
   };
 }
 
