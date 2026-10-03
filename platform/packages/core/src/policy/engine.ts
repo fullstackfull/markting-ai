@@ -152,7 +152,7 @@ export class PolicyEngine {
     // 2. Human approval + four-eyes (no consume on failure).
     this.checkApproval(approver, peek.requestedBy, approval.allowSelfApproval ?? false);
 
-    // 3. Atomic claim: exactly one concurrent apply transitions pending|failed → applying.
+    // 3. Atomic claim: exactly one concurrent apply transitions pending → applying.
     const claim = await this.pending.claim(pendingId, approver ?? LOCAL_OPERATOR);
     switch (claim.status) {
       case 'not_found':
@@ -229,8 +229,10 @@ export class PolicyEngine {
         if (error.code === 'POLICY_VIOLATION') await this.pending.markFailed(pendingId, error.message).catch(() => {});
         throw error;
       }
-      // Provider write threw: the write may or may not have landed. Mark failed (indeterminate),
-      // never write an 'applied' row. A retry is allowed (failed → applying) but is operator-driven.
+      // Provider write threw: the write may or may not have landed. Mark failed (indeterminate) and
+      // never write an 'applied' row. A failed apply is TERMINAL and is NOT re-claimable — retrying
+      // requires an explicit fresh validate, so an uncertain result can never be blindly re-executed
+      // (which would risk a duplicate create).
       await this.pending.markFailed(pendingId, error instanceof Error ? error.message : String(error));
       await this.audit.append({
         event: 'rejected',

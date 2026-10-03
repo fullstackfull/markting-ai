@@ -413,7 +413,7 @@ export class PostgresPendingStore {
             approved_by_type = ${approver.type}, approved_by_id = ${approver.id},
             apply_attempt_id = gen_random_uuid()
       where id = ${id} and organization_id = ${this.principal.organizationId}
-        and state in ('pending', 'failed') and expires_at > now()
+        and state = 'pending' and expires_at > now()
       returning id, provider, operation_hash, operation, preview, preview_digest, state,
                 requested_by_type, requested_by_id, approved_by_type, approved_by_id, result, created_at, expires_at
     `;

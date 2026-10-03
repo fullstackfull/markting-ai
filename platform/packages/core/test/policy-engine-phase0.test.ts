@@ -35,7 +35,7 @@ class AtomicMemPendingStore implements PendingOperationStore {
     const state = row.state ?? 'pending';
     if (state === 'applied') return { status: 'already_applied', result: row.result };
     if (state === 'applying') return { status: 'in_progress' };
-    if (state === 'superseded' || state === 'expired') return { status: 'superseded' };
+    if (state === 'superseded' || state === 'expired' || state === 'failed') return { status: 'superseded' };
     if (state === 'rejected') return { status: 'rejected' };
     const claimed: PendingOperation = { ...row, state: 'applying', approvedBy: approver };
     this.rows.set(id, claimed); // … and write, with no await between: atomic in the event loop.
@@ -128,7 +128,7 @@ describe('R0-01: atomic + idempotent apply', () => {
     expect(retry.result).toEqual(first.result);
   });
 
-  it('an apply that reaches a failed row can be retried; a provider throw marks failed, never applied', async () => {
+  it('a provider throw marks the pending FAILED (terminal, not re-claimable), never applied', async () => {
     const { engine, pending, audit, provider } = makeEngine();
     const { pendingOperationId } = await engine.validate(provider, budgetOp(12_000_000), AI_AGENT);
     provider.openGateWhen(Promise.reject(new Error('provider down')));
@@ -136,6 +136,10 @@ describe('R0-01: atomic + idempotent apply', () => {
     expect((await pending.get(pendingOperationId))?.state).toBe('failed');
     expect(audit.entries.map((e) => e.event)).toContain('applying');
     expect(audit.entries.map((e) => e.event)).not.toContain('applied');
+    // A failed (indeterminate) apply is terminal: a blind retry must NOT re-execute the provider write.
+    await expect(engine.apply(provider, budgetOp(12_000_000), pendingOperationId, { approver: HUMAN_A }))
+      .rejects.toMatchObject({ code: 'PENDING_SUPERSEDED' });
+    expect(provider.applyCalls).toBe(1);
   });
 });
 

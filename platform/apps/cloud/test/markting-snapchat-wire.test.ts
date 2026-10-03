@@ -40,7 +40,7 @@ class MemoryPending {
     const s = o.state ?? 'pending';
     if (s === 'applied') return { status: 'already_applied', result: o.result };
     if (s === 'applying') return { status: 'in_progress' };
-    if (s === 'superseded' || s === 'expired') return { status: 'superseded' };
+    if (s === 'superseded' || s === 'expired' || s === 'failed') return { status: 'superseded' };
     if (s === 'rejected') return { status: 'rejected' };
     const claimed: PendingOperation = { ...o, state: 'applying', approvedBy: approver };
     this.rows.set(id, claimed);

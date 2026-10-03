@@ -78,13 +78,16 @@ describeDatabase('PostgresPendingStore atomic claim (local database)', () => {
     expect(claim.status).toBe('expired');
   });
 
-  it('a failed row may be re-claimed; a superseded row may not', async () => {
+  it('a failed row is terminal (not re-claimable); a superseded row is not claimable', async () => {
     const id = randomUUID();
     await store.put(pendingOp(id));
     expect((await store.claim(id, HUMAN_A)).status).toBe('claimed');
     await store.markFailed(id, 'provider down');
-    expect((await store.claim(id, HUMAN_B)).status).toBe('claimed'); // failed → applying retry
-    await store.markSuperseded(id);
-    expect((await store.claim(id, HUMAN_A)).status).toBe('superseded');
+    // Terminal: a blind retry cannot re-claim a failed (indeterminate) apply.
+    expect((await store.claim(id, HUMAN_B)).status).not.toBe('claimed');
+    const id2 = randomUUID();
+    await store.put(pendingOp(id2));
+    await store.markSuperseded(id2);
+    expect((await store.claim(id2, HUMAN_A)).status).toBe('superseded');
   });
 });

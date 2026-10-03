@@ -1,5 +1,6 @@
 import 'server-only';
 import { z } from 'zod';
+import { resolveRuntimeMode } from './runtime-mode';
 
 /**
  * markting-ai bridge settings. Parsed separately from `@/lib/env` so the upstream schema stays
@@ -26,6 +27,12 @@ export function marktingEnv(): MarktingEnv {
   return parsed;
 }
 
-export function isDemoMode(): boolean { return marktingEnv().MARKTING_DEMO_MODE === 'true'; }
+/**
+ * Demo mode and the runtime safety state share ONE source of truth so the provider wiring and the
+ * apply gate can never disagree: a fail-open where the gate reads DEMO but the live provider is built
+ * (or vice-versa). Both derive from resolveRuntimeMode() (which honors an explicit
+ * MARKTING_RUNTIME_MODE and otherwise derives from MARKTING_DEMO_MODE).
+ */
+export function isDemoMode(): boolean { return resolveRuntimeMode() === 'DEMO'; }
 
 export function resetMarktingEnvForTests(): void { parsed = undefined; }

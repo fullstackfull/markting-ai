@@ -120,7 +120,8 @@ export class PendingStore implements PendingOperationStore {
     if (state === 'applying') return { status: 'in_progress' };
     if (state === 'superseded' || state === 'expired') return { status: 'superseded' };
     if (state === 'rejected') return { status: 'rejected' };
-    // state is 'pending' or 'failed' (retry): claim it.
+    if (state === 'failed') return { status: 'superseded' }; // a failed (indeterminate) apply is terminal; re-validate to retry
+    // state is 'pending': claim it.
     const claimed: PendingOperation = { ...op, state: 'applying', approvedBy: approver };
     await this.write(claimed);
     return { status: 'claimed', pending: claimed };
