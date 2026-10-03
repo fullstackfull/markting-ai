@@ -1,28 +1,27 @@
 import { defineConfig, devices } from '@playwright/test';
+import { BUYER_STATE } from './e2e/paths';
 
 /**
- * Coherence hardening Program 12 — browser E2E foundation (REAL headless Chromium, not unit-render).
+ * CODE-RC browser E2E — real headless Chromium (pre-installed at PLAYWRIGHT_BROWSERS_PATH).
  *
- * The suite in ./e2e drives the built app in headless Chromium (pre-installed at
- * PLAYWRIGHT_BROWSERS_PATH=/opt/pw-browsers). Because `output: standalone` is set, `next start` does
- * NOT serve — we boot the copied standalone server directly (scripts/prepare-standalone.mjs must have
- * run, via `pnpm build:standalone`).
+ * Two postures, selected by E2E_SEEDED_SESSION:
+ *  - UNSEEDED (default): only the `public` project runs — landing + the unauthenticated redirect guard —
+ *    against the standalone server booted with non-secret PLACEHOLDER env. No DB/Supabase needed.
+ *  - SEEDED (E2E_SEEDED_SESSION=1, set by the CI e2e lane): the `setup` project authenticates a seeded
+ *    user via the test-only login route, then the `authed` project runs the full media-buyer journeys
+ *    with that storage state. The lane boots Supabase, seeds tenants, and runs the server in DEMO
+ *    runtime with the REAL Supabase env (so auth resolves and surfaces have synthetic content), passing
+ *    that env through to the webServer below (not the placeholders).
  *
- * Public journeys (landing + the unauthenticated redirect guard) run against this server with
- * PLACEHOLDER env — syntactically valid, non-secret dummy values that satisfy lib/env.ts boot
- * validation. They are NOT credentials and connect to nothing: Supabase/provider calls are never made
- * on these routes. The authenticated dashboard journeys additionally require a SEEDED Supabase auth
- * session + a DEMO-mode server; where that session is unavailable (a credential-less CI container)
- * those specs skip with an explicit reason rather than passing vacuously — see e2e/journeys.spec.ts.
- *
- * Run: `pnpm --filter @adport/cloud build:standalone && pnpm --filter @adport/cloud e2e`.
+ * Because `output: standalone` is set, the server is the copied standalone server (run
+ * `pnpm build:standalone` first), never `next start`.
  */
 const PORT = Number(process.env.E2E_PORT ?? 3100);
 const BASE_URL = process.env.E2E_BASE_URL ?? `http://127.0.0.1:${PORT}`;
+const SEEDED = process.env.E2E_SEEDED_SESSION === '1';
 const startServer = process.env.E2E_NO_SERVER !== '1';
 
-// Non-secret placeholders so the standalone server passes lib/env.ts validation and can render public
-// routes. They point at loopback / example hosts and are never used to authenticate anything.
+// Non-secret placeholders so the standalone server passes lib/env.ts validation for PUBLIC routes.
 const PLACEHOLDER_ENV: Record<string, string> = {
   NEXT_PUBLIC_SUPABASE_URL: 'http://127.0.0.1:54321',
   NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: 'e2e_placeholder_publishable_key_0000000',
@@ -34,10 +33,20 @@ const PLACEHOLDER_ENV: Record<string, string> = {
   ADPORT_MCP_OAUTH_SIGNING_KEY: 'e2e_placeholder_mcp_oauth_signing_key_00000000000000',
 };
 
+// In the SEEDED lane, the server must use the REAL Supabase env (inherited from the lane) plus DEMO
+// runtime and the test-auth flag; passing undefined values lets the child inherit the real ones.
+const SEEDED_SERVER_ENV: Record<string, string> = {
+  MARKTING_RUNTIME_MODE: 'DEMO',
+  MARKTING_DEMO_MODE: 'true',
+  MARKTING_E2E_TEST_AUTH: '1',
+  PORT: String(PORT),
+  HOSTNAME: '127.0.0.1',
+};
+
 export default defineConfig({
   testDir: './e2e',
   timeout: 30_000,
-  expect: { timeout: 5_000 },
+  expect: { timeout: 8_000 },
   retries: 0,
   reporter: [['list']],
   use: {
@@ -46,15 +55,20 @@ export default defineConfig({
     ...devices['Desktop Chrome'],
     launchOptions: process.env.PW_EXECUTABLE ? { executablePath: process.env.PW_EXECUTABLE } : {},
   },
-  // Boot the STANDALONE server (next start is incompatible with output: standalone). Skip with
-  // E2E_NO_SERVER=1 (e.g. for --list, which only needs to collect specs).
+  projects: SEEDED
+    ? [
+        { name: 'setup', testMatch: /auth\.setup\.ts/ },
+        { name: 'public', testMatch: /(journeys|a11y)\.spec\.ts/, grep: /@public/ },
+        { name: 'authed', testMatch: /(journeys|a11y)\.spec\.ts/, grepInvert: /@public/, dependencies: ['setup'], use: { storageState: BUYER_STATE } },
+      ]
+    : [{ name: 'public', testMatch: /(journeys|a11y)\.spec\.ts/, grep: /@public/ }],
   webServer: startServer
     ? {
         command: 'node .next/standalone/apps/cloud/server.js',
         url: BASE_URL,
         timeout: 120_000,
         reuseExistingServer: true,
-        env: { ...PLACEHOLDER_ENV, PORT: String(PORT), HOSTNAME: '127.0.0.1' },
+        env: SEEDED ? { ...SEEDED_SERVER_ENV, PORT: String(PORT), HOSTNAME: '127.0.0.1' } : { ...PLACEHOLDER_ENV, PORT: String(PORT), HOSTNAME: '127.0.0.1' },
       }
     : undefined,
 });

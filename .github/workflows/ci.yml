@@ -88,6 +88,67 @@ jobs:
         working-directory: platform
         run: npx --yes supabase@latest stop || true
 
+  e2e:
+    name: authenticated browser E2E + axe accessibility (seeded Supabase, DEMO runtime)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v6
+        with:
+          package_json_file: platform/package.json
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+          cache-dependency-path: platform/pnpm-lock.yaml
+      - name: Start local Supabase (auth.users + roles)
+        working-directory: platform
+        run: npx --yes supabase@latest start
+      - name: Apply migrations forward-only
+        working-directory: platform
+        run: npx --yes supabase@latest migration up --local
+      - name: Export Supabase + app env (build-time NEXT_PUBLIC_* are inlined, so set before build)
+        working-directory: platform
+        run: |
+          npx --yes supabase@latest status -o env > "$RUNNER_TEMP/sb.env"
+          get() { sed -n "s/^$1=\"\(.*\)\"\$/\1/p" "$RUNNER_TEMP/sb.env"; }
+          echo "::add-mask::$(get SERVICE_ROLE_KEY)"; echo "::add-mask::$(get SECRET_KEY)"
+          echo "SUPABASE_DB_URL=$(get DB_URL)" >> "$GITHUB_ENV"
+          echo "NEXT_PUBLIC_SUPABASE_URL=$(get API_URL)" >> "$GITHUB_ENV"
+          ANON="$(get ANON_KEY)"; [ -z "$ANON" ] && ANON="$(get PUBLISHABLE_KEY)"
+          echo "NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=$ANON" >> "$GITHUB_ENV"
+          SVC="$(get SERVICE_ROLE_KEY)"; [ -z "$SVC" ] && SVC="$(get SECRET_KEY)"
+          echo "SUPABASE_SECRET_KEY=$SVC" >> "$GITHUB_ENV"
+          # Non-secret app env (test values) required by lib/env.ts at build + runtime.
+          echo "ADPORT_CLOUD_BASE_URL=http://127.0.0.1:3100" >> "$GITHUB_ENV"
+          echo "ADPORT_CLOUD_ENCRYPTION_KEY=ZTJlX2NpXzMyYnl0ZV9lbmNyeXB0aW9uX2tleSEhISE=" >> "$GITHUB_ENV"
+          echo "ADPORT_API_KEY_PEPPER=e2e_ci_api_key_pepper_000000000000000000" >> "$GITHUB_ENV"
+          echo "ADPORT_MCP_OAUTH_SIGNING_KEY=e2e_ci_mcp_oauth_signing_key_0000000000000000" >> "$GITHUB_ENV"
+          echo "MARKTING_E2E_TEST_PASSWORD=e2e-ci-test-password-123456" >> "$GITHUB_ENV"
+          echo "MARKTING_RUNTIME_MODE=DEMO" >> "$GITHUB_ENV"
+          echo "MARKTING_DEMO_MODE=true" >> "$GITHUB_ENV"
+          echo "MARKTING_E2E_TEST_AUTH=1" >> "$GITHUB_ENV"
+          echo "E2E_SEEDED_SESSION=1" >> "$GITHUB_ENV"
+      - name: Install deps + build packages + standalone server
+        working-directory: platform
+        run: |
+          pnpm install --frozen-lockfile
+          pnpm -r --filter './packages/*' run build
+          pnpm --filter @adport/cloud build:standalone
+      - name: Install Playwright Chromium
+        working-directory: platform/apps/cloud
+        run: pnpm exec playwright install --with-deps chromium
+      - name: Seed deterministic E2E tenants (users + orgs + memberships)
+        working-directory: platform/apps/cloud
+        run: node e2e/seed.mjs
+      - name: Run authenticated journeys + axe accessibility
+        working-directory: platform/apps/cloud
+        run: pnpm exec playwright test
+      - name: Stop Supabase
+        if: always()
+        working-directory: platform
+        run: npx --yes supabase@latest stop || true
+
   engine:
     name: engine (ruff, mypy, pytest) + engine-host demo tests
     runs-on: ubuntu-latest
