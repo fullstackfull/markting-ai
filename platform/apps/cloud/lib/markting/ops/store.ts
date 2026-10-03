@@ -1,6 +1,7 @@
 import 'server-only';
 import { db } from '@/lib/db';
 import { assertTransition, type OperationState } from './state-machine';
+import { canApprove } from './rbac';
 import type { TypedProposedAction } from './actions';
 import type { KillSwitch, WriteContext } from './kill-switch';
 import { evaluateWriteBlocked } from './kill-switch';
@@ -34,24 +35,52 @@ export async function getOperation(organizationId: string, operationId: string):
   return rows[0] ?? null;
 }
 
-/** Transition an operation's state, guarded by the state machine (illegal transitions throw). */
-export async function transitionOperation(organizationId: string, operationId: string, to: OperationState, patch: Record<string, unknown> = {}): Promise<void> {
+export class ConcurrentTransitionError extends Error {
+  constructor(public operationId: string, public expected: OperationState, public to: OperationState) {
+    super(`concurrent transition on ${operationId}: state was not ${expected} when moving to ${to}`);
+    this.name = 'ConcurrentTransitionError';
+  }
+}
+
+/**
+ * Transition an operation's state. Guarded two ways:
+ *  1) the state machine refuses illegal transitions server-side;
+ *  2) a COMPARE-AND-SWAP (`where ... and state = <observed>`) so a concurrent transition cannot
+ *     last-writer-win (e.g. APPLYING→APPLIED racing an expire job). No row updated → throw.
+ *  3) UNKNOWN_RESULT → APPLIED is EVIDENCE-GATED: it requires a reconciliation verdict of
+ *     APPLIED_CONFIRMED (passed in patch.reconciliationVerdict), never a bare advance.
+ */
+export async function transitionOperation(organizationId: string, operationId: string, to: OperationState, patch: { providerResult?: unknown; afterState?: unknown; failureClassification?: string; reconciliationVerdict?: string } = {}): Promise<void> {
   const cur = await getOperation(organizationId, operationId);
   if (!cur) throw new Error('operation not found');
   assertTransition(cur.state, to); // server-side illegal-transition guard
-  await db()`
+  if (cur.state === 'UNKNOWN_RESULT' && to === 'APPLIED' && patch.reconciliationVerdict !== 'APPLIED_CONFIRMED') {
+    throw new Error('UNKNOWN_RESULT → APPLIED requires a reconciliation verdict of APPLIED_CONFIRMED');
+  }
+  const rows = await db()<Array<{ operationId: string }>>`
     update public.markting_operations set state = ${to}, updated_at = now(),
       provider_result = ${patch.providerResult ? db().json(patch.providerResult as never) : db()`provider_result`},
       after_state = ${patch.afterState ? db().json(patch.afterState as never) : db()`after_state`},
-      failure_classification = ${(patch.failureClassification as string) ?? db()`failure_classification`},
+      failure_classification = ${patch.failureClassification ?? db()`failure_classification`},
       applied_at = ${to === 'APPLIED' ? db()`now()` : db()`applied_at`}
-    where organization_id = ${organizationId} and operation_id = ${operationId}`;
+    where organization_id = ${organizationId} and operation_id = ${operationId} and state = ${cur.state}
+    returning operation_id as "operationId"`;
+  if (rows.length !== 1) throw new ConcurrentTransitionError(operationId, cur.state, to); // CAS lost the race
 }
 
-export async function recordApproval(organizationId: string, operationId: string, approverUserId: string, roles: string[]): Promise<void> {
+/**
+ * Record a human approval. Defense-in-depth: the SoD guard runs HERE too (not only at quorum eval), so
+ * a buggy caller cannot persist a self-approval, a model/service-account approval, or a no-permission
+ * approval. The requester + actor principal are required so the 4-eyes rule is enforced at write time.
+ */
+export async function recordApproval(organizationId: string, operationId: string, approver: { userId: string; roles: string[]; isServiceAccount?: boolean; isModel?: boolean }): Promise<void> {
+  const op = await getOperation(organizationId, operationId);
+  if (!op) throw new Error('operation not found');
+  const sod = canApprove({ requesterUserId: op.requesterUserId ?? '', actorUserId: approver.userId, actor: { userId: approver.userId, roles: approver.roles as never, isServiceAccount: approver.isServiceAccount, isModel: approver.isModel } });
+  if (!sod.ok) throw new Error(`approval rejected: ${sod.reason}`);
   await db()`
     insert into public.markting_operation_approvals (organization_id, operation_id, approver_user_id, roles)
-    values (${organizationId}, ${operationId}, ${approverUserId}, ${db().json(roles as never)})
+    values (${organizationId}, ${operationId}, ${approver.userId}, ${db().json(approver.roles as never)})
     on conflict (organization_id, operation_id, approver_user_id) do nothing`; // an actor approves at most once
 }
 

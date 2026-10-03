@@ -19,6 +19,10 @@ export interface AgencyMembership {
   /** The client organizations this user is explicitly granted, server-side. */
   clientOrganizationIds: string[];
   role: string;
+  /** Optional server graph: which workspaces/accounts belong under each client org. When present, a
+   * requested workspace/account is validated to belong under the requested client (prevents a user
+   * granted client-A from targeting a workspace/account that belongs to client-B). */
+  scopeGraph?: Record<string, { workspaces?: string[]; accounts?: string[] }>;
 }
 
 /** Resolve whether a user may act within a requested client scope, from the server membership graph. */
@@ -26,6 +30,16 @@ export function resolveClientScope(membership: AgencyMembership, requested: Agen
   if (membership.agencyId !== requested.agencyId) return { allowed: false, reason: 'agency mismatch' };
   if (!membership.clientOrganizationIds.includes(requested.clientOrganizationId)) {
     return { allowed: false, reason: `user is not granted client ${requested.clientOrganizationId}` };
+  }
+  // Validate the sub-scope belongs under the requested client (when the server graph is provided).
+  const graph = membership.scopeGraph?.[requested.clientOrganizationId];
+  if (graph) {
+    if (requested.workspaceId && graph.workspaces && !graph.workspaces.includes(requested.workspaceId)) {
+      return { allowed: false, reason: `workspace ${requested.workspaceId} does not belong to client ${requested.clientOrganizationId}` };
+    }
+    if (requested.accountId && graph.accounts && !graph.accounts.includes(requested.accountId)) {
+      return { allowed: false, reason: `account ${requested.accountId} does not belong to client ${requested.clientOrganizationId}` };
+    }
   }
   return { allowed: true };
 }

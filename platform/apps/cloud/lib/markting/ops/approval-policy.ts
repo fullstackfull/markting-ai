@@ -108,20 +108,39 @@ export interface LiveSnapshot {
 
 export type RevalidationResult = { ok: true } | { ok: false; code: 'REPREVIEW_REQUIRED' | 'EXPIRED'; reasons: string[] };
 
+export type LiveStateCheck = 'target_ownership' | 'entity_exists' | 'currency_match' | 'current_value' | 'entity_status';
+
 /**
  * Revalidate at apply time. A material change (ownership moved, entity gone, budget/currency changed,
  * status changed, policy version changed, or digest mismatch) → REPREVIEW_REQUIRED. Past expiry →
  * EXPIRED. A stale approval is NEVER silently reused.
+ *
+ * FAIL CLOSED on missing live data: for every check the action REQUIRES (`requiredChecks`), a missing
+ * or null live value is a hard REPREVIEW_REQUIRED — we never skip a required check because the live
+ * probe came back partial. Pass the action definition's `requiredLiveStateChecks`.
  */
-export function revalidateAtApply(preview: PreviewSnapshot, live: LiveSnapshot, now = Date.now()): RevalidationResult {
+export function revalidateAtApply(preview: PreviewSnapshot, live: LiveSnapshot, opts: { requiredChecks?: LiveStateCheck[]; now?: number } = {}): RevalidationResult {
+  const now = opts.now ?? Date.now();
+  const required = new Set(opts.requiredChecks ?? ['target_ownership', 'entity_exists']);
   if (now > Date.parse(preview.approvalExpiresAt)) return { ok: false, code: 'EXPIRED', reasons: ['approval/preview has expired'] };
   const reasons: string[] = [];
   if (preview.operationDigest !== live.operationDigest) reasons.push('operation digest mismatch (the approved operation is not the one being applied)');
+  if (preview.policyVersion !== live.policyVersion) reasons.push('policy version changed since preview');
+  // target_ownership + entity_exists are always enforced (booleans that must be true).
   if (!live.targetOwnershipOk) reasons.push('target ownership changed or cannot be confirmed');
   if (!live.providerEntityExists) reasons.push('provider entity no longer exists');
-  if (preview.policyVersion !== live.policyVersion) reasons.push('policy version changed since preview');
-  if (preview.currency != null && live.currency != null && preview.currency !== live.currency) reasons.push('currency changed since preview');
-  if (preview.currentBudgetMinor != null && live.currentBudgetMinor != null && preview.currentBudgetMinor !== live.currentBudgetMinor) reasons.push('current budget changed externally since preview');
-  if (preview.entityStatus != null && live.entityStatus != null && preview.entityStatus !== live.entityStatus) reasons.push('entity status changed since preview');
+  // The remaining checks fail CLOSED when required but the live value is absent.
+  if (required.has('currency_match')) {
+    if (live.currency == null) reasons.push('currency could not be read at apply time (required check)');
+    else if (preview.currency != null && preview.currency !== live.currency) reasons.push('currency changed since preview');
+  } else if (preview.currency != null && live.currency != null && preview.currency !== live.currency) reasons.push('currency changed since preview');
+  if (required.has('current_value')) {
+    if (live.currentBudgetMinor == null) reasons.push('current budget could not be read at apply time (required check)');
+    else if (preview.currentBudgetMinor != null && preview.currentBudgetMinor !== live.currentBudgetMinor) reasons.push('current budget changed externally since preview');
+  } else if (preview.currentBudgetMinor != null && live.currentBudgetMinor != null && preview.currentBudgetMinor !== live.currentBudgetMinor) reasons.push('current budget changed externally since preview');
+  if (required.has('entity_status')) {
+    if (live.entityStatus == null) reasons.push('entity status could not be read at apply time (required check)');
+    else if (preview.entityStatus != null && preview.entityStatus !== live.entityStatus) reasons.push('entity status changed since preview');
+  } else if (preview.entityStatus != null && live.entityStatus != null && preview.entityStatus !== live.entityStatus) reasons.push('entity status changed since preview');
   return reasons.length ? { ok: false, code: 'REPREVIEW_REQUIRED', reasons } : { ok: true };
 }

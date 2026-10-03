@@ -22,13 +22,26 @@ export interface KillSwitch {
 
 export interface WriteContext { organizationId: string; provider: string; accountId: string; actionType: string }
 
-/** Which kill-switch keys could block a given write, in evaluation order (most specific last). */
+/**
+ * The canonical key for an ACCOUNT-scope switch — ORG-QUALIFIED so one tenant's ACCOUNT switch can
+ * never collide with (or overwrite) another tenant's under the `(scope, scope_key)` unique constraint,
+ * and a provider account id shared across tenants stays isolated.
+ */
+export function accountSwitchKey(organizationId: string, accountId: string): string {
+  return `${organizationId}:${accountId}`;
+}
+
+/**
+ * Which kill-switch keys could block a given write, in evaluation order (most specific last).
+ * GLOBAL/PROVIDER/ACTION_TYPE are platform-wide (org-null rows); ORGANIZATION/ACCOUNT are org-scoped
+ * (ORGANIZATION key = org id; ACCOUNT key = org:account) so they never collide across tenants.
+ */
 export function relevantSwitches(ctx: WriteContext): Array<{ scope: KillScope; key: string }> {
   return [
     { scope: 'GLOBAL', key: '' },
     { scope: 'ORGANIZATION', key: ctx.organizationId },
     { scope: 'PROVIDER', key: ctx.provider },
-    { scope: 'ACCOUNT', key: ctx.accountId },
+    { scope: 'ACCOUNT', key: accountSwitchKey(ctx.organizationId, ctx.accountId) },
     { scope: 'ACTION_TYPE', key: ctx.actionType },
   ];
 }

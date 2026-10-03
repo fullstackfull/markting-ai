@@ -13,7 +13,9 @@ import type { TypedProposedAction } from './actions';
 export function operationDigest(a: TypedProposedAction, policyVersion: string): string {
   const canonical = JSON.stringify({
     type: a.type, provider: a.provider, accountId: a.accountId, entityId: a.entityId, entityLevel: a.entityLevel,
-    budget: a.budget ? { toMinor: a.budget.toMinor, currency: a.budget.currency } : null, status: a.status ?? null, policyVersion,
+    // fromMinor is bound into the identity so the approved operation carries the exact baseline the
+    // delta cap was evaluated against — it cannot be swapped out between preview and apply.
+    budget: a.budget ? { toMinor: a.budget.toMinor, fromMinor: a.budget.fromMinor ?? null, currency: a.budget.currency } : null, status: a.status ?? null, policyVersion,
   });
   return createHash('sha256').update(canonical).digest('hex');
 }

@@ -98,11 +98,16 @@ export function validateProposedAction(a: TypedProposedAction, dataTrust: string
   if (trustRank.indexOf(dataTrust) < trustRank.indexOf(def.requiredDataTrust)) reasons.push(`data trust ${dataTrust} below required ${def.requiredDataTrust}`);
   if (a.type === 'SET_DAILY_BUDGET') {
     if (!a.budget) reasons.push('SET_DAILY_BUDGET requires a budget target');
-    else if (a.budget.fromMinor != null && def.maxDeltaFraction != null && a.budget.fromMinor > 0) {
-      const frac = Math.abs(a.budget.toMinor - a.budget.fromMinor) / a.budget.fromMinor;
-      if (frac > def.maxDeltaFraction) reasons.push(`budget delta ${Math.round(frac * 100)}% exceeds max ${Math.round(def.maxDeltaFraction * 100)}% for a single governed step`);
+    else {
+      // fromMinor (the SERVER-observed current value) is MANDATORY: the delta cap is only meaningful
+      // against a known baseline, and omitting it must never bypass the cap.
+      if (a.budget.fromMinor == null) reasons.push('SET_DAILY_BUDGET requires the server-observed current value (fromMinor) — the delta cap cannot be evaluated without it');
+      else if (def.maxDeltaFraction != null && a.budget.fromMinor > 0) {
+        const frac = Math.abs(a.budget.toMinor - a.budget.fromMinor) / a.budget.fromMinor;
+        if (frac > def.maxDeltaFraction) reasons.push(`budget delta ${Math.round(frac * 100)}% exceeds max ${Math.round(def.maxDeltaFraction * 100)}% for a single governed step`);
+      }
+      if (a.budget.toMinor < 0) reasons.push('budget cannot be negative');
     }
-    if (a.budget && a.budget.toMinor < 0) reasons.push('budget cannot be negative');
   }
   if ((a.type === 'PAUSE_ENTITY' && a.status !== 'PAUSED') || (a.type === 'RESUME_ENTITY' && a.status !== 'ACTIVE')) reasons.push('status does not match the action type');
   return reasons.length ? { ok: false, reasons } : { ok: true, definition: def };

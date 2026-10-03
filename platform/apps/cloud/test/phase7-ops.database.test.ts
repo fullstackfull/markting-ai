@@ -60,8 +60,39 @@ describeDatabase('Phase 7 ops governance store (local database)', () => {
   it('approvals dedupe a repeated actor', async () => {
     const opId = `op-${randomUUID().slice(0, 8)}`;
     await createOperation(a.organizationId, { operationId: opId, accountId: 'act_1', provider: 'sandbox', action, requesterUserId: a.userId, previewDigest: 'd', approvalExpiresAt: new Date(Date.now() + 3_600_000).toISOString() });
-    await recordApproval(a.organizationId, opId, b.userId!, ['APPROVER']);
-    await recordApproval(a.organizationId, opId, b.userId!, ['APPROVER']); // same actor again
+    await recordApproval(a.organizationId, opId, { userId: b.userId!, roles: ['APPROVER'] });
+    await recordApproval(a.organizationId, opId, { userId: b.userId!, roles: ['APPROVER'] }); // same actor again
+    expect((await listApprovals(a.organizationId, opId)).length).toBe(1);
+  });
+
+  it('F3: transitionOperation is compare-and-swap — a stale-state transition loses the race', async () => {
+    const opId = `op-${randomUUID().slice(0, 8)}`;
+    await createOperation(a.organizationId, { operationId: opId, accountId: 'act_1', provider: 'sandbox', action, requesterUserId: a.userId, previewDigest: 'd', approvalExpiresAt: new Date(Date.now() + 3_600_000).toISOString() });
+    await transitionOperation(a.organizationId, opId, 'PENDING_APPROVAL');
+    await transitionOperation(a.organizationId, opId, 'APPROVED');
+    await transitionOperation(a.organizationId, opId, 'CLAIMED');
+    await transitionOperation(a.organizationId, opId, 'APPLYING');
+    // two legal-but-conflicting transitions from APPLYING; exactly one CAS wins.
+    const results = await Promise.allSettled([
+      transitionOperation(a.organizationId, opId, 'APPLIED', { reconciliationVerdict: 'APPLIED_CONFIRMED' }),
+      transitionOperation(a.organizationId, opId, 'FAILED'),
+    ]);
+    expect(results.filter((r) => r.status === 'fulfilled')).toHaveLength(1); // one wins, the other throws ConcurrentTransitionError
+  });
+
+  it('F6: UNKNOWN_RESULT → APPLIED is refused without reconciliation evidence', async () => {
+    const opId = `op-${randomUUID().slice(0, 8)}`;
+    await createOperation(a.organizationId, { operationId: opId, accountId: 'act_1', provider: 'sandbox', action, requesterUserId: a.userId, previewDigest: 'd', approvalExpiresAt: new Date(Date.now() + 3_600_000).toISOString() });
+    for (const s of ['PENDING_APPROVAL', 'APPROVED', 'CLAIMED', 'APPLYING', 'UNKNOWN_RESULT'] as const) await transitionOperation(a.organizationId, opId, s);
+    await expect(transitionOperation(a.organizationId, opId, 'APPLIED')).rejects.toThrow(/APPLIED_CONFIRMED/);
+    await transitionOperation(a.organizationId, opId, 'APPLIED', { reconciliationVerdict: 'APPLIED_CONFIRMED' }); // with evidence → ok
+  });
+
+  it('F6b: recordApproval rejects self-approval at write time (defense-in-depth SoD)', async () => {
+    const opId = `op-${randomUUID().slice(0, 8)}`;
+    await createOperation(a.organizationId, { operationId: opId, accountId: 'act_1', provider: 'sandbox', action, requesterUserId: a.userId, previewDigest: 'd', approvalExpiresAt: new Date(Date.now() + 3_600_000).toISOString() });
+    await expect(recordApproval(a.organizationId, opId, { userId: a.userId!, roles: ['ADMIN'] })).rejects.toThrow(/4-eyes/);
+    await recordApproval(a.organizationId, opId, { userId: b.userId!, roles: ['APPROVER'] }); // a different human is fine
     expect((await listApprovals(a.organizationId, opId)).length).toBe(1);
   });
 
