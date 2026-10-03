@@ -1,6 +1,7 @@
 import Link from 'next/link';
 import { PageHeader } from '@/components/ui';
 import { SectionView, IntelMeta } from '@/components/intel';
+import { PacingChart, BarChart } from '@/components/charts';
 import { requireDashboardTenant } from '@/lib/cloud/dashboard';
 import { loadCampaign, loadSection } from '@/lib/cloud/intelligence';
 import { getT } from '@/lib/i18n/server';
@@ -29,6 +30,17 @@ export default async function CampaignPage({ params }: { params: Promise<{ accou
         <div className="card-head"><h2>{L('Performance & health', 'الأداء والصحة')}</h2></div>
         <SectionView section={section} locale={locale} />
       </section>
+      {section.found && (
+        <section className="card" style={{ marginBottom: 12 }}>
+          <div className="card-head"><h2>{L('Charts', 'الرسوم')}</h2></div>
+          {section.pacing && <PacingChart title={L('Pacing', 'الوتيرة')} elapsedPct={section.pacing.expectedFraction * 100} spentPct={section.pacing.actualFraction * 100} locale={locale} />}
+          {section.comparison && (
+            <div style={{ marginTop: 10 }}>
+              <BarChart title={L('Current vs previous half', 'الحالي مقابل السابق')} twoSeries bars={section.comparison.flatMap((c) => [{ label: `${c.metric} (cur)`, value: c.to, group: 'current' as const }, { label: `${c.metric} (prev)`, value: c.from, group: 'previous' as const }])} locale={locale} />
+            </div>
+          )}
+        </section>
+      )}
       <section className="card" style={{ marginBottom: 12 }}>
         <div className="card-head"><h2>{L('Creative health', 'صحة الإبداع')}</h2></div>
         {section.found && section.creatives && section.creatives.length > 0

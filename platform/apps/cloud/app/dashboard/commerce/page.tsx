@@ -1,5 +1,6 @@
 import { PageHeader } from '@/components/ui';
 import { SectionView, IntelMeta } from '@/components/intel';
+import { BarChart } from '@/components/charts';
 import { requireDashboardTenant } from '@/lib/cloud/dashboard';
 import { loadSection } from '@/lib/cloud/intelligence';
 import { getT } from '@/lib/i18n/server';
@@ -18,6 +19,15 @@ export default async function CommercePage() {
       <section className="card">
         <div className="card-head"><h2>{L('Profit intelligence', 'ذكاء الربح')}</h2></div>
         {a.section?.kind === 'commerce' && <SectionView section={a.section} locale={locale} />}
+        {a.section?.kind === 'commerce' && a.section.available && (
+          <div style={{ marginTop: 10 }}>
+            <BarChart title={L('Profit signals', 'إشارات الربح')} unit="%/ratio" bars={[
+              { label: L('Refund rate %', 'نسبة الاسترداد %'), value: a.section.refundRatePct ?? 0 },
+              { label: L('Contribution margin %', 'هامش المساهمة %'), value: a.section.margin?.contributionMarginPct ?? 0 },
+              { label: 'MER', value: a.section.mer?.value ?? 0 },
+            ]} locale={locale} />
+          </div>
+        )}
         <p className="cell-sub" style={{ marginTop: 10 }}>{locale === 'ar' ? a.text.ar : a.text.en}</p>
       </section>
     </main>

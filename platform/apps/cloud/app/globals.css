@@ -723,3 +723,24 @@ html[dir="rtl"] .mirror-rtl { transform: scaleX(-1); }
 .sidebar-foot-actions .link-button { margin-inline-start: 0; }
 .locale-switcher { font-weight: 600; }
 .workspace-name, .user-name, .user-sub { unicode-bidi: plaintext; }
+
+/* Coherence hardening — charts, client switcher, mobile-critical + a11y */
+.chart svg { max-width: 100%; height: auto; display: block; }
+.chart-summary { font-style: italic; }
+.client-switcher { margin-top: 6px; }
+.client-switcher > summary { cursor: pointer; list-style: none; display: flex; flex-direction: column; }
+.client-switcher > summary::-webkit-details-marker { display: none; }
+.client-switcher .client-list { list-style: none; margin: 6px 0 0; padding: 6px; border: 1px solid var(--border, #e5e7eb); border-radius: 8px; }
+.client-switcher .client-list li { padding: 4px 2px; }
+.client-switcher .client-list a[aria-current="true"] { font-weight: 700; }
+/* Keyboard focus is always visible (a11y). */
+a:focus-visible, button:focus-visible, summary:focus-visible, [tabindex]:focus-visible { outline: 2px solid var(--accent, #3b82f6); outline-offset: 2px; }
+.sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0,0,0,0); white-space: nowrap; border: 0; }
+/* Mobile-critical: new surfaces stack, tables scroll, no horizontal page overflow. */
+@media (max-width: 560px) {
+  .page { padding-inline: 16px; }
+  .card { padding: 12px; }
+  .table-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+  .chart svg { min-width: 280px; }
+  .card-head { flex-wrap: wrap; gap: 6px; }
+}
