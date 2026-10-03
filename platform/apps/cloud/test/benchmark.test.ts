@@ -43,7 +43,10 @@ describe('Program 29 — executable 50-question media-buyer benchmark (>=40 ANSW
 
     // No assistant question may silently fail its check (that would be an inflated mapping).
     expect(failedAssistant, failedAssistant.map((v) => `#${v.n}`).join(',')).toEqual([]);
-    expect(answerable.length).toBeGreaterThanOrEqual(40);
+    // CODE-RC Program 25 — REGRESSION GATE at the current honest count (42/50). If an ANSWERABLE_NOW
+    // capability regresses, CI fails here. This is NOT an artificial push to 45: the 8 not-now
+    // questions stay classified below. Raise this floor only when a capability is genuinely added.
+    expect(answerable.length, `ANSWERABLE_NOW regressed to ${answerable.length}/50 (gate: 42)`).toBeGreaterThanOrEqual(42);
 
     // Program 27 — every NOT-answerable-now question must carry an honest classification; none may be
     // silently missing. The classification distribution is printed for the exit report.

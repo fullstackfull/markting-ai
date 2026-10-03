@@ -8,6 +8,7 @@ import type { IntelligenceRequestContext, IntelligenceIntent } from '@/lib/markt
 import type { AssistantAnswer } from '@/lib/markting/orchestrator/answer';
 import { assertResultPostureAllowed } from '@/lib/markting/ops/source-guard';
 import type { DataTier } from '@/lib/markting/orchestrator/trust';
+import { emitIntelEvent } from '@/lib/markting/ops/intel-telemetry';
 
 /**
  * Defense-in-depth source isolation (CODE-RC Program 20): verify the composed answer's trust tier
@@ -46,7 +47,10 @@ function serviceForMode(): AssistantIntelligenceService {
 }
 
 export async function loadWorkspaceIntelligence(tenant: DashboardTenant, intent: IntelligenceIntent = 'DAILY_REVIEW', extra: Partial<IntelligenceRequestContext> = {}): Promise<AssistantAnswer> {
-  return guardAnswerPosture(await serviceForMode().run(contextForTenant(tenant, extra), intent));
+  const start = Date.now();
+  const answer = guardAnswerPosture(await serviceForMode().run(contextForTenant(tenant, extra), intent));
+  emitIntelEvent({ kind: 'orchestrator_answer', organizationId: tenant.organizationId, intent, durationMs: Date.now() - start, aiMode: answer.source, sourceType: isDemoMode() ? 'SYNTHETIC' : 'LIVE', trustTier: answer.trustTier });
+  return answer;
 }
 
 /** Load a single typed-intent answer (with its analytical section) for a product surface. */
