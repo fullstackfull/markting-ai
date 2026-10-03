@@ -1,19 +1,20 @@
--- Phase 4 follow-up — re-assert creative-table grants + RLS, and add a reverse-lookup index.
+-- Phase 4 follow-up — fix the markting_creative_assets grant and add a reverse-lookup index.
 --
--- Why a second migration: the real-Postgres CI lane runs against a PERSISTED docker volume that is
--- reused across runs. A prior (cancelled/duplicate-dispatch) run left that volume with the Phase-4
--- creative tables present but the `markting_creative_assets` INSERT grant not in effect, and
--- forward-only `supabase migration up` never re-applies an already-recorded migration — so the grants
--- in 20261007000000 do not converge an existing volume. This additive migration always applies (new
--- version row) and re-asserts the full grant + RLS set idempotently, so any volume state converges.
--- Nothing here publishes or modifies a creative — ANALYSIS ONLY, unchanged.
+-- Root cause: `upsertCreative` inserts assets with `INSERT ... ON CONFLICT ... DO UPDATE`, which
+-- requires BOTH insert AND update privilege. The Phase-4 migration granted only `select, insert` on
+-- markting_creative_assets (markting_creatives correctly had `update`, which is why its own upsert
+-- worked), so the asset upsert failed on the real-Postgres CI lane with
+-- `permission denied for table markting_creative_assets`. Forward-only migrations are not re-applied,
+-- so this additive migration grants the missing UPDATE (idempotent) and, defensively, re-asserts the
+-- full grant set + RLS for the creative tables. ANALYSIS ONLY — nothing here publishes or modifies a
+-- creative.
 
 grant select, insert, update on public.markting_creatives to adport_backend;
-grant select, insert on public.markting_creative_assets to adport_backend;
-grant select, insert on public.markting_creative_analysis to adport_backend;
+grant select, insert, update on public.markting_creative_assets to adport_backend; -- +update: upsert does ON CONFLICT DO UPDATE
+grant select, insert on public.markting_creative_analysis to adport_backend;       -- insert-only (ON CONFLICT DO NOTHING)
 grant select, insert, update on public.markting_creative_clusters to adport_backend;
-grant select, insert on public.markting_creative_memberships to adport_backend;
-grant select, insert on public.markting_creative_signals to adport_backend;
+grant select, insert on public.markting_creative_memberships to adport_backend;    -- ON CONFLICT DO NOTHING
+grant select, insert on public.markting_creative_signals to adport_backend;        -- plain insert
 
 -- Reverse lookup (cluster membership by creative) without a scan.
 create index if not exists markting_creative_memberships_creative_idx

@@ -27,9 +27,11 @@ Built on Phase-3 exit HEAD `299460c`, on branch `claude/amazing-heisenberg-0unna
 - `20261007000000_phase4_creative.sql` — 6 forward-only tenant-scoped tables (`markting_creatives`,
   `_assets`, `_analysis` versioned/insert-only, `_clusters`, `_memberships`, `_signals`) with FKs,
   indexes, grants, and the RLS + revoke house convention.
-- `20261008000000_phase4_creative_grants_fixup.sql` — re-asserts the six creative-table grants and RLS
-  idempotently (converges the persisted CI Postgres volume, which forward-only apply does not re-touch)
-  and adds the membership reverse-lookup index.
+- `20261008000000_phase4_creative_grants_fixup.sql` — grants the missing **UPDATE** on
+  `markting_creative_assets` (the asset upsert uses `ON CONFLICT ... DO UPDATE`, which needs UPDATE as
+  well as INSERT; the original migration granted only `select, insert`, so the real-Postgres CI lane
+  failed with `permission denied for table markting_creative_assets`). Also re-asserts the full grant
+  set + RLS idempotently and adds the membership reverse-lookup index. Forward-only.
 
 ## Tests
 
