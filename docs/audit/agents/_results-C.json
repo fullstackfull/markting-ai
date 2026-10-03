@@ -2881,5 +2881,1341 @@
   "disagreements": "engine/docs/architecture/tools-and-context.md:28 says tool results are \"typed, bounded summaries\": summarize_window (14,401 chars measured) and compare_periods (per-account growth) are not bounded. tools-and-context.md:34-42 says every offloaded artifact records a local path: the on-disk metadata does (artifacts.py:106) but the model-facing stub does not (offload.py:44-51). tools/artifacts.py:122 claims one row per line: indent=1 produces ~30 lines per row. tools-and-context.md:48-50 says the runtime cannot read coding-agent files or paths outside its root: /AGENTS.md, /CLAUDE.md, /src/**, /tests/**, /docs/** are readable (local.py:30-49, backend read succeeded). The live skills prompt tells the model skills may contain executable scripts while execute is hidden (authorization.py:22). docs/ARCHITECTURE.md section 3.6 (middleware order, 6/6000 defaults) agrees with the code.",
   "confidence": 0.8,
   "not_verified": "Live Pipeboard catalog size and tool description lengths (no credentials may be set), so selector-cost and compare_periods-at-scale numbers are extrapolations. Behaviour on the Managed Deep Agents path (agent.py -> managed_deepagents.define_deep_agent), which adds its own memory/instructions and backend, was not executed. Whether the deployment's Anthropic/OpenAI tier accepts the 1M-token requests the default compaction assumes. Exact tokenizer counts (chars/4 heuristic; Arabic ratio inferred). read_file of repository source was verified at the FilesystemBackend layer plus code reading of the guard and permissions, not through a full graph invocation."
+ },
+ "C10": {
+  "agent_id": "C10",
+  "role": "AI cost engineer",
+  "report_path": "docs/audit/agents/C10.md",
+  "scope": "Model-cost estimation for the paid-media engine and its adport/host glue: prompt and tool footprint (instructions.md, skills, deepagents base prompt, tool schemas), the scripted demo turn (5 analysis + 3 proposal calls), retry/timeout/call-cap/offload/compaction middleware, prompt caching, the no-model report path, adport rate limits, plan economics and metering; per-chat, per-report, per-account-daily and per-organization-monthly estimates with an explicitly labelled price assumption table; cost-control recommendations. No code was changed.",
+  "files_inspected": [
+   "engine/src/paid_media_agent/config.py",
+   "engine/src/paid_media_agent/assembly.py",
+   "engine/src/paid_media_agent/middleware/tool_selection.py",
+   "engine/src/paid_media_agent/middleware/offload.py",
+   "engine/src/paid_media_agent/middleware/timeout.py",
+   "engine/src/paid_media_agent/middleware/authorization.py",
+   "engine/src/paid_media_agent/runtime/local.py",
+   "engine/src/paid_media_agent/runtime/profiles.py",
+   "engine/src/paid_media_agent/testing/demo_script.py",
+   "engine/src/paid_media_agent/testing/scripted_model.py",
+   "engine/src/paid_media_agent/reports/cadence.py",
+   "engine/src/paid_media_agent/reports/bridge.py",
+   "engine/src/paid_media_agent/cli.py",
+   "engine/src/paid_media_agent/surfaces/api/app.py",
+   "engine/src/paid_media_agent/surfaces/runner.py",
+   "engine/src/paid_media_agent/admin/model_presets.py",
+   "engine/instructions.md",
+   "engine/workspace/skills/**",
+   "engine/schedules/weekly_report.py",
+   "engine/schedules/monthly_report.py",
+   "engine/pyproject.toml",
+   "engine/uv.lock",
+   "engine/.venv/lib/python3.11/site-packages/deepagents/graph.py",
+   "engine/.venv/lib/python3.11/site-packages/deepagents/middleware/summarization.py",
+   "engine/.venv/lib/python3.11/site-packages/langchain/agents/middleware/model_retry.py",
+   "engine/.venv/lib/python3.11/site-packages/langchain/agents/middleware/model_call_limit.py",
+   "engine/.venv/lib/python3.11/site-packages/langchain/agents/middleware/provider_tool_search.py",
+   "engine/.venv/lib/python3.11/site-packages/langchain_anthropic/chat_models.py",
+   "engine/.venv/lib/python3.11/site-packages/langchain_anthropic/data/_profiles.py",
+   "services/engine-demo/serve_demo.py",
+   "platform/apps/cloud/lib/markting/assistant.ts",
+   "platform/apps/cloud/lib/markting/engine-client.ts",
+   "platform/apps/cloud/lib/markting/env.ts",
+   "platform/apps/cloud/lib/markting/repository.ts",
+   "platform/apps/cloud/app/api/assistant/messages/route.ts",
+   "platform/apps/cloud/app/api/reports/engine/route.ts",
+   "platform/apps/cloud/app/dashboard/assistant/assistant-chat.tsx",
+   "platform/apps/cloud/lib/cloud/plans.ts",
+   "platform/apps/cloud/lib/cloud/plan-limit.ts",
+   "platform/apps/cloud/lib/cloud/repository.ts",
+   ".env.example",
+   "docker-compose.yml",
+   "docs/TODO.md",
+   "docs/ARCHITECTURE.md",
+   "docs/PHASE0-REPORT.md"
+  ],
+  "tests_executed": [
+   "cd engine && uv run --frozen python <scratchpad>/c10/capture.py (instrumented scripted demo, 8 model calls captured) => 0",
+   "cd engine && uv run --frozen pytest -q tests/unit/test_report_cadence.py tests/behavior/test_scripted_behavior.py tests/contract/test_read_path_graph.py tests/unit/test_config_and_registry.py => 1 (17 passed, 1 failed due to untracked engine/workspace/KILL_SWITCH leftover)",
+   "cd engine && uv run --frozen pytest -q ../services/engine-demo/tests => 0 (7 passed)",
+   "cd engine && env -u ANTHROPIC_API_KEY uv run --frozen python -c \"init_chat_model('anthropic:claude-sonnet-4-6', timeout=120, max_retries=2)\" => 0 (max_tokens=128000, thinking=None)",
+   "grep -rn -iE 'cache_control|prompt_cach|usage_metadata|input_tokens|output_tokens|token_usage' engine/src/paid_media_agent => 1 (no matches)",
+   "git status --short => 0 (no files outside docs/audit/agents touched)"
+  ],
+  "findings": [
+   {
+    "id": "C10-01",
+    "title": "No token or cost accounting anywhere in the stack",
+    "severity": "GAP",
+    "classification": "VERIFIED_CODE",
+    "evidence": [
+     "grep -rn -iE 'cache_control|usage_metadata|input_tokens|output_tokens|token_usage' engine/src/paid_media_agent => exit 1",
+     "grep over services/ and platform/apps/cloud for token_usage|quota|credits|llm_cost => only scripted:demo hits",
+     "docs/TODO.md:8",
+     "engine/src/paid_media_agent/admin/actions.py:219,905"
+    ],
+    "description": "ChatAnthropic returns usage_metadata on every AIMessage but engine, host and adport never record, attribute or expose it; the only hook is optional LangSmith tracing. Threads are already namespaced per org/user (assistant.ts:35-37) so attribution is feasible but absent.",
+    "recommendation": "Add a wrap_model_call usage middleware persisting {org,user,thread,model,input,cached_input,output,est_cost}; roll up per org for billing; alert at budget thresholds."
+   },
+   {
+    "id": "C10-02",
+    "title": "No spend quota; 120 assistant turns/min/user rate limit is throughput-only (P1 once MARKTING_ENGINE_MODE=live)",
+    "severity": "P1",
+    "classification": "VERIFIED_CODE",
+    "evidence": [
+     "platform/apps/cloud/lib/cloud/repository.ts:355",
+     "platform/apps/cloud/app/api/assistant/messages/route.ts:13",
+     "engine/src/paid_media_agent/config.py:120",
+     "engine/src/paid_media_agent/assembly.py:257-259",
+     "platform/apps/cloud/lib/cloud/plans.ts:11-21",
+     "platform/apps/cloud/lib/cloud/plan-limit.ts:1",
+     ".env.example:51 and docker-compose.yml:51 (default demo => $0)"
+    ],
+    "description": "Only a 40-call per-run cap exists; no per-thread, per-caller or per-organization budget in engine, host or adport, and plans have no usage dimension. Estimated (price table is an assumption): a light Free seat costs ~$106/month on Sonnet 4.6, a Premium org ~$1,448/month vs EUR 79 revenue, and one seat can theoretically drive ~120 x $4.36 = ~$520/min at the 40-call cap. Conditional on live mode; the shipped default is the $0 scripted demo.",
+    "recommendation": "Per-organization monthly token/dollar budget enforced in adport (reuse the 402 PLAN_LIMIT contract), lower the assistant rate limit (e.g. 10/min, 200/day), add thread_limit to ModelCallLimitMiddleware and an org kill switch."
+   },
+   {
+    "id": "C10-03",
+    "title": "No prompt caching: ~5.6K-token stable prefix and full transcript re-billed on every call",
+    "severity": "P2",
+    "classification": "VERIFIED_RUNTIME",
+    "evidence": [
+     "scratchpad c10/calls.json: system 7,562 chars and tools 21,217 chars identical on all 8 calls",
+     "grep for cache_control in engine/src => exit 1",
+     "engine/.venv/.../langchain_anthropic/chat_models.py:1578-1583 (breakpoints only when cache_control kwarg passed)",
+     "engine/src/paid_media_agent/assembly.py:263 (date block last, prefix is cache-friendly)"
+    ],
+    "description": "The prefix is deterministic and cache-friendly but no breakpoint is ever set, so every call pays full input price for the system prompt, tool schemas and the growing history. Estimated savings ~70% on a fresh turn ($0.32 -> ~$0.10) and ~85% on a 10-turn thread ($17.77 -> ~$2.49) on Sonnet 4.6.",
+    "recommendation": "Pass cache_control={'type':'ephemeral'} (top-level auto caching) or set breakpoints on system/tools and the last message in a middleware; verify usage.cache_read_input_tokens > 0."
+   },
+   {
+    "id": "C10-04",
+    "title": "Unbounded context growth: compaction only at ~850K tokens, UI reuses one thread per session",
+    "severity": "P2",
+    "classification": "VERIFIED_CODE",
+    "evidence": [
+     "engine/.venv/.../deepagents/middleware/summarization.py:274-286 (trigger fraction 0.85, keep 0.10)",
+     "engine/.venv/.../langchain_anthropic/data/_profiles.py:361 (max_input_tokens 1,000,000)",
+     "engine/.venv/.../deepagents/graph.py:803 (summarizer = main model)",
+     "platform/apps/cloud/app/dashboard/assistant/assistant-chat.tsx:25,45",
+     "services/engine-demo/serve_demo.py:208-221 (Postgres checkpointer)"
+    ],
+    "description": "History is re-sent on every call of every later turn; estimated turn cost grows ~$0.32 per prior turn on Sonnet 4.6 (turn 10 ~ $3.23, 20-turn thread ~ $68 uncached). When compaction fires it is a ~850K-token call on the main model.",
+    "recommendation": "Explicit SummarizationMiddleware with trigger ~60K tokens and a Haiku summarizer; new engine thread per conversation after N turns or idle period."
+   },
+   {
+    "id": "C10-05",
+    "title": "Client-side timeouts abandon runs that keep spending on the engine",
+    "severity": "P2",
+    "classification": "INFERRED",
+    "evidence": [
+     "platform/apps/cloud/lib/markting/env.ts:18 (240,000 ms default)",
+     "platform/apps/cloud/lib/markting/engine-client.ts:73,82",
+     "platform/apps/cloud/app/api/assistant/messages/route.ts:7 (maxDuration 300)",
+     "engine/src/paid_media_agent/surfaces/api/app.py:92 (awaits run, no deadline/cancel)",
+     "engine/src/paid_media_agent/middleware/timeout.py:36 + assembly.py:71,255 (up to 3 x 120 s per call, 40 calls per run)"
+    ],
+    "description": "adport aborts at 240 s and reports the engine unreachable while the engine run continues to completion and is billed; the user's natural retry starts a second concurrent run on the same thread. Continuation after disconnect is inferred from code, not exercised at runtime.",
+    "recommendation": "Run-level wall-clock budget in the engine aligned with MARKTING_ENGINE_TIMEOUT_MS, cancellation on disconnect, per-thread run dedupe, async job + poll/stream for long turns."
+   },
+   {
+    "id": "C10-06",
+    "title": "Retry amplification is uncounted by the call cap and can bill partial generations",
+    "severity": "P3",
+    "classification": "VERIFIED_CODE",
+    "evidence": [
+     "engine/src/paid_media_agent/assembly.py:170 (SDK max_retries=2)",
+     "engine/src/paid_media_agent/assembly.py:71,255 (ModelRetryMiddleware max_retries=2)",
+     "engine/.venv/.../langchain/agents/middleware/model_retry.py:119-125 (default retry_on any exception, backoff 2.0/1.0/60.0)",
+     "engine/.venv/.../langchain/agents/middleware/model_call_limit.py:168,236 (before_model/after_model hooks)",
+     "engine/src/paid_media_agent/middleware/timeout.py:36"
+    ],
+    "description": "Up to 9 HTTP attempts per logical model call; the local 120 s TimeoutError is retried; retries do not count toward the 40-call run cap. Billing of server-side generations cancelled client-side is inferred, not verified.",
+    "recommendation": "Retry only transient provider errors, count attempts against the run budget, prefer streaming so the timeout guard sees progress."
+   },
+   {
+    "id": "C10-07",
+    "title": "max_tokens left at the profile default of 128,000",
+    "severity": "P3",
+    "classification": "VERIFIED_RUNTIME",
+    "evidence": [
+     "env -u ANTHROPIC_API_KEY uv run python -c init_chat_model(...) => max_tokens=128000, thinking=None (exit 0)",
+     "engine/.venv/.../langchain_anthropic/chat_models.py:1390-1397",
+     "engine/.venv/.../langchain_anthropic/data/_profiles.py:362",
+     "engine/src/paid_media_agent/assembly.py:170-174 (no max_tokens kwarg)"
+    ],
+    "description": "The only practical ceiling on output per call is the 120 s timeout; a chat agent instructed to keep tables in files never needs 128K output.",
+    "recommendation": "Set max_tokens ~4,096-8,192 for chat turns in resolve_model."
+   },
+   {
+    "id": "C10-08",
+    "title": "Cheaper-model routing exists only for the portable selector path; recommended gateway preset is the more expensive path",
+    "severity": "P3",
+    "classification": "VERIFIED_CODE",
+    "evidence": [
+     "engine/src/paid_media_agent/config.py:116",
+     "engine/src/paid_media_agent/assembly.py:217-229",
+     "engine/src/paid_media_agent/middleware/tool_selection.py:75-83,97-100,115-118,159-176",
+     "engine/src/paid_media_agent/admin/model_presets.py:11-20",
+     "engine/.venv/.../deepagents/graph.py:803"
+    ],
+    "description": "PAID_MEDIA_TOOL_SELECTOR_MODEL is consulted only on the portable path; with the Anthropic default it is never built; the summarizer is hard-wired to the main model; the console's recommended LangSmith gateway preset disables native tool search and therefore adds a selector LLM call per step on the main model unless a cheaper selector is configured.",
+    "recommendation": "Default the selector to Haiku 4.5 whenever the portable path is active; make the summarizer model configurable; document the cost implication of the gateway preset."
+   },
+   {
+    "id": "C10-09",
+    "title": "Local write demo and behaviour test fail because of an untracked host-written KILL_SWITCH (observation)",
+    "severity": "P3",
+    "classification": "VERIFIED_TEST",
+    "evidence": [
+     "uv run --frozen pytest -q tests/behavior/test_scripted_behavior.py ... => exit 1 (kill_switch: engine/workspace/KILL_SWITCH exists)",
+     "git ls-files engine/workspace/KILL_SWITCH => empty (untracked)",
+     "services/engine-demo/serve_demo.py:173-180 (engage_kill_switch writes it)"
+    ],
+    "description": "Running the markting host once leaves a kill-switch file in the shared engine workspace, after which the upstream demo --with-proposal and its behaviour test fail locally. Not a cost defect; routed to the engine/test workstream.",
+    "recommendation": "Point the host's kill switch at its own path via PAID_MEDIA_KILL_SWITCH_PATH instead of the shared workspace."
+   }
+  ],
+  "key_findings": [
+   "Default deployment is the $0 scripted demo (MARKTING_ENGINE_MODE=demo); every cost finding is conditional on switching to live.",
+   "Measured (VERIFIED_RUNTIME): one scripted demo turn = 5 model calls (~33K input tokens) + 3 for a proposal (~26K); each call carries a 7.6K-char system prompt and 14.5K chars of always-on tool schemas, uncached.",
+   "Estimated on Sonnet 4.6 (price table is an assumption): fresh live analysis turn ~$0.32, tenth turn of the same thread ~$3.23, 10-turn thread ~$18; light seat ~$106/month vs Operator plan EUR 19 for two seats; caching alone cuts these by ~70-85%.",
+   "The deterministic report path (CLI `report`, host POST /reports/run, adport Reports page) makes zero model calls (VERIFIED_CODE/TEST); only the MDA schedules use the agent for reports.",
+   "No prompt caching, no token/cost metering, no spend quota anywhere; adport's 120 req/min/user limiter allows ~$500+/min theoretical burn at the 40-call cap.",
+   "Context never compacts below ~850K tokens (deepagents 0.85 x 1M profile) while the UI reuses one engine thread per session, so cost grows linearly with conversation length.",
+   "MODEL_RETRY_ATTEMPTS lives in assembly.py (not config.py) and retries are not counted by the call cap; SDK + middleware retries allow up to 9 HTTP attempts per logical call.",
+   "max_tokens defaults to 128,000 and thinking is off; the 120 s timeout is the only practical output bound."
+  ],
+  "disagreements": "The workstream brief places MODEL_RETRY_ATTEMPTS in config.py; it is a module constant in assembly.py:71 and is not env-configurable (only timeout and max calls are, config.py:118-121). The \"report command (no model)\" claim holds for the CLI and /reports/run but not for engine/schedules/weekly_report.py and monthly_report.py, which run the full agent. The setup console's \"recommended\" LangSmith gateway preset (model_presets.py:11-20) is, per tool_selection.py:75-83,97-100, the more expensive path because native tool search is disabled and a selector LLM call is added per step on the main model unless PAID_MEDIA_TOOL_SELECTOR_MODEL is set. docs/TODO.md:8 lists per-org metering as an open question; code confirms nothing is metered, so docs and code agree but the gap is a business-model risk rather than a backlog item. PHASE0-REPORT.md:88 asks for a long client timeout; implemented (240 s / 300 s) but the engine has no matching run deadline.",
+  "confidence": 0.65,
+  "not_verified": "Actual provider token counts (no count_tokens call, no live key; 4 chars/token heuristic used, JSON-heavy bound at 3.3; Arabic text tokenization not measured). Real live-turn call counts and output lengths for Sonnet 4.6 (9-call shape is inferred from the scripted trace plus instructions.md's required skill reads). Whether generations cancelled client-side at 120 s are billed. Whether FastAPI/uvicorn cancels the running graph on client disconnect (C10-05 continuation inferred from code only). Current list prices and cache multipliers (taken from the claude-api skill cache dated 2026-09-25). Non-model costs (MDA/LangSmith hosting, Pipeboard fees, WeasyPrint CPU)."
+ },
+ "C12": {
+  "agent_id": "C12",
+  "role": "AI observability engineer",
+  "report_path": "docs/audit/agents/C12.md",
+  "scope": "Traceability per request from user prompt through model/tool execution to ad-change outcome, across engine/ (paid_media_agent) and platform/apps/cloud glue: LangSmith/tracing, logging config, redaction, read audit, adport audit_events, markting_engine_proposals provenance, outcome recording.",
+  "files_inspected": [
+   "engine/src/paid_media_agent/cli.py",
+   "engine/src/paid_media_agent/middleware/redaction.py",
+   "engine/src/paid_media_agent/tools/reads.py",
+   "engine/src/paid_media_agent/testing/demo_script.py",
+   "engine/src/paid_media_agent/surfaces/api/app.py",
+   "engine/src/paid_media_agent/surfaces/runner.py",
+   "engine/src/paid_media_agent/tools/writes.py",
+   "engine/src/paid_media_agent/domain/proposals.py",
+   "engine/src/paid_media_agent/persistence/postgres.py",
+   "engine/src/paid_media_agent/middleware/authorization.py",
+   "platform/apps/cloud/lib/markting/engine-client.ts",
+   "platform/apps/cloud/lib/markting/assistant.ts",
+   "platform/apps/cloud/lib/markting/bridge.ts",
+   "platform/apps/cloud/lib/markting/repository.ts",
+   "platform/apps/cloud/lib/markting/runtime.ts",
+   "platform/apps/cloud/lib/cloud/repository.ts",
+   "platform/apps/cloud/app/api/approvals/[id]/apply/route.ts",
+   "platform/apps/cloud/app/api/approvals/[id]/reject/route.ts",
+   "platform/supabase/migrations/20261002000000_markting_bridge.sql",
+   "platform/supabase/migrations/20260817171039_cloud_initial_schema.sql",
+   "platform/supabase/migrations/20260828120000_cloud_plans_and_account_scope.sql"
+  ],
+  "tests_executed": [
+   "grep -rnE 'LANGSMITH_TRACING|LANGCHAIN_TRACING|LANGSMITH_PROJECT|OTEL|opentelemetry|prometheus|statsd|datadog|sentry' <source trees> => 1 (no matches in source/config/docs)",
+   "grep -rn 'usage_metadata|input_tokens|output_tokens|total_tokens|token_usage' engine/src --include=*.py => 1 (no matches)",
+   "grep -rn '\\.audit' engine/src --include=*.py => only reads.py:210-211 writer and demo_script.py:250 reader",
+   "grep -rn \"'expired'\" platform/apps/cloud --include=*.ts | grep -v test => no caller passes 'expired' to markPendingOutcome",
+   "grep -rn 'logger\\.|_LOG' engine/src --include=*.py | grep -v test => 5 log sites total + basicConfig"
+  ],
+  "findings": [
+   {
+    "id": "C12-01",
+    "title": "No end-to-end trace/correlation id across cloud → engine",
+    "severity": "P2",
+    "classification": "VERIFIED_CODE",
+    "evidence": [
+     "platform/apps/cloud/lib/markting/engine-client.ts:84-99",
+     "engine/src/paid_media_agent/surfaces/api/app.py:39-168",
+     "engine/src/paid_media_agent/surfaces/runner.py:86-89"
+    ],
+    "description": "A user action spans Next route -> EngineClient -> FastAPI -> LangGraph, but nothing generates or forwards a correlation id. EngineClient sends only authorization/content-type/accept headers; the engine API has no request-id middleware and no access logging; RunnableConfig carries only configurable={thread_id,caller_ref}.",
+    "recommendation": "Mint a request id at the cloud route, forward as a header, bind in engine logs and RunnableConfig.metadata, stamp onto audit_events and markting_engine_proposals."
+   },
+   {
+    "id": "C12-02",
+    "title": "LangSmith tracing never configured; only tracing call disables it",
+    "severity": "P2",
+    "classification": "VERIFIED_CODE",
+    "evidence": [
+     "engine/src/paid_media_agent/testing/demo_script.py:207-210",
+     "grep LANGSMITH_TRACING|LANGCHAIN_TRACING|OTEL => exit 1",
+     "engine/src/paid_media_agent/assembly.py:154"
+    ],
+    "description": "The sole langsmith runtime use is tracing_context(enabled=False) in the fixture demo. No source/config enables LangSmith/OTel tracing, sets a project, or attaches run metadata in the self-hosted serve path. RunnableConfig has no metadata/tags/run_name, so even manual LANGSMITH_TRACING would not attribute traces to org/user/thread.",
+    "recommendation": "Enable one tracing backend in serve and bind org/user/thread/request-id as run metadata/tags."
+   },
+   {
+    "id": "C12-03",
+    "title": "No token or cost accounting anywhere in the engine",
+    "severity": "P2",
+    "classification": "VERIFIED_CODE",
+    "evidence": [
+     "grep usage_metadata engine/src => exit 1",
+     "engine/src/paid_media_agent/surfaces/runner.py:26-32",
+     "engine/src/paid_media_agent/admin/actions.py:360,380-388"
+    ],
+    "description": "The serving model-call path records no tokens, cost, or latency. RunOutcome exposes only text/interrupted/proposal/receipt. The only latency measurement is the doctor test-model action, not serving. docs/TODO.md:8 lists per-org metering as open; code confirms absence.",
+    "recommendation": "Capture response.usage_metadata per model call, convert to cost via a price table, emit tokens+cost+latency per turn keyed by org/user/request-id."
+   },
+   {
+    "id": "C12-04",
+    "title": "Host read audit is in-memory, capped, consumed only by the demo",
+    "severity": "P2",
+    "classification": "VERIFIED_CODE",
+    "evidence": [
+     "engine/src/paid_media_agent/tools/reads.py:65-66",
+     "engine/src/paid_media_agent/tools/reads.py:137",
+     "engine/src/paid_media_agent/tools/reads.py:210-219",
+     "engine/src/paid_media_agent/testing/demo_script.py:250"
+    ],
+    "description": "Every provider read is appended to a process-local list (fields tool/account_alias/catalog_revision/policy/artifact_id, no timestamp/caller/window) capped at AUDIT_LIMIT=500 and read only by the demo; servers never persist or expose it. Which account/tool/window a model read per request is not recoverable server-side.",
+    "recommendation": "Persist read-audit rows (timestamp, caller_ref, thread_id, request-id, window, row_count, artifact_id) to durable storage or structured logs."
+   },
+   {
+    "id": "C12-05",
+    "title": "Near-zero operational logging in the engine; no structured/request logging",
+    "severity": "P2",
+    "classification": "VERIFIED_CODE",
+    "evidence": [
+     "engine/src/paid_media_agent/cli.py:23-26",
+     "engine/src/paid_media_agent/middleware/authorization.py:82,89",
+     "engine/src/paid_media_agent/surfaces/slack/delivery.py",
+     "engine/src/paid_media_agent/tools/pipeboard.py:119"
+    ],
+    "description": "_configure_logging sets only level+plain format, no JSON/handlers/request context. The entire engine has 5 log sites (authz x2, slack x2, pipeboard x1); the serving path, graph, ReadDispatcher.execute and write execution log nothing on success or failure. No per-turn log of model/latency/tool calls/caller.",
+    "recommendation": "Emit structured JSON per-turn logs bound to request-id/org/user/thread covering model, strategy, tool outcomes, latency, sanitized errors."
+   },
+   {
+    "id": "C12-06",
+    "title": "Cloud chat turns write no usage/audit record; audit_events is a change-log not a request log",
+    "severity": "P3",
+    "classification": "VERIFIED_CODE",
+    "evidence": [
+     "platform/apps/cloud/lib/markting/assistant.ts:30-79",
+     "platform/supabase/migrations/20260817171039_cloud_initial_schema.sql:152-160"
+    ],
+    "description": "runAssistantTurn records audit/provenance only inside the awaiting_approval branch; a plain question->answer turn records nothing. audit_events events are all connection or proposal-lifecycle. 'User X asked P, got A at T' has no cloud-side record, and thread messages carry no model/token/latency.",
+    "recommendation": "Record a lightweight per-turn usage row (org,user,thread,request-id,latency,tokens) distinct from the change-audit."
+   },
+   {
+    "id": "C12-07",
+    "title": "Write-outcome provenance is real and tenant-scoped, but the 'expired' outcome is never written",
+    "severity": "P3",
+    "classification": "VERIFIED_CODE",
+    "evidence": [
+     "platform/supabase/migrations/20261002000000_markting_bridge.sql:40-60",
+     "platform/apps/cloud/app/api/approvals/[id]/apply/route.ts:29",
+     "platform/apps/cloud/lib/cloud/repository.ts:420-425",
+     "engine/src/paid_media_agent/domain/proposals.py:208"
+    ],
+    "description": "Provenance row is rich and RLS-scoped; markPendingOutcome is called on apply/reject and the engine keeps an append-only history. But status enum 'expired' is never written by any caller, and PostgresPendingStore.sweep only sets consumed_at and is invoked nowhere outside tests, so expired previews leave markting_engine_proposals.status stuck at 'pending'.",
+    "recommendation": "Run the pending sweep on a schedule and have it set the provenance row to 'expired'."
+   },
+   {
+    "id": "C12-08",
+    "title": "Redaction covers tool output/errors but not logs, prompts, or stored artifacts",
+    "severity": "P3",
+    "classification": "VERIFIED_CODE",
+    "evidence": [
+     "engine/src/paid_media_agent/middleware/redaction.py:16-28",
+     "engine/src/paid_media_agent/middleware/redaction.py:49-87",
+     "engine/src/paid_media_agent/cli.py:23-26"
+    ],
+    "description": "RedactionMiddleware redacts only model-facing ToolMessage content and tool exceptions; it is not applied to stdlib logging or persisted artifacts/thread messages, and patterns are credential-shaped only (no PII). New request/trace logging would bypass redaction.",
+    "recommendation": "Route any new structured logs/traces through redact() and extend patterns to PII before enabling prompt/response capture."
+   }
+  ],
+  "capabilities": [
+   {
+    "capability": "trace_id / correlation id per request",
+    "rating": "MISSING",
+    "evidence": "engine-client.ts:84-99 sends no trace header; app.py no request-id middleware; runner.py:89",
+    "provider": "cloud+engine"
+   },
+   {
+    "capability": "model spec per request",
+    "rating": "DOCUMENTED_NOT_IMPLEMENTED",
+    "evidence": "not logged per turn; /health:87 shows selection strategy only",
+    "provider": "engine"
+   },
+   {
+    "capability": "tokens",
+    "rating": "MISSING",
+    "evidence": "grep usage_metadata engine/src => exit 1",
+    "provider": "engine"
+   },
+   {
+    "capability": "latency (serving)",
+    "rating": "MISSING",
+    "evidence": "RunOutcome has none; only admin/actions.py:380 doctor test",
+    "provider": "engine"
+   },
+   {
+    "capability": "tool calls",
+    "rating": "EXISTS_BUT_LIMITED",
+    "evidence": "ReadDispatcher.audit in-memory demo-only reads.py:65-66,211; authz denials authorization.py:82,89",
+    "provider": "engine"
+   },
+   {
+    "capability": "failures",
+    "rating": "EXISTS_BUT_LIMITED",
+    "evidence": "errors sanitized to model redaction.py:65-74; only slack/pipeboard/authz failures logged",
+    "provider": "engine"
+   },
+   {
+    "capability": "cost",
+    "rating": "MISSING",
+    "evidence": "no token/price accounting; docs/TODO.md:8",
+    "provider": "engine"
+   },
+   {
+    "capability": "user",
+    "rating": "PARTIAL",
+    "evidence": "cloud audit_events.actor_user_id; engine sees only caller_ref service token + encoded thread_id",
+    "provider": "cloud+engine"
+   },
+   {
+    "capability": "organization",
+    "rating": "EXISTS_BUT_LIMITED",
+    "evidence": "cloud rows org-scoped via RLS; engine has no org concept beyond thread_id prefix",
+    "provider": "cloud"
+   },
+   {
+    "capability": "recommendation (proposal)",
+    "rating": "EXISTS_AND_STRONG",
+    "evidence": "markting_bridge.sql:40-60 + proposals.py:208 history",
+    "provider": "cloud+engine"
+   },
+   {
+    "capability": "approval",
+    "rating": "EXISTS_AND_STRONG",
+    "evidence": "audit_events validated/applied/rejected; ApprovalClaim persisted persistence/postgres.py",
+    "provider": "cloud+engine"
+   },
+   {
+    "capability": "outcome (applied/rejected/expired)",
+    "rating": "EXISTS_BUT_LIMITED",
+    "evidence": "markPendingOutcome apply/reject only; expired never written (C12-07)",
+    "provider": "cloud"
+   },
+   {
+    "capability": "LangSmith tracing (self-hosted)",
+    "rating": "DOCUMENTED_NOT_IMPLEMENTED",
+    "evidence": "only tracing_context(enabled=False) demo_script.py:207-210; grep tracing env => exit 1",
+    "provider": "engine"
+   }
+  ],
+  "key_findings": [
+   "Self-hosted path has essentially no AI observability floor: no trace/correlation id (C12-01), tracing never enabled and the only tracing call disables it (C12-02), ~5 log sites total and no per-turn logging (C12-05).",
+   "No token or cost accounting anywhere in the engine (grep usage_metadata => exit 1); RunOutcome carries no tokens/latency — per-org metering is absent, matching docs/TODO.md:8.",
+   "The host read-audit is a demo-only in-memory ring buffer (cap 500) that servers never persist or expose — data-access per request is not recoverable (C12-04).",
+   "Write provenance/outcome chain is genuinely strong and tenant-scoped (markting_engine_proposals + audit_events + engine ProposalRecord.history), the one real observability asset.",
+   "But the 'expired' outcome is never written and the pending sweep has no scheduler, so expired previews stay 'pending' forever (C12-07).",
+   "Plain Q&A chat turns produce no cloud-side usage/audit record; audit_events is a change-log, not a request/usage log (C12-06).",
+   "Docs oversell LangSmith tracing for the self-hosted stack; it applies only to managed MDA, which is external to this repo."
+  ],
+  "disagreements": "docs/ARCHITECTURE.md:776-777 and engine/.env.example:31-33 present LANGSMITH_API_KEY as serving 'tracing', but the serving code never enables tracing and the only langsmith.tracing_context call DISABLES it (demo_script.py:207-210). engine/README.md:141 / OPERATIONS.md:62-68 ('open the printed LangSmith URL to inspect your agent') hold for managed MDA only; the compose/self-hosted stack has no observability wired. markting_engine_proposals.status advertises 'expired' (bridge.sql:54) but no code writes it and the sweep has no scheduler.",
+  "confidence": 0.86,
+  "not_verified": "Runtime behaviour with LANGSMITH_TRACING=true manually set (no key/run executed — would need VERIFIED_RUNTIME); whether any deployment cron invokes PostgresPendingStore.sweep outside this repo (none found in-tree); whether the managed-MDA path adds run metadata the self-hosted path lacks (MDA runtime is external to this repo). Grep-based negatives (no tokens, no tracing env) are strong but bounded to inspected source trees, excluding node_modules/.next build artifacts."
+ },
+ "C11": {
+  "agent_id": "C11",
+  "role": "AI reliability specialist",
+  "report_path": "docs/audit/agents/C11.md",
+  "scope": "Engine failure handling: retries/timeouts/limits (assembly.py, middleware/timeout.py), run error handling and streaming (surfaces/runner.py), HTTP status mapping (surfaces/api/app.py, views.py), provider error contract (tools/providers.py), MCP catalog load & invocation (tools/pipeboard.py), mutation/idempotency/readback (tools/writes.py, write_tools.py), and the adport bridge (engine-client.ts, assistant.ts, env.ts, messages/route.ts, assistant-chat.tsx). Focus: provider outages, partial failures, malformed responses, hung calls, duplicate submissions.",
+  "files_inspected": [
+   "engine/src/paid_media_agent/assembly.py",
+   "engine/src/paid_media_agent/middleware/timeout.py",
+   "engine/src/paid_media_agent/surfaces/runner.py",
+   "engine/src/paid_media_agent/surfaces/api/app.py",
+   "engine/src/paid_media_agent/surfaces/api/views.py",
+   "engine/src/paid_media_agent/tools/providers.py",
+   "engine/src/paid_media_agent/tools/pipeboard.py",
+   "engine/src/paid_media_agent/tools/writes.py",
+   "engine/src/paid_media_agent/tools/write_tools.py",
+   "engine/src/paid_media_agent/middleware/tool_selection.py",
+   "engine/src/paid_media_agent/admin/actions.py",
+   "engine/src/paid_media_agent/persistence/memory.py",
+   "engine/src/paid_media_agent/persistence/postgres.py",
+   "engine/src/paid_media_agent/runtime/profiles.py",
+   "engine/src/paid_media_agent/config.py",
+   "engine/src/paid_media_agent/surfaces/slack/service.py",
+   "engine/src/paid_media_agent/surfaces/slack/delivery.py",
+   "engine/.venv/lib/python3.11/site-packages/langchain/agents/middleware/model_retry.py",
+   "engine/.venv/lib/python3.11/site-packages/langchain/agents/middleware/_retry.py",
+   "services/engine-demo/serve_demo.py",
+   "platform/apps/cloud/lib/markting/engine-client.ts",
+   "platform/apps/cloud/lib/markting/assistant.ts",
+   "platform/apps/cloud/lib/markting/env.ts",
+   "platform/apps/cloud/app/api/assistant/messages/route.ts",
+   "platform/apps/cloud/app/dashboard/assistant/assistant-chat.tsx",
+   "engine/tests/contract/test_write_flows_graph.py",
+   "engine/tests/unit/test_runtime_surfaces.py",
+   "engine/tests/conftest.py",
+   "engine/tests/contract/helpers.py"
+  ],
+  "tests_executed": [
+   "uv run --frozen pytest -q tests/unit/test_runtime_surfaces.py -k model_timeout => 0 (1 passed)",
+   "uv run --frozen pytest -q tests/contract/test_write_flows_graph.py => 1 (11 failed/8 passed; all execute-path failures are kill_switch rejections from stale engine/workspace/KILL_SWITCH)",
+   "repro: fixture settings scripted:demo => execute_change receipt status=rejected reason='kill_switch: workspace/KILL_SWITCH exists'",
+   "repro: default Settings()+scripted model => final assistant text 'Model call failed after 3 attempts with ValueError: ProviderToolSearchMiddleware...' (confirms retry-swallow-to-text)",
+   "find engine -name KILL_SWITCH => engine/workspace/KILL_SWITCH present"
+  ],
+  "findings": [
+   {
+    "id": "C11-01",
+    "title": "Model-call failures returned to the user as HTTP 200 answers (English error sentinel), not errors",
+    "severity": "P2",
+    "classification": "VERIFIED_CODE",
+    "evidence": [
+     "engine/src/paid_media_agent/assembly.py:240",
+     "engine/.venv/lib/python3.11/site-packages/langchain/agents/middleware/model_retry.py:192",
+     "engine/.venv/lib/python3.11/site-packages/langchain/agents/middleware/model_retry.py:210",
+     "engine/src/paid_media_agent/surfaces/runner.py:131",
+     "engine/src/paid_media_agent/surfaces/api/app.py:91",
+     "engine/src/paid_media_agent/surfaces/api/views.py:23",
+     "platform/apps/cloud/lib/markting/engine-client.ts:101",
+     "platform/apps/cloud/lib/markting/assistant.ts:70",
+     "platform/apps/cloud/app/dashboard/assistant/assistant-chat.tsx:46",
+     "engine/src/paid_media_agent/admin/actions.py:1045",
+     "runtime repro => assistant message 'Model call failed after 3 attempts with ValueError: ...'"
+    ],
+    "description": "on_failure='continue' turns an exhausted model call into an AIMessage 'Model call failed after N attempts with <Type>: <msg>'. runner/outcome_view put it in outcome.text; app.py post_message returns 200; engine-client only treats non-2xx as errors; assistant.ts returns outcome.text verbatim; the chat UI renders it in a <pre>. Only admin/actions.py:1045 detects the sentinel and marks it a failure.",
+    "recommendation": "Propagate a typed failure (or detect the sentinel in runner/outcome_view as admin does) and map to 5xx with a localized message; have the engine-client/assistant surface an error state, not chat text."
+   },
+   {
+    "id": "C11-02",
+    "title": "Deterministic/internal errors are retried as if transient, then swallowed",
+    "severity": "P2",
+    "classification": "VERIFIED_RUNTIME",
+    "evidence": [
+     "engine/.venv/lib/python3.11/site-packages/langchain/agents/middleware/_retry.py:70",
+     "engine/src/paid_media_agent/assembly.py:235",
+     "runtime repro: plain ValueError retried to exhaustion -> 'Model call failed after 3 attempts with ValueError'"
+    ],
+    "description": "default_retry_on returns True for every non-ModelError exception, so config/programming errors (ValueError, KeyError, serialization, unwrapped auth/400) are retried MODEL_RETRY_ATTEMPTS+1 times with backoff and then masked as a model answer rather than failing fast.",
+    "recommendation": "Set an explicit retry_on limited to transient classes (timeouts/429/5xx); let deterministic errors propagate immediately, combined with C11-01 for surfacing."
+   },
+   {
+    "id": "C11-03",
+    "title": "Nested retry layers and no per-request wall-clock cap",
+    "severity": "P2",
+    "classification": "VERIFIED_CODE",
+    "evidence": [
+     "engine/src/paid_media_agent/assembly.py:166",
+     "engine/src/paid_media_agent/assembly.py:240",
+     "engine/src/paid_media_agent/config.py:118",
+     "engine/src/paid_media_agent/config.py:120",
+     "engine/src/paid_media_agent/surfaces/api/app.py:91",
+     "engine/src/paid_media_agent/middleware/timeout.py:24"
+    ],
+    "description": "SDK max_retries=2 nested inside ModelRetryMiddleware max_retries=2 (middleware timeout bounds each attempt at 120s); up to ~360s+backoff per inference, up to 40 model calls/run, with no overall engine request deadline.",
+    "recommendation": "Add a run-level wall-clock deadline and/or reduce stacked retries; align server worker timeouts to the realistic worst case."
+   },
+   {
+    "id": "C11-04",
+    "title": "adport client timeout (240s) aborts while the engine keeps running (orphaned work, false 'unreachable')",
+    "severity": "P2",
+    "classification": "VERIFIED_CODE",
+    "evidence": [
+     "platform/apps/cloud/lib/markting/engine-client.ts:73",
+     "platform/apps/cloud/lib/markting/env.ts:18",
+     "platform/apps/cloud/lib/markting/engine-client.ts:81",
+     "platform/apps/cloud/lib/markting/assistant.ts:44",
+     "engine/src/paid_media_agent/surfaces/api/app.py:91"
+    ],
+    "description": "The client AbortController fires at MARKTING_ENGINE_TIMEOUT_MS (default 240s) and raises EngineError unreachable (503). A turn that exceeds that (C11-03) is not cancelled engine-side; it runs to completion (spending tokens) and advances the checkpoint while the user is told the engine is unreachable.",
+    "recommendation": "Honor client disconnect / enforce an engine deadline <= client timeout; return a resumable turn id for reconciliation."
+   },
+   {
+    "id": "C11-05",
+    "title": "No per-thread concurrency control; duplicate/retried submissions race the checkpointer",
+    "severity": "P2",
+    "classification": "VERIFIED_CODE",
+    "evidence": [
+     "engine/src/paid_media_agent/surfaces/runner.py:86",
+     "engine/src/paid_media_agent/persistence/memory.py:94",
+     "engine/src/paid_media_agent/persistence/postgres.py:237",
+     "platform/apps/cloud/app/api/assistant/messages/route.ts:14",
+     "platform/apps/cloud/lib/markting/assistant.ts:30",
+     "services/engine-demo/serve_demo.py:324"
+    ],
+    "description": "ThreadOwnershipStore.claim is ownership-only (returns True for the same caller every time), not a mutex; the message route carries no idempotency key. Two concurrent POSTs for the same thread (double-click, or a retry after the C11-04 abort) both call graph.ainvoke on the same thread_id, concurrently writing the LangGraph checkpoint. The reports endpoint uses an asyncio.Lock but message posting does not.",
+    "recommendation": "Serialize per thread_id (lock/DB advisory lock), reject a second in-flight turn with 409, and accept a client idempotency key."
+   },
+   {
+    "id": "C11-06",
+    "title": "Catalog/provider outage at load is silently swallowed into a degraded surface, loaded once per process",
+    "severity": "P2",
+    "classification": "VERIFIED_CODE",
+    "evidence": [
+     "engine/src/paid_media_agent/tools/pipeboard.py:111",
+     "engine/src/paid_media_agent/tools/pipeboard.py:95",
+     "engine/src/paid_media_agent/surfaces/api/app.py:80"
+    ],
+    "description": "load_endpoint catches all exceptions and returns [], so a down/slow MCP endpoint (20s load timeout) drops its tools; the catalog is loaded once per process ('restart to pick up changes') and /health still reports status ok. The agent runs with a partial/empty read surface until manual restart.",
+    "recommendation": "Expose per-endpoint load status in health/metadata, fail boot or mark unhealthy when endpoints are missing, and add periodic catalog refresh with backoff. (Not reachable in the default fixture-catalog demo host.)"
+   },
+   {
+    "id": "C11-07",
+    "title": "Write-execution reliability is strong in code but not test-green here and unreachable in product",
+    "severity": "P3",
+    "classification": "VERIFIED_CODE",
+    "evidence": [
+     "engine/src/paid_media_agent/tools/writes.py:819",
+     "engine/src/paid_media_agent/tools/writes.py:840",
+     "engine/src/paid_media_agent/tools/writes.py:855",
+     "engine/src/paid_media_agent/tools/writes.py:781",
+     "engine/src/paid_media_agent/tools/writes.py:810",
+     "engine/src/paid_media_agent/tools/writes.py:713",
+     "services/engine-demo/serve_demo.py:69",
+     "engine/tests/contract/test_write_flows_graph.py:378"
+    ],
+    "description": "One call_mutation attempt wrapped at 30s; ProviderTimeout/TimeoutError => outcome unknown with 'no retry was attempted'; idempotency key proposal:revision when configured; claim consumed (mark_used) with replay refusal before mutation; idempotent re-execute via cached receipt; bounded readback to an 'unknown' receipt. Correct anti-duplicate design, but the contract tests that assert it are red here (D1 kill switch) and the product swaps in ProposalOnlyWriteProvider so this path never runs a live write.",
+    "recommendation": "Make the kill-switch path hermetic in tests (resolve against workspace_root) so these contracts run green in CI."
+   },
+   {
+    "id": "C11-08",
+    "title": "Streaming surfaces can duplicate partial text when a model call fails mid-stream and retries",
+    "severity": "P3",
+    "classification": "INFERRED",
+    "evidence": [
+     "engine/src/paid_media_agent/surfaces/runner.py:158",
+     "engine/src/paid_media_agent/surfaces/slack/delivery.py:50",
+     "engine/src/paid_media_agent/surfaces/slack/delivery.py:85"
+    ],
+    "description": "runner._run emits text events as the model streams; ModelRetryMiddleware re-invokes on failure; Slack delivery accumulates last_text += event.text, so an attempt-1 fragment then the attempt-2 full reply would both appear. The API/adport path is non-streaming and unaffected.",
+    "recommendation": "Reset per-attempt stream state on retry or buffer text until the attempt succeeds."
+   },
+   {
+    "id": "C11-09",
+    "title": "Sync model-timeout path is a no-op (acceptable, documented)",
+    "severity": "P3",
+    "classification": "VERIFIED_CODE",
+    "evidence": [
+     "engine/src/paid_media_agent/middleware/timeout.py:24",
+     "engine/src/paid_media_agent/assembly.py:166"
+    ],
+    "description": "wrap_model_call (sync) returns handler(request) with no bound; the SDK timeout=120 is the only sync defense. All product surfaces use the async graph, so this is intentional; a future sync entrypoint would lose the hard cap against a post-headers gateway stall.",
+    "recommendation": "If a sync entrypoint is added, give it an equivalent hard bound."
+   }
+  ],
+  "key_findings": [
+   "Model-provider outages surface to end users as HTTP 200 chat replies containing the English string 'Model call failed after N attempts with <Type>: <msg>' — no error status, no retry, no localization; only the admin console detects this sentinel, the API and Slack do not (C11-01).",
+   "The retry middleware treats ALL non-ModelError exceptions as retryable (default_retry_on), so deterministic/config errors are retried 3x with backoff and then masked as a model 'answer' — verified at runtime with a ValueError (C11-02).",
+   "Retries are stacked (SDK max_retries=2 inside middleware max_retries=2) and there is no per-request wall-clock cap; the adport client aborts at 240s and reports a false 'engine unreachable' while the engine keeps running the turn uncancelled (C11-03, C11-04).",
+   "No per-thread concurrency control or idempotency key: concurrent/retried POSTs race the LangGraph checkpointer on the same thread_id (C11-05).",
+   "A Pipeboard MCP outage at catalog load is silently swallowed to an empty/partial tool surface, loaded once per process, with /health still reporting ok (C11-06).",
+   "The mutation path is genuinely robust against duplicate submissions (single attempt, no retry on timeout, idempotency key, claim consumption, idempotent re-execute, reconciling readback) — but it is unreachable in the product (ProposalOnlyWriteProvider) and its contract tests are currently red due to a stale KILL_SWITCH file (C11-07, D1).",
+   "The write-flow contract suite is non-hermetic: the kill-switch path resolves against the project root, so a leaked engine/workspace/KILL_SWITCH reddens 11/19 tests — a test-isolation defect, not an engine failure-handling bug (D1)."
+  ],
+  "disagreements": "D1: test_write_flows_graph.py is advertised as the proof of approval/mutation/readback contracts but 11/19 fail in this tree solely because of a stale engine/workspace/KILL_SWITCH (kill-switch path resolves against project root at runtime/profiles.py:58-60, not the per-test workspace_root) — a non-hermetic-test defect, not a product failure-handling bug; the documented reliability guarantees are therefore unverified by a green run here. D2: assembly.py:235-238 comment ('Transient model failures should not kill a run; bounded, and tool effects never repeat') is accurate for tool effects but understates that the same mechanism also swallows NON-transient failures and masks them as a successful 200 answer. D3: engine-client.ts documents a test that neither approve nor edit is ever requested (write safety) but there is no guard that a 200 body is a real answer rather than the failure sentinel — the client trusts any 2xx body.",
+  "confidence": 0.82,
+  "not_verified": "Live-model behavior (no credentials): (a) whether a real provider auth/400 is raised as a non-retryable ModelError (-> 500 at API) or as a plain exception (-> retried then 200 sentinel); (b) whether ProviderToolSearchMiddleware actually works against anthropic:claude-opus-4-8 with the installed langchain on the PROVIDER_NATIVE path; (c) real end-to-end Pipeboard MCP outage behavior. The write-execution no-retry/unknown guarantees are VERIFIED_CODE but could not be made VERIFIED_TEST because the contract suite is red from the stale KILL_SWITCH and I did not modify the tree. FastAPI's exact client-disconnect cancellation for C11-04 was reasoned from framework defaults, not instrumented.",
+  "capabilities": [
+   {
+    "capability": "Hard per-call async model timeout",
+    "rating": "EXISTS_AND_STRONG",
+    "evidence": "engine/src/paid_media_agent/middleware/timeout.py:30-38; test_runtime_surfaces.py model_timeout passed (exit 0)",
+    "provider": "engine"
+   },
+   {
+    "capability": "Bounded model retries on transient failure",
+    "rating": "EXISTS_BUT_LIMITED",
+    "evidence": "assembly.py:240; retries all non-ModelError (C11-02) and masks final failure as 200 text (C11-01)",
+    "provider": "engine"
+   },
+   {
+    "capability": "Surfacing model failure as an error to the caller",
+    "rating": "EXISTS_BUT_LIMITED",
+    "evidence": "only admin/actions.py:1045 detects the sentinel; surfaces/api/app.py:91 and slack/service.py:113 return it as a normal reply",
+    "provider": "engine/adport"
+   },
+   {
+    "capability": "Anti-loop run call-count cap",
+    "rating": "EXISTS_AND_STRONG",
+    "evidence": "assembly.py:242 ModelCallLimitMiddleware run_limit=40 exit_behavior=end",
+    "provider": "engine"
+   },
+   {
+    "capability": "Per-turn/request wall-clock deadline",
+    "rating": "MISSING",
+    "evidence": "no request timeout in surfaces/api/app.py; stacked retries assembly.py:166,240 (C11-03)",
+    "provider": "engine"
+   },
+   {
+    "capability": "Duplicate-submission protection on chat turns",
+    "rating": "MISSING",
+    "evidence": "runner.py:86 claim is ownership-only; no idempotency key on messages/route.ts (C11-05)",
+    "provider": "engine/adport"
+   },
+   {
+    "capability": "Duplicate-submission protection on mutations",
+    "rating": "EXISTS_AND_STRONG",
+    "evidence": "writes.py:819-845 single attempt + idempotency key + claim consumption + idempotent re-execute (C11-07); unreachable in product (serve_demo.py:69)",
+    "provider": "engine"
+   },
+   {
+    "capability": "Provider-timeout 'unknown not failed' semantics",
+    "rating": "EXISTS_AND_STRONG",
+    "evidence": "providers.py:28-29; writes.py:855-915 (code verified; tests red here per D1)",
+    "provider": "engine"
+   },
+   {
+    "capability": "Malformed provider response coercion",
+    "rating": "EXISTS_BUT_LIMITED",
+    "evidence": "pipeboard.py:161-176 coerces non-JSON to {text:...}; error content truncated to 300 chars (pipeboard.py:153)",
+    "provider": "engine"
+   },
+   {
+    "capability": "Catalog/provider-outage resilience",
+    "rating": "EXISTS_BUT_LIMITED",
+    "evidence": "pipeboard.py:111-134 swallows load errors to []; load-once; /health unaware (C11-06)",
+    "provider": "engine"
+   },
+   {
+    "capability": "adport->engine error mapping",
+    "rating": "EXISTS_BUT_LIMITED",
+    "evidence": "engine-client.ts:101-108 maps non-2xx; blind to 200-with-error-text (C11-01)",
+    "provider": "adport"
+   }
+  ]
+ },
+ "C13": {
+  "agent_id": "C13",
+  "role": "AI safety / autonomous-action specialist",
+  "report_path": "docs/audit/agents/C13.md",
+  "scope": "Break the invariant \"AI proposes → policy preview → human approval → apply\": enumerate every path by which a write can reach a provider (engine python + adport ts) and whether each requires a prior validate with identical args and a human approval. Covered engine WriteGate/kill switch/approvers/execute interrupt, serve_demo fail-closed + ProposalOnlyWriteProvider, docker-compose env, and adport PolicyEngine/guardedWriteTool/bridge/approval routes/REST/MCP surfaces.",
+  "files_inspected": [
+   "engine/src/paid_media_agent/tools/writes.py",
+   "engine/src/paid_media_agent/tools/write_tools.py",
+   "engine/src/paid_media_agent/tools/write_policy.py",
+   "engine/src/paid_media_agent/runtime/profiles.py",
+   "engine/src/paid_media_agent/surfaces/api/app.py",
+   "engine/src/paid_media_agent/surfaces/runner.py",
+   "engine/src/paid_media_agent/config.py",
+   "services/engine-demo/serve_demo.py",
+   "services/engine-demo/tests/test_demo_api.py",
+   "docker-compose.yml",
+   "platform/packages/core/src/policy/engine.ts",
+   "platform/packages/core/src/tools/write.ts",
+   "platform/packages/core/src/policy/pending.ts",
+   "platform/packages/core/src/policy/policy.ts",
+   "platform/packages/core/src/provider.ts",
+   "platform/packages/mcp/src/index.ts",
+   "platform/apps/cloud/lib/markting/bridge.ts",
+   "platform/apps/cloud/lib/markting/assistant.ts",
+   "platform/apps/cloud/lib/markting/engine-client.ts",
+   "platform/apps/cloud/lib/markting/runtime.ts",
+   "platform/apps/cloud/lib/markting/translate.ts",
+   "platform/apps/cloud/lib/markting/env.ts",
+   "platform/apps/cloud/lib/markting/repository.ts",
+   "platform/apps/cloud/app/api/approvals/[id]/apply/route.ts",
+   "platform/apps/cloud/app/api/approvals/[id]/reject/route.ts",
+   "platform/apps/cloud/app/api/v1/tools/[tool]/route.ts",
+   "platform/apps/cloud/app/mcp/route.ts",
+   "platform/apps/cloud/lib/cloud/auth.ts",
+   "platform/apps/cloud/lib/cloud/runtime.ts",
+   "platform/apps/cloud/lib/cloud/repository.ts",
+   "platform/apps/cloud/lib/cloud/plans.ts",
+   "platform/apps/cloud/test/markting-bridge.test.ts",
+   "platform/supabase/migrations/20260817171039_cloud_initial_schema.sql"
+  ],
+  "tests_executed": [
+   "cd engine && uv run --frozen pytest -q tests/unit/test_write_policy_and_gate.py tests/contract/test_live_write_gates.py tests/contract/test_write_flows_graph.py => exit 1 (16 failed/21 passed, all failures = stray workspace/KILL_SWITCH)",
+   "cd engine && PAID_MEDIA_KILL_SWITCH_PATH=<nonexistent> uv run --frozen pytest -q tests/contract/test_live_write_gates.py tests/contract/test_write_flows_graph.py => exit 0 (30 passed)",
+   "cd engine && PAID_MEDIA_KILL_SWITCH_PATH=<nonexistent> uv run --frozen pytest -q ../services/engine-demo/tests/test_demo_api.py => exit 0 (7 passed)",
+   "cd platform && pnpm --filter @adport/core test => exit 0 (41 passed)",
+   "cd platform && pnpm --filter @adport/cloud exec vitest run test/markting-bridge.test.ts => exit 0 (8 passed)"
+  ],
+  "findings": [
+   {
+    "id": "C13-01",
+    "title": "Human approval not enforced on adport REST/MCP write surfaces (only the dashboard)",
+    "severity": "P1",
+    "classification": "VERIFIED_CODE",
+    "evidence": [
+     "platform/packages/core/src/tools/write.ts:52",
+     "platform/apps/cloud/app/api/v1/tools/[tool]/route.ts:7",
+     "platform/apps/cloud/app/mcp/route.ts:40",
+     "platform/packages/mcp/src/index.ts:176",
+     "platform/apps/cloud/app/api/approvals/[id]/apply/route.ts:18"
+    ],
+    "description": "The two-step validate->apply guardedWriteTool is satisfiable by the SAME principal on the REST (/api/v1/tools/{tool}) and MCP (/mcp) surfaces with no second human and no server-side interrupt. The MCP 'approval:{arguments}' object is an advisory structuredContent hint, not enforcement. The product 'human approval' invariant holds only in the markting dashboard apply route. An autonomous AI holding a tools:write key can validate then immediately apply a real ad-platform mutation within policy rails only.",
+    "recommendation": "Enforce an out-of-band human approver on apply for REST/MCP, or explicitly scope/document tools:write keys as self-service-within-rails and restrict who/what may hold them."
+   },
+   {
+    "id": "C13-02",
+    "title": "Non-atomic pending consumption + no idempotency key: concurrent/duplicate apply can execute a live mutation twice",
+    "severity": "P2",
+    "classification": "VERIFIED_CODE",
+    "evidence": [
+     "platform/packages/core/src/policy/engine.ts:87",
+     "platform/apps/cloud/lib/cloud/repository.ts:413",
+     "platform/packages/core/src/provider.ts:79",
+     "platform/apps/cloud/lib/markting/repository.ts:133"
+    ],
+    "description": "PolicyEngine.apply does get->applyWrite->delete with no lock/transaction; PostgresPendingStore.delete is an unconditional UPDATE consumed_at=now() with no 'and consumed_at is null' and no row-count check; applyWrite takes no idempotency key. Two concurrent apply calls for one pending id both pass the unconsumed read and both call provider.applyWrite. The sandbox has a state CAS mitigation; live providers have none.",
+    "recommendation": "Consume atomically (UPDATE ... WHERE consumed_at IS NULL RETURNING, treat 0 rows as not-found), add SELECT FOR UPDATE across get+apply, and pass the pending id as a provider idempotency key."
+   },
+   {
+    "id": "C13-03",
+    "title": "Dashboard self-approval guard bypassed for API-key-created pending ops; absent entirely on REST/MCP",
+    "severity": "P2",
+    "classification": "VERIFIED_CODE",
+    "evidence": [
+     "platform/apps/cloud/app/api/approvals/[id]/apply/route.ts:22",
+     "platform/apps/cloud/lib/cloud/auth.ts:22",
+     "platform/apps/cloud/lib/cloud/repository.ts:374"
+    ],
+    "description": "The guard is `if (row.createdBy && row.createdBy === principal.userId ...)`. authenticateApiKey returns a principal with no userId, so pending ops staged via an API key store created_by=null and the guard short-circuits, letting the same human approve their own API-key-staged change from the dashboard. The guard is also wholly absent on the REST/MCP apply paths.",
+    "recommendation": "Propagate the key owner's user id (or key id) into created_by and compare against it; default-deny when provenance is unknown unless MARKTING_ALLOW_SELF_APPROVAL=true."
+   },
+   {
+    "id": "C13-04",
+    "title": "Budget-cap policy re-checked at validate but not at apply",
+    "severity": "P3",
+    "classification": "VERIFIED_CODE",
+    "evidence": [
+     "platform/packages/core/src/policy/engine.ts:110",
+     "platform/packages/core/src/policy/engine.ts:133",
+     "platform/packages/core/src/policy/policy.ts:19"
+    ],
+    "description": "apply re-runs only checkStaticPolicy (protected accounts); checkBudgetPolicy runs only in validate. A budget cap tightened during the pending TTL window (default 15 min) is not enforced against an already-validated op.",
+    "recommendation": "Re-run checkBudgetPolicy inside apply against the current policy/preview."
+   },
+   {
+    "id": "C13-05",
+    "title": "Engine contract tests not isolated from the default-workspace kill switch (test hygiene; positive kill-switch evidence)",
+    "severity": "P3",
+    "classification": "VERIFIED_RUNTIME",
+    "evidence": [
+     "engine/src/paid_media_agent/config.py:158",
+     "engine/src/paid_media_agent/runtime/profiles.py:57",
+     "services/engine-demo/serve_demo.py:179",
+     "engine/workspace/KILL_SWITCH"
+    ],
+    "description": "A leftover engine/workspace/KILL_SWITCH (exact serve_demo engage text, not git-tracked) engaged the gate for the default-path contract tests: 16 failed with reason 'kill_switch'; re-running with the path pointed elsewhere passed all 30. Test-isolation defect, not a product defect. It also positively confirms the kill switch is fail-closed and global (even fake-provider happy paths are refused when engaged).",
+    "recommendation": "Point paid_media_kill_switch_path at a per-test tmp dir in conftest, as services/engine-demo/tests already does."
+   }
+  ],
+  "capabilities": [
+   {
+    "capability": "Proposal-only engine (engine cannot reach a platform)",
+    "rating": "EXISTS_AND_STRONG",
+    "evidence": "serve_demo.py:69 ProposalOnlyWriteProvider.call_mutation raises; forced at build_runtime serve_demo.py:204; test_demo_api.py:147",
+    "provider": "engine"
+   },
+   {
+    "capability": "Fail-closed boot assertions",
+    "rating": "EXISTS_AND_STRONG",
+    "evidence": "serve_demo.py:139 assert_fail_closed runs for demo+live (build_app_async:388); test_demo_api.py:81-90"
+   },
+   {
+    "capability": "Kill switch fail-closed",
+    "rating": "EXISTS_AND_STRONG",
+    "evidence": "writes.py:195 checked before any provider call and for fake providers; engaged at boot serve_demo.py:173; confirmed by C13-05 runtime behaviour"
+   },
+   {
+    "capability": "Live-write gate (writes_enabled+pinned revision+released canary tool)",
+    "rating": "EXISTS_AND_STRONG",
+    "evidence": "writes.py:198; tests/contract/test_live_write_gates.py 30 passed"
+   },
+   {
+    "capability": "Two-step validate->apply with hash binding",
+    "rating": "EXISTS_AND_STRONG",
+    "evidence": "engine.ts:31 hashOperation over tool/provider/accountId/kind/payload; engine.ts:104 mismatch check; markting-bridge.test.ts PENDING_MISMATCH",
+    "provider": "adport"
+   },
+   {
+    "capability": "Bridge is preview-only; engine never approved from adport",
+    "rating": "EXISTS_AND_STRONG",
+    "evidence": "bridge.ts:58 only registry.call without pending id; engine-client.ts:61 forbids /approve,/edit; markting-bridge.test.ts",
+    "provider": "adport"
+   },
+   {
+    "capability": "Engine in-graph self-approval blocked in host",
+    "rating": "EXISTS_AND_STRONG",
+    "evidence": "write_tools.py:169 -> ProposalService.approve -> may_approve empty approver set writes.py:136; assert refuses approver_ids serve_demo.py:159; test_demo_api.py:126",
+    "provider": "engine"
+   },
+   {
+    "capability": "Human-approval-in-the-loop (universal across surfaces)",
+    "rating": "EXISTS_BUT_LIMITED",
+    "evidence": "Enforced only in dashboard apply route; absent on REST/MCP (C13-01)",
+    "provider": "adport"
+   },
+   {
+    "capability": "Separation of duties (requester != approver)",
+    "rating": "EXISTS_BUT_LIMITED",
+    "evidence": "Dashboard only and bypassed for created_by=null API-key ops (C13-03)",
+    "provider": "adport"
+   },
+   {
+    "capability": "Idempotent / atomic apply",
+    "rating": "PARTIAL",
+    "evidence": "sandbox CAS only (repository.ts:133); live apply non-atomic, no idempotency key (C13-02)",
+    "provider": "adport"
+   },
+   {
+    "capability": "Demo->production isolation on autonomous surfaces",
+    "rating": "EXISTS_AND_STRONG",
+    "evidence": "REST/MCP use createTenantRuntime not sandbox (runtime.ts:18); productionOnly throws on synthetic/demo tools mcp/index.ts:89",
+    "provider": "adport"
+   },
+   {
+    "capability": "Policy rails at apply (budget caps)",
+    "rating": "EXISTS_BUT_LIMITED",
+    "evidence": "budget caps enforced at validate only, not re-checked at apply (C13-04)",
+    "provider": "adport"
+   },
+   {
+    "capability": "Multi-tenant isolation of pending operations",
+    "rating": "EXISTS_AND_STRONG",
+    "evidence": "all pending reads/writes scoped by organization_id repository.ts:385-425,696",
+    "provider": "adport"
+   }
+  ],
+  "key_findings": [
+   "Engine side: the single-write-path guarantee holds and is well tested — ProposalOnlyWriteProvider raises, kill switch engaged at boot, empty approver set blocks in-graph self-approval, and assert_fail_closed refuses boot on any live credential/flag (incl. PIPEBOARD, writes_enabled, approver_ids). The MARKTING_ENGINE_MODE=live+PIPEBOARD misconfiguration is caught at boot (VERIFIED_TEST).",
+   "P1: the 'human approval' invariant is enforced ONLY in the markting dashboard; adport's own REST and MCP write surfaces let the same principal validate then apply a real mutation with no second human — the MCP approval field is advisory, not enforced. This is the central autonomous-action bypass.",
+   "P2: live apply is not atomic and passes no idempotency key — concurrent/duplicate apply of one pending id can execute the mutation twice (sandbox has a CAS; live providers do not).",
+   "P2: the dashboard 'requester cannot approve' guard no-ops for API-key-created pending ops (created_by is null because API-key principals carry no userId), and is absent on REST/MCP.",
+   "P3: budget caps are enforced at validate but not re-checked at apply; only protected-account static policy is re-checked.",
+   "Every apply still requires a prior validate that created a hash-identical pending row; the bridge/assistant can only ever validate; demo sandbox cannot leak to the REST/MCP (productionOnly + createTenantRuntime).",
+   "Test-hygiene: 16 engine contract tests fail purely because a stray workspace/KILL_SWITCH from a demo run engages the gate on the default path; they pass once the path is redirected — which also confirms the kill switch is fail-closed and global."
+  ],
+  "disagreements": "serve_demo.py:8-9 and README present 'AI proposes -> policy preview -> human approval -> apply' as a universal product invariant. Engine-side the single-write-path claim is verified, but adport's own REST (/api/v1/tools/{tool}) and MCP (/mcp) surfaces apply writes with no enforced human approver — 'approval' on MCP is an advisory structuredContent field. The universal 'human approval' framing overstates what the code enforces on the AI-facing surfaces. Also, the dashboard apply route comment implies self-approval is blocked by default, but the guard silently no-ops for API-key-created pending operations.",
+  "confidence": 0.82,
+  "not_verified": "No live ad-platform call was made (prohibited); per-provider applyWrite idempotency was not inspected, so C13-02's double-execution impact assumes providers are not independently idempotent. The concurrent double-apply (C13-02) is reasoned from code (no lock/CAS) and was NOT reproduced against Postgres — VERIFIED_CODE, not VERIFIED_RUNTIME. Did not deep-audit the Slack surface or admin/actions.py for an alternate approve/execute route (a grep found no extra call_mutation caller). Plan/entitlement filtering of tools:write (plans.ts:103) was confirmed to protect REST and MCP by code reading, not tested across every plan tier at runtime."
+ },
+ "C14": {
+  "agent_id": "C14",
+  "role": "Chief AI Architect (team lead, cohort C)",
+  "report_path": "/home/user/markting-ai/docs/audit/agents/C14.md",
+  "scope": "Lead/reviewer for cohort C. Read all C1–C13 specialist reports; re-verified 15 load-bearing citations against the code (safety invariant, forced sample mode, cross-tenant isolation, adport write surfaces, context injection, retry masking, caching, eval). Authored docs/audit/02-ai-architecture-assessment.md (graph, tools, context, memory, safety-invariant bypass table, reliability, observability, cost, capability roll-up, dashboard-vs-OS verdict, consolidated findings) and docs/audit/03-ai-evolution-plan.md (AI Gateway options, Marketing Intelligence Layer ontology, Marketing Memory boundaries, Recommendation Engine pipeline stage-by-stage vs code, AI Media Buyer Workbench modules, performance/outcome loop schema, sequencing). Produced the de-duplicated team finding set with final severities below.",
+  "files_inspected": [
+   "docs/audit/agents/C1.md",
+   "docs/audit/agents/C2.md",
+   "docs/audit/agents/C3.md",
+   "docs/audit/agents/C4.md",
+   "docs/audit/agents/C5.md",
+   "docs/audit/agents/C6.md",
+   "docs/audit/agents/C7.md",
+   "docs/audit/agents/C8.md",
+   "docs/audit/agents/C9.md",
+   "docs/audit/agents/C10.md",
+   "docs/audit/agents/C11.md",
+   "docs/audit/agents/C12.md",
+   "docs/audit/agents/C13.md",
+   "services/engine-demo/serve_demo.py",
+   "engine/src/paid_media_agent/assembly.py",
+   "engine/src/paid_media_agent/runtime/local.py",
+   "engine/src/paid_media_agent/surfaces/api/app.py",
+   "engine/tests/eval/questions.json",
+   "engine/.venv/lib/python3.11/site-packages/deepagents/graph.py",
+   "engine/.venv/lib/python3.11/site-packages/deepagents/middleware/summarization.py",
+   "engine/.venv/lib/python3.11/site-packages/langchain/agents/middleware/model_retry.py",
+   "platform/packages/core/src/tools/write.ts",
+   "platform/packages/core/src/policy/engine.ts",
+   "platform/packages/google/src/tools.ts",
+   "platform/packages/google/src/provider.ts",
+   "platform/apps/cloud/app/api/v1/tools/[tool]/route.ts",
+   "platform/apps/cloud/app/api/approvals/[id]/apply/route.ts",
+   "platform/apps/cloud/lib/cloud/repository.ts",
+   "platform/apps/cloud/lib/markting/engine-client.ts",
+   "docs/audit/02-ai-architecture-assessment.md",
+   "docs/audit/03-ai-evolution-plan.md"
+  ],
+  "tests_executed": [
+   "read-only spot-check: sed serve_demo.py:139-171,383-392 (assert_fail_closed + forced sample mode) => exit 0, CONFIRMED",
+   "read-only spot-check: sed assembly.py:234-290 (interrupt_on execute_change) => exit 0, CONFIRMED",
+   "read-only spot-check: sed deepagents/graph.py:880-895 + summarization.py history prefix => exit 0, CONFIRMED (/conversation_history on shared backend)",
+   "read-only spot-check: sed runtime/local.py:28-50 (read-deny list excludes conversation_history) => exit 0, CONFIRMED",
+   "read-only spot-check: sed core/src/tools/write.ts:40-156 + engine.ts:87-153 (two-step same handler, apply no human) => exit 0, CONFIRMED",
+   "read-only spot-check: cat app/api/v1/tools/[tool]/route.ts (requireScope only, forwards body) => exit 0, CONFIRMED",
+   "read-only spot-check: grep/sed repository.ts:377-423 + engine.ts apply (non-atomic consume, created_by null) => exit 0, CONFIRMED",
+   "read-only spot-check: cat approvals/[id]/apply/route.ts:22-24 (self-approval guard short-circuits on null createdBy) => exit 0, CONFIRMED",
+   "read-only spot-check: sed google/provider.ts:343-351 + google/tools.ts:155-193 (budget-only policy, arbitrary create/remove) => exit 0, CONFIRMED",
+   "read-only spot-check: grep engine-client.ts sendMessage + app.py MessageIn (only {text}) => exit 0, CONFIRMED",
+   "read-only spot-check: sed serve_demo.py:352-376 (/reports served to any bearer, no org) => exit 0, CONFIRMED",
+   "read-only spot-check: grep model_retry.py:193-195 (AIMessage 'Model call failed') => exit 0, CONFIRMED",
+   "read-only spot-check: sed assembly.py:147-172 resolve_model (no cache_control) => exit 0, CONFIRMED",
+   "read-only spot-check: grep -rn usage_metadata|cache_control engine/src/paid_media_agent => exit 1 (no matches), CONFIRMED",
+   "read-only spot-check: sed tests/eval/questions.json q02 expectation => exit 0, CONFIRMED text (figure-mismatch inherited from C6 runtime, PARTIAL)",
+   "NOTE: no pytest/vitest suites re-run in this lead pass; cited test exit codes are the specialists' (C1/C4/C6/C7/C13), which cross-agree on the kill-switch root cause"
+  ],
+  "findings": [
+   {
+    "id": "C14-P1-01",
+    "title": "adport REST and MCP write surfaces apply writes with no enforced human approver (product invariant bypass)",
+    "severity": "P1",
+    "classification": "VERIFIED_CODE",
+    "evidence": [
+     "platform/packages/core/src/tools/write.ts:40-156",
+     "platform/apps/cloud/app/api/v1/tools/[tool]/route.ts:5-16",
+     "platform/packages/mcp/src/index.ts:121-184",
+     "platform/packages/core/src/policy/engine.ts:87-125"
+    ],
+    "description": "The same guardedWriteTool handler validates when pending_operation_id is absent and applies when present; the REST route enforces only requireScope then forwards the raw body (incl. pending_operation_id); MCP registers the write tool for tools:write principals with the approval object as an advisory structuredContent hint, not an enforced interrupt. apply() checks only existence/expiry/hash/protected-account. Subsumes C7-01, C13-01. Verified in spot-checks 5 and 6. The engine->bridge (Assistant) path is safe because the bridge only ever validates; the bypass is on adport's own autonomous surfaces.",
+    "recommendation": "Refuse pending_operation_id on /mcp and /api/v1/tools/* (preview-only for AI clients), or make apply require an out-of-band approver principal distinct from the creator; add a contract test that an MCP/REST client cannot apply its own pending operation. Reconcile README.md:79 which claims nothing applies without a human."
+   },
+   {
+    "id": "C14-P1-02",
+    "title": "Generic *_api_create/update/remove tools allow arbitrary API-shaped mutations with budget-only policy (status/bid/targeting/delete uncapped)",
+    "severity": "P1",
+    "classification": "VERIFIED_CODE",
+    "evidence": [
+     "platform/packages/google/src/tools.ts:155-193",
+     "platform/packages/google/src/provider.ts:343-351",
+     "platform/packages/tiktok/src/provider.ts:288-291",
+     "platform/packages/meta/src/provider.ts:376-379",
+     "platform/apps/cloud/lib/cloud/runtime.ts:103-138"
+    ],
+    "description": "google_api_update rejects only budget (campaignBudgets service or /budget/i on update_mask); status flip (starts delivery), bid change, targeting, ad schedule all pass with no risk flag. google_api_create takes creates: array of arbitrary records; google_api_remove is destructive. Same pattern across Meta/TikTok/Apple/Microsoft/Reddit. Registered in the tenant runtime for every connected provider and reachable over MCP/REST. Combined with C14-P1-02 bypass, an agent can enable a paused campaign or change bids with no human and no cap. Subsumes C7-02, C7-03. Verified in spot-check 10.",
+    "recommendation": "Do not register the *_api_* namespace in the tenant runtime by default (gate behind an org policy flag off by default); add starts_delivery/bid/destructive risk flags routed to mandatory human apply; extend money detectors to bid/target fields or route to typed tools. Keep generic tools for CLI operators only."
+   },
+   {
+    "id": "C14-P1-03",
+    "title": "Engine receives zero tenant/business/locale context and only ever analyses the three fixture accounts, in demo and live mode alike",
+    "severity": "P1",
+    "classification": "VERIFIED_CODE",
+    "evidence": [
+     "platform/apps/cloud/lib/markting/engine-client.ts:114-116",
+     "engine/src/paid_media_agent/surfaces/api/app.py:16-17",
+     "services/engine-demo/serve_demo.py:139-171",
+     "services/engine-demo/serve_demo.py:383-392",
+     "engine/src/paid_media_agent/runtime/catalog.py:51-58"
+    ],
+    "description": "Per-turn payload to the engine is {text} only; MessageIn has only a text field; the model gets instructions.md + skills listing + UTC date and nothing else - no org identity, goal, margin, market, currency, budget, locale or history. The host refuses to boot with any live credential and pins PAID_MEDIA_DATA_MODE=sample in both modes, so MARKTING_ENGINE_MODE=live swaps only the LLM while data stays the US fixture accounts. README/Assistant copy ('analyses your connected accounts') is unbacked. Subsumes C3-01, C3-02, C3-03/C5-03. Verified in spot-checks 1 and 11.",
+    "recommendation": "Inject a per-tenant context envelope (org profile, locale, accounts, goals, targets) keyed by organization_id on every turn; route engine reads through adport's tenant runtime so the data is the tenant's real accounts; until then label the Assistant as a synthetic sandbox."
+   },
+   {
+    "id": "C14-P1-04",
+    "title": "Cross-tenant isolation holes in the model's shared state (report index, workspace+artifacts, and summarization history)",
+    "severity": "P1",
+    "classification": "VERIFIED_RUNTIME",
+    "evidence": [
+     "engine/.venv/lib/python3.11/site-packages/deepagents/graph.py:886-889",
+     "engine/.venv/lib/python3.11/site-packages/deepagents/middleware/summarization.py:607-611",
+     "engine/src/paid_media_agent/runtime/local.py:28-50",
+     "services/engine-demo/serve_demo.py:355-374",
+     "engine/src/paid_media_agent/tools/artifacts.py:63-67"
+    ],
+    "description": "One process serves every org. deepagents summarization writes verbatim evicted chat history to /conversation_history/{session}.md via the backend directly, bypassing tool permissions; the read-deny list does not cover it, so another thread can ls/read_file it. The ArtifactStore and /workspace are a single shared tree readable/writable by every thread (also a persisted prompt-injection channel). GET /reports and /reports/files serve a global index and files to any bearer with no org key. Latent today because data is fixture-only and identical per org; becomes P0 on live reads. Subsumes C5-01, C5-02, C4-01, C4-04, C8-08, C9-05. Verified in spot-checks 3, 4, 12.",
+    "recommendation": "Per-org (or per-thread) backend root, ArtifactStore and report index derived server-side from the thread id; CompositeBackend routing /conversation_history, /workspace, /large_tool_results to per-thread state; add read-deny for history/large-tool-results; enforce organization_id on /reports; contract test cross-thread ls/read_file is empty."
+   },
+   {
+    "id": "C14-P1-05",
+    "title": "Organization deletion and data retention never reach engine memory",
+    "severity": "P1",
+    "classification": "VERIFIED_CODE",
+    "evidence": [
+     "platform/apps/cloud/app/api/deletion/route.ts:21",
+     "platform/supabase/migrations/20260828120000_cloud_plans_and_account_scope.sql:131-160",
+     "engine/src/paid_media_agent/persistence/postgres.py:11-42",
+     "platform/apps/cloud/lib/markting/repository.ts:12-14"
+    ],
+    "description": "Org deletion cascades markting_* but never purges LangGraph checkpoints (verbatim user prose), pma_* proposals/receipts, or artifacts, which are keyed by a thread_id embedding the deleted org/user UUIDs. apply_data_retention omits markting_* and all engine tables; pma_dedupe has no TTL. A 'delete my org' request leaves the most sensitive memory in place indefinitely and the engine DB grows unbounded. Subsumes C4-02.",
+    "recommendation": "Add an engine purge endpoint (checkpointer.adelete_thread + pma_* + artifacts by org prefix) called from the deletion route; extend apply_data_retention to markting_* and engine tables (scheduled engine sweep by org prefix); add TTL on pma_dedupe."
+   },
+   {
+    "id": "C14-P2-01",
+    "title": "No token/cost metering and no spend quota anywhere in the stack",
+    "severity": "P2",
+    "classification": "VERIFIED_CODE",
+    "evidence": [
+     "engine/src/paid_media_agent/assembly.py:160-172",
+     "platform/apps/cloud/lib/cloud/repository.ts:355",
+     "platform/apps/cloud/lib/cloud/plans.ts:11-21",
+     "docs/TODO.md:8"
+    ],
+    "description": "grep usage_metadata/input_tokens/cache_control over engine/src returns nothing (spot-check 14/15). No per-org token or dollar ledger, no budget; plans carry no usage dimension; the only limiter is 120 req/min/user, a throughput limit. In live mode on one shared provider key a single seat can accrue hundreds of dollars/min (INFERRED). Subsumes C10-01, C10-02, C2-02, C12-03.",
+    "recommendation": "UsageMiddleware capturing usage_metadata per call -> pma_model_usage(org,user,thread,model,in,cached_in,out,cost); per-org monthly token/$ budget enforced in the cloud route (402 PLAN_LIMIT pattern); per-thread lifetime call cap; lower the assistant rate limit."
+   },
+   {
+    "id": "C14-P2-02",
+    "title": "No prompt caching and unbounded context growth (compaction only at ~850K tokens)",
+    "severity": "P2",
+    "classification": "VERIFIED_CODE",
+    "evidence": [
+     "engine/src/paid_media_agent/assembly.py:160-172",
+     "engine/.venv/lib/python3.11/site-packages/deepagents/middleware/summarization.py:274-286",
+     "engine/.venv/lib/python3.11/site-packages/deepagents/graph.py:803",
+     "platform/apps/cloud/app/dashboard/assistant/assistant-chat.tsx:25"
+    ],
+    "description": "resolve_model passes only timeout+max_retries; no cache_control is ever set, so the ~5.6K-token stable prefix and whole transcript are re-billed every call (spot-check 14). Compaction fires only at 85% of the 1M-token profile using the main model as summarizer; the UI reuses one thread per session, so turn cost grows linearly. Subsumes C10-03, C10-04, C9-09.",
+    "recommendation": "Ephemeral cache_control on system+tools and the last message (keep the date block last); explicit SummarizationMiddleware trigger ~60K tokens with a Haiku-class summarizer; new engine thread per conversation after N turns/idle."
+   },
+   {
+    "id": "C14-P2-03",
+    "title": "Model failures masked as HTTP-200 answers; all errors retried; no run deadline; client abort orphans the engine run",
+    "severity": "P2",
+    "classification": "VERIFIED_CODE",
+    "evidence": [
+     "engine/.venv/lib/python3.11/site-packages/langchain/agents/middleware/model_retry.py:193-195",
+     "engine/src/paid_media_agent/assembly.py:239-240",
+     "engine/.venv/lib/python3.11/site-packages/langchain/agents/middleware/_retry.py:70-74",
+     "platform/apps/cloud/lib/markting/engine-client.ts:73",
+     "engine/src/paid_media_agent/surfaces/api/app.py:91-101"
+    ],
+    "description": "ModelRetryMiddleware(on_failure=continue) returns an AIMessage 'Model call failed after N attempts...' (HTTP 200) on exhaustion; default_retry_on retries every non-ModelError (config/ValueError), wasting the budget and masking deterministic bugs. There is no per-run or per-request wall-clock deadline; the cloud aborts the fetch at 240s but does not cancel the engine, which keeps spending. Subsumes C11-01, C11-02, C11-03, C11-04, C1-04, C2-03, C10-05. Verified in spot-check 13.",
+    "recommendation": "Propagate a typed failure (code+localized message) instead of on_failure=continue; narrow retry_on to transient classes (429/5xx/timeout); add a run-level asyncio.wait_for deadline aligned below the client timeout; cancel on client disconnect; return a resumable turn id."
+   },
+   {
+    "id": "C14-P2-04",
+    "title": "No per-thread concurrency control or idempotency on chat; non-atomic live apply can execute a mutation twice",
+    "severity": "P2",
+    "classification": "VERIFIED_CODE",
+    "evidence": [
+     "engine/src/paid_media_agent/surfaces/runner.py:86-89",
+     "engine/src/paid_media_agent/persistence/memory.py:94-96",
+     "platform/packages/core/src/policy/engine.ts:87-125",
+     "platform/apps/cloud/lib/cloud/repository.ts:413-418",
+     "platform/packages/core/src/provider.ts:79"
+    ],
+    "description": "Thread claim is ownership, not a mutex; two concurrent POST /threads/{id}/messages race the checkpoint. On the adport side apply is get->applyWrite->delete with no lock/transaction and no idempotency key into applyWrite; only the sandbox provider has a CAS, so two concurrent applies of one pending_operation_id can both execute a live mutation. Subsumes C11-05, C1-03, C13-02. Verified in spot-check 7.",
+    "recommendation": "Per-thread asyncio/advisory lock + client idempotency key on the message route (409 on a second in-flight turn); atomic consume (update ... where consumed_at is null returning *) with FOR UPDATE across get+apply; pass the pending id as a provider idempotency key."
+   },
+   {
+    "id": "C14-P2-05",
+    "title": "Demo engine mis-routes analysis questions to a hard-coded budget-cut proposal and shares scripted state across threads/tenants",
+    "severity": "P2",
+    "classification": "VERIFIED_RUNTIME",
+    "evidence": [
+     "services/engine-demo/serve_demo.py:63-66",
+     "services/engine-demo/serve_demo.py:92-111",
+     "engine/src/paid_media_agent/testing/demo_script.py:158-170",
+     "platform/apps/cloud/lib/i18n/messages/assistant.ts:10"
+    ],
+    "description": "The default-mode scripted engine routes any message matching a keyword regex (incl. the product's own suggestion chip and Arabic negation particles غير/زد) to a write script that always proposes g-103 -> 240 regardless of the question, staging it into adport's production approval queue; and its state is one process-global instance, so a second thread/tenant gets 'exhausted' text or a malformed write turn. Demo code reaching the production approval path. Subsumes C3-04, C6-01, C6-02, C8-01, C8-02, C1-07.",
+    "recommendation": "Key script state by thread_id or construct a model per thread; restrict the write script to an explicit demo phrase or classify on imperative verbs excluding negations; add a two-thread host test and a test that every non-change suggestion chip yields no proposal."
+   },
+   {
+    "id": "C14-P2-06",
+    "title": "Account scoping checks one argument; cross-account reads possible; engine trusts readOnlyHint for direct tool binding",
+    "severity": "P2",
+    "classification": "VERIFIED_CODE",
+    "evidence": [
+     "platform/apps/cloud/lib/cloud/account-scope.ts:48-54",
+     "platform/packages/reddit/src/provider.ts:424-428",
+     "engine/src/paid_media_agent/tools/catalog.py:150",
+     "engine/src/paid_media_agent/tools/catalog.py:170-190"
+    ],
+    "description": "The cloud authorizer checks only top-level account_id/customer_id, so Reddit/TikTok single-resource reads and Apple unscoped reads can cross accounts under one grant. The engine picks the first matching account_arg name and does not walk nested/list id args. The engine classifies any tool with readOnlyHint:true as READ and binds it directly, so a misannotated/malicious Pipeboard tool named update_*/upload_* becomes a direct model call (deny-name covers only mutate|raw|delete|remove|purge). Subsumes C7-04, C7-05, C7-06.",
+    "recommendation": "Wrap all provider tools (reads included) in AccountScopedProvider with per-tool scope extractors; make Apple account_id required; add verb-based deny patterns for READ classification and pin the read-catalog revision."
+   },
+   {
+    "id": "C14-P2-07",
+    "title": "Self-approval guard bypassed for API-key-created pending operations; guard absent on REST/MCP",
+    "severity": "P2",
+    "classification": "VERIFIED_CODE",
+    "evidence": [
+     "platform/apps/cloud/app/api/approvals/[id]/apply/route.ts:22-24",
+     "platform/apps/cloud/lib/cloud/repository.ts:377-381",
+     "platform/apps/cloud/lib/cloud/auth.ts:22-37"
+    ],
+    "description": "The dashboard requester-cannot-approve guard is `if (row.createdBy && row.createdBy === principal.userId ...)`; an API-key principal has no userId, so created_by is null and the guard short-circuits, letting the same human approve. The guard is also wholly absent on REST/MCP (see C14-P1-01). Separation of duties degrades to one person whenever the request originates from an API key. Subsumes C13-03. Verified in spot-check 8.",
+    "recommendation": "Propagate the key owner's user id / key id into created_by and compare against it; default-deny when provenance is unknown unless MARKTING_ALLOW_SELF_APPROVAL=true; move the switch into organization policy."
+   },
+   {
+    "id": "C14-P2-08",
+    "title": "Secret redaction misses JSON-quoted credential keys and common token shapes",
+    "severity": "P2",
+    "classification": "VERIFIED_RUNTIME",
+    "evidence": [
+     "engine/src/paid_media_agent/middleware/redaction.py:16-28",
+     "engine/src/paid_media_agent/tools/pipeboard.py:165-170",
+     "engine/src/paid_media_agent/tools/reads.py:340-344"
+    ],
+    "description": "The credential regex requires the key immediately followed by :/=, so {\"access_token\":\"...\"} never matches; Meta EAA tokens, Google ya29., JWTs, AWS AKIA, and URL/base64-encoded configured secrets pass unredacted (6/13 shapes in C8's runtime probe). Provider error envelopes and provider_result previews are JSON, the most likely echo form. Reaches the checkpoint and artifact store. Live-mode only (fixtures carry no credentials). Subsumes C8-04.",
+    "recommendation": "Allow an optional quote between key and separator; add shape patterns for Meta/Google-OAuth/JWT/AWS and encoded variants of configured secrets; add negative tests; also route any future logs/traces through redact()."
+   },
+   {
+    "id": "C14-P2-09",
+    "title": "No end-to-end tracing, correlation id, per-turn structured logging, or durable read audit on the self-hosted path",
+    "severity": "P2",
+    "classification": "VERIFIED_CODE",
+    "evidence": [
+     "platform/apps/cloud/lib/markting/engine-client.ts:84-99",
+     "engine/src/paid_media_agent/testing/demo_script.py:207-210",
+     "engine/src/paid_media_agent/tools/reads.py:137",
+     "engine/src/paid_media_agent/cli.py:23-26"
+    ],
+    "description": "No correlation id is minted or forwarded cloud->engine; LangSmith/OTel tracing is never enabled and the only tracing_context call disables it; there is no per-turn log of model/tokens/latency/tool-calls (5 log sites total); the read audit is an in-memory 500-entry ring consumed only by the demo. Incidents cannot be reconstructed per request/tenant. Subsumes C12-01, C12-02, C12-04, C12-05.",
+    "recommendation": "Mint a request id at the cloud edge, forward it, bind into logs + RunnableConfig.metadata + every audit/provenance row; enable one tracing backend tagged by org/user/thread with redaction on the sink; persist a durable read-audit; emit per-turn structured logs."
+   },
+   {
+    "id": "C14-P2-10",
+    "title": "Oversized deterministic results offload to an unusable stub (no path, no consumer); model can read the whole engine checkout",
+    "severity": "P2",
+    "classification": "VERIFIED_RUNTIME",
+    "evidence": [
+     "engine/src/paid_media_agent/tools/summary.py:84-148",
+     "engine/src/paid_media_agent/middleware/offload.py:44-52",
+     "engine/src/paid_media_agent/runtime/local.py:28-50",
+     "engine/src/paid_media_agent/tools/compare_periods.py:59-60"
+    ],
+    "description": "summarize_window is unbounded (14,401 chars for 3 fixture accounts) and crosses the 6,000-char offload cliff; the stub carries no path and no deterministic tool consumes a tool_result artifact, so the numbers are lost and the skill forbids computing from previews. Separately, the filesystem read policy denies only secrets and allows everything else, so the model can grep/read src, tests, docs and instructions.md (its own prompt). Subsumes C9-01, C5-04, C9-05. Verified in spot-check 4.",
+    "recommendation": "Bounded head + analysis artifact for summarize_window/compare_periods; add read_analysis_section tool; put path+kind in the offload stub; invert the filesystem policy to allow only /skills and /workspace/{analysis,out}."
+   },
+   {
+    "id": "C14-P2-11",
+    "title": "Engine-side outcome memory is systematically wrong: every bridged proposal is recorded as rejected",
+    "severity": "P2",
+    "classification": "VERIFIED_CODE",
+    "evidence": [
+     "platform/apps/cloud/lib/markting/bridge.ts:94",
+     "engine/src/paid_media_agent/tools/writes.py:498-511",
+     "engine/src/paid_media_agent/surfaces/runner.py:257-275",
+     "platform/apps/cloud/lib/markting/repository.ts:107-112"
+    ],
+    "description": "After a successful preview the bridge calls reject on the engine proposal ('handled by adport'), so the engine's durable conversation memory and the resumed graph record a rejection while the real outcome lives only in adport and is never fed back. A follow-up 'did my change go through?' is answered from a checkpoint that says rejected. No accepted/rejected learning is possible from engine data. Subsumes C4-05, C8-05.",
+    "recommendation": "Replace reject with a handed_off decision (or a reject message the system prompt interprets as 'pending in adport'); write the adport outcome back into the thread as a system message on the next turn."
+   },
+   {
+    "id": "C14-P3-01",
+    "title": "Model filesystem write covers artifacts/reports/kill-switch; artifact integrity is SHA-256 not HMAC",
+    "severity": "P3",
+    "classification": "VERIFIED_CODE",
+    "evidence": [
+     "engine/src/paid_media_agent/runtime/local.py:47-49",
+     "engine/src/paid_media_agent/tools/artifacts.py:134-145",
+     "engine/src/paid_media_agent/config.py:158"
+    ],
+    "description": "write/edit are always bound and /workspace/** is writable except /workspace/skills, so the model can create the kill switch (halting all writes, with no delete tool to clear it), overwrite a served rpt_*.html, or attempt a forged performance_rows artifact. Artifact integrity is a plain SHA-256 stored next to the payload, not a host-keyed HMAC. Subsumes C7-07.",
+    "recommendation": "Deny model writes to /workspace/{analysis,in,out} and the kill-switch path; give a dedicated notes dir; sign artifacts with a host HMAC key."
+   },
+   {
+    "id": "C14-P3-02",
+    "title": "Budget cap re-check skipped at apply; 'expired' outcome never written and no sweep runs",
+    "severity": "P3",
+    "classification": "VERIFIED_CODE",
+    "evidence": [
+     "platform/packages/core/src/policy/engine.ts:110-153",
+     "platform/apps/cloud/lib/cloud/repository.ts:420-425",
+     "platform/supabase/migrations/20261002000000_markting_bridge.sql:51"
+    ],
+    "description": "apply() re-runs checkStaticPolicy (protected accounts) only, not checkBudgetPolicy, so a validated op can land after a tightened budget cap within the 15-min TTL. The pending sweep that would set 'expired' is never invoked, so markting_engine_proposals.status sticks at pending and dashboards over-count. Subsumes C13-04, C12-07. Verified in spot-check 9.",
+    "recommendation": "Re-run checkBudgetPolicy inside apply; schedule the pending sweep to set expired and mark the provenance row."
+   },
+   {
+    "id": "C14-P3-03",
+    "title": "Three inconsistent write vocabularies/units exposed to AI clients",
+    "severity": "P3",
+    "classification": "VERIFIED_CODE",
+    "evidence": [
+     "engine/src/paid_media_agent/tools/write_tools.py:30-42",
+     "platform/packages/google/src/tools.ts:59",
+     "platform/packages/meta/src/tools.ts:347",
+     "platform/apps/cloud/lib/markting/translate.ts:103-123"
+    ],
+    "description": "Engine propose_change uses field->value in account currency/day; adport typed budgets use micros/cents/float per provider; the generic *_api_* tools add raw API fields; statuses use four vocabularies. The unit lives only in the tool description, not the schema, and the bridge reconciles only two operations for six providers. An LLM choosing between tiktok_set_budget{240} and tiktok_api_update{budget:240000000} has no schema-level unit guard. Subsumes C7-09.",
+    "recommendation": "Normalize to one money representation (amount + currency, integer minor units) on the tool boundary and convert inside providers; remove typed/generic duplication for agents."
+   },
+   {
+    "id": "C14-P3-04",
+    "title": "Advertised providers not installed in the engine image; implicit LANGSMITH_GATEWAY reroute contradicts 'no implicit gateway'",
+    "severity": "P3",
+    "classification": "VERIFIED_CODE",
+    "evidence": [
+     "engine/Dockerfile:13",
+     "engine/pyproject.toml:52-67",
+     "engine/src/paid_media_agent/admin/model_presets.py:45-99",
+     "engine/.venv/lib/python3.11/site-packages/langchain_core/utils/_gateway.py:96-103"
+    ],
+    "description": "The compose image installs only self-host/slack/reports extras, so Google/Groq/xAI/Mistral/DeepSeek presets crash at init_chat_model in the container though they work in the dev venv. Separately, the installed langchain reroutes anthropic:/openai: traffic through the LangSmith gateway whenever LANGSMITH_GATEWAY is truthy, contradicting config.py:24/assembly.py:154 ('no implicit gateway'). Subsumes C2-01, C2-07.",
+    "recommendation": "Either extend the image with intended extras or trim the advertised presets in markting docs; pin LANGSMITH_GATEWAY empty in compose and document it, or adopt the gateway explicitly."
+   },
+   {
+    "id": "C14-P3-05",
+    "title": "Engine test suite is not hermetic (stray workspace/KILL_SWITCH reddens 16-19 write-flow tests); no model-behaviour regression in CI",
+    "severity": "P3",
+    "classification": "VERIFIED_RUNTIME",
+    "evidence": [
+     "services/engine-demo/serve_demo.py:173-180",
+     "engine/src/paid_media_agent/config.py:158",
+     "engine/src/paid_media_agent/runtime/profiles.py:58-60",
+     "engine/tests/conftest.py:34-43"
+    ],
+    "description": "The host writes engine/workspace/KILL_SWITCH at the default relative path resolved against project root; conftest pins model/workspace/approvers but not the kill-switch path, so after one host boot 16-19 write-flow and behaviour tests fail with reason kill_switch; they pass (30/30) when the path is isolated. Root Makefile does not run the engine suite and no model-behaviour regression runs in CI. Test-isolation defect, not a product defect; it means the write guarantees are currently unverified by a green run in this checkout. Subsumes C1-06, C4-08, C6-03, C6-06, C10-09, C11-07, C13-05. Confirmed by every cohort member and spot-checks 1/3.",
+    "recommendation": "Point the kill-switch path at a per-test tmp dir in conftest (as the demo tests already do); have the host engage the switch under its own workspace root; add the engine + engine-demo suites to root make test and a behaviour-regression job."
+   },
+   {
+    "id": "C14-P3-06",
+    "title": "Evaluation harness weak: q02 expectation disagrees with fixtures; 12/15 questions have no machine check; no provenance/hallucination grader",
+    "severity": "P3",
+    "classification": "VERIFIED_CODE",
+    "evidence": [
+     "engine/tests/eval/questions.json:3",
+     "engine/tests/eval/grade.py:55-69",
+     "engine/tests/eval/grade.py:95-106"
+    ],
+    "description": "q02 expect says 'google CPA 26.82 vs 29.60' while the shipped fixtures yield 25.80/28.13 or 26.04/27.97 (C6 VERIFIED_RUNTIME; spot-check 15 confirms the expect text). grade.py checks spend for q01/q05 only; CPA is never checked; 12/15 questions print 'numbers ok' whenever no error occurs; substring matching rejects formatted figures; no check that prose numbers originate from tool outputs, no refusal/tool-trace grader. A green run is weak evidence. Subsumes C6-04, C6-05, C6-08.",
+    "recommendation": "Generate every numeric expectation from compute.py over the fixtures; add a deterministic provenance grader (prose numbers must appear in tool outputs), tool-trace and refusal checks; record full transcripts; run graders in CI without a model key."
+   },
+   {
+    "id": "C14-GAP-01",
+    "title": "No durable/tenant/account/long-term/outcome memory or learning",
+    "severity": "GAP",
+    "classification": "VERIFIED_CODE",
+    "evidence": [
+     "engine/src/paid_media_agent/runtime/local.py:70-82",
+     "engine/docs/customization.md:112-125",
+     "engine/src/paid_media_agent/domain/proposals.py:105-106"
+    ],
+    "description": "No LangGraph store is configured, no memory.py exists, and the MDA memory the docs describe is off and deployment-global (unsuitable for multi-tenant by the upstream's own warning). measurement_plan/reversal_plan are parsed and stored but nothing schedules a measurement or records an outcome. Every conversation starts from zero knowledge of the org's goals, past recommendations, acceptance, or results. This is the core of the Marketing Memory and outcome-loop design. Subsumes C4-11, C5-06. No code claims otherwise, so GAP not defect.",
+    "recommendation": "Build tenant/account/decision memory in adport Postgres (RLS by org); governed learning restricted to user-confirmed facts, measured outcomes, and accept/reject rates used only to annotate/rank - never to change policy limits or approver sets. See 03-ai-evolution-plan.md sections 3 and 6."
+   },
+   {
+    "id": "C14-GAP-02",
+    "title": "Arabic-first applies to UI chrome only; no language/locale policy, Arabic corpus, Arabic reports, or regional playbooks",
+    "severity": "GAP",
+    "classification": "VERIFIED_CODE",
+    "evidence": [
+     "engine/instructions.md",
+     "engine/workspace/skills/paid-media-wiki/answer-style.md:1-20",
+     "engine/src/paid_media_agent/testing/demo_script.py:86-130",
+     "docs/TODO.md:38-39"
+    ],
+    "description": "The prompt layer contains no Arabic and no language directive; the wiki is generic/English/US-centric with no Gulf calendar (Ramadan/Eid/White Friday), SAR/AED, RTL, or Snapchat/TikTok playbooks; the demo composer answers Arabic questions in English; reports hard-code lang=en and DejaVu fonts. The product is marketed as Arabic-first but that scopes to the Next.js UI. Subsumes C3-05, C5-05, C8-03, C6-09, C9-12.",
+    "recommendation": "Add a product-owned locale policy via build_agent_components(system_prompt=...) (answer in the user's language, Latin digits, ad terms in English, currency code after the number); bilingual regional wiki + Snap/TikTok playbooks; Arabic/RTL report template and fonts; bilingual eval set."
+   },
+   {
+    "id": "C14-GAP-03",
+    "title": "Tool coverage gaps for a real media buyer (no creative/frequency reads, no change history, no Snap/TikTok/Pinterest/LinkedIn engine fixtures, no deterministic decomposition/anomaly tools)",
+    "severity": "GAP",
+    "classification": "VERIFIED_CODE",
+    "evidence": [
+     "engine/src/paid_media_agent/tools/fixtures.py:301-337",
+     "engine/src/paid_media_agent/config/write-policy.example.toml:20-62",
+     "engine/src/paid_media_agent/tools/compute.py:349-372",
+     "engine/src/paid_media_agent/assembly.py:61-67"
+    ],
+    "description": "Engine reads expose spend/impressions/clicks/conversions/value only - no frequency, reach, creative id or age - so 'creative fatigue vs audience saturation' cannot be grounded; admitted writes are budget/status for three fixture platforms; deterministic analysis is compare_periods/summarize_window/render_report with no ROAS decomposition, significance test, or marginal-efficiency curve. The code does not claim these, so GAP. Subsumes C7-16, C6-10.",
+    "recommendation": "Add creative/frequency reads and normalizers for all providers, a deterministic explain_delta (value vs spend vs mix), significance testing, change-history reads, and Snap/TikTok/Pinterest/LinkedIn engine fixtures so eval and the bridge have engine-side data."
+   }
+  ],
+  "key_findings": [
+   "Verdict, proven from capabilities: markting-ai is a dashboard-with-chat over synthetic data, not an intelligent operating system - the host refuses live credentials and pins sample mode in both demo and live, so every 'analysis' a tenant sees is fixture data (serve_demo.py:139-171,383-392).",
+   "The central safety invariant holds on the engine->bridge Assistant path (engine is fail-closed, proposal-only; 6 bypass attempts blocked and verified) but is BROKEN on adport's own REST/MCP write surfaces: any tools:write holder can validate then apply with no human (P1; checks 5,6).",
+   "The engine receives {text} + fixtures and zero tenant/business/margin/market/currency/locale/history context; the only tenant-context mechanism is absent, Git-ignored and deployment-global (P1; checks 1,11).",
+   "Cross-tenant isolation holes exist by construction in the model's shared state - summarization writes verbatim history to world-readable /conversation_history, one shared /workspace+ArtifactStore, and a global report index served to any bearer - latent now (fixtures), P0 on live reads (P1; checks 3,4,12).",
+   "Generic *_api_* write tools let an agent make uncapped status/bid/targeting/destructive changes with budget-only policy (P1; check 10).",
+   "No memory, no learning, no outcome loop: no LangGraph store, every bridged proposal recorded as rejected, org deletion/retention never reach engine memory, measurement_plan stored but never measured (P1/P2/GAP).",
+   "No metering, no quota, no prompt caching, compaction only at ~850K tokens, model failures masked as HTTP-200 answers, no run deadline, no per-thread concurrency control - the operability floor for live mode is near zero (P2).",
+   "All 15 spot-checked citations held (14 CONFIRMED, 1 PARTIAL); the C1-C13 cohort's code-level evidence is reliable and cross-corroborating, with soft spots (live model, Docker, Postgres concurrency, MDA) honestly self-flagged."
+  ],
+  "disagreements": "\"Code contradicts several documented claims, all VERIFIED_CODE: (1) README.md:79 'nothing is applied until a human approves it' - true only for the Assistant; adport REST/MCP apply writes with no enforced human approver (write.ts:40-156, v1/tools route, mcp/index.ts). (2) docs listing company-context and 'read business context' as a shipped capability (capability-map.md:18) - the folder is absent, Git-ignored and never created per org. (3) 'Analyses connected accounts' / 'Arabic-first' reasoning (README) - the engine only ever sees USD fixtures and no language reaches the model. (4) config.py:24 / assembly.py:154 'no implicit gateway' - installed langchain reroutes through LANGSMITH_GATEWAY when the env var is set. (5) tools-and-context.md:48 'cannot read coding-agent files or paths outside its root' - the model can read the whole engine checkout incl. its own prompt. (6) markting_engine_proposals.status enum advertises 'expired' but no code writes it. (7) PHASE0-REPORT 'engine suite 177 passed' is reproducible only on a clean workspace - a stray KILL_SWITCH reddens 16-19 tests in this checkout. One inter-report disagreement I adjudicated: C5 rates the summarization cross-tenant leak P0 'by construction, latent in default config'; I consolidated it to P1 because it requires live mode + long threads + two orgs on one process to coincide - C5's framing is defensible and noted.\"",
+  "confidence": 0.85,
+  "not_verified": "\"As lead I re-confirmed 15 static citations (14 CONFIRMED, 1 PARTIAL - the q02 fixture-figure mismatch inherits C6's VERIFIED_RUNTIME grade.window_totals, which I did not re-run) but re-ran no pytest/vitest suites; cited test exit codes are the specialists' (C1/C4/C6/C7/C13), which cross-agree on the kill-switch root cause. Inherited NOT_VERIFIED from the cohort, needing resources an audit must not use: live-model behaviour (MARKTING_ENGINE_MODE=live, no key) - Arabic answers, injection susceptibility, real live-turn shape and cost (C10 dollar figures rest on an assumed price table + chars/4 heuristic and are INFERRED, not fact); the Docker image contents (builds blocked); Postgres/Supabase concurrency - the double-apply race and JSONB-CAS are VERIFIED_CODE, not reproduced; the MDA hosted path (Context Hub, platform checkpointer, MANAGED_RECURSION_LIMIT); live Pipeboard catalog schemas (so the readOnlyHint-trust and account-arg findings are mechanism-level); whether any deployment cron invokes the pending sweep; and the main open architecture question for the forward plan - whether routing live reads through adport's tenant runtime fits the engine's process-global profile (assembly.py:189-195) without one engine process per tenant.\""
  }
 }
