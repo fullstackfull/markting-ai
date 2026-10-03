@@ -16,4 +16,16 @@ paths = [
   '''.*\.test\.[cm]?tsx?$''',
   '''.*/__fixtures__/.*''',
   '''.*/fixtures/.*''',
+  '''.*/e2e/.*''',
+]
+# Deterministic, NON-SECRET test values used only to boot the credential-less E2E server and the CI
+# e2e lane (see .github/workflows/ci.yml and apps/cloud/playwright.config.ts). They authenticate
+# nothing — loopback/placeholder values — and must not trip the generic-api-key entropy rule.
+regexes = [
+  '''ZTJlX2NpXzMyYnl0ZV9lbmNyeXB0aW9uX2tleSEhISE=''',
+  '''e2e_ci_api_key_pepper_000000000000000000''',
+  '''e2e_ci_mcp_oauth_signing_key_0000000000000000''',
+  '''e2e-ci-test-password-123456''',
+  '''e2e_placeholder_[a-z_]*_0+''',
+  '''ZTJlX2NpXzMyYnl0ZV9lbmNyeXB0aW9uX2tleS[A-Za-z0-9+/=]*''',
 ]
