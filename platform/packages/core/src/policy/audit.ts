@@ -4,8 +4,12 @@ import { adportHome } from '../paths.js';
 
 export interface AuditEntry {
   ts: string;
-  /** 'note' records external/manual changes made outside adport's write path. */
-  event: 'validated' | 'applied' | 'rejected' | 'note';
+  /**
+   * 'note' records external/manual changes made outside adport's write path.
+   * 'applying' is the pre-write intent row written before the external provider call, so a
+   * completed-but-uncommitted write (crash after applyWrite) is still reconstructable (SEC-08).
+   */
+  event: 'validated' | 'applying' | 'applied' | 'rejected' | 'note';
   provider: string;
   tool: string;
   accountId: string;

@@ -43,7 +43,11 @@ it('uses the real policy gate, persists across runtimes, and never changes histo
   const reloaded = new SyntheticProvider(store);
   expect((await reloaded.listCampaigns('demo-eur'))[0]).toMatchObject({ dailyBudgetMicros: 27_000_000, status: 'PAUSED' });
   expect(await reloaded.report({ ...query, metrics: [...query.metrics] })).toEqual(before);
-  await expect(runtime.registry.call('demo_set_budget', { ...args, pending_operation_id: preview.pending_operation_id }, runtime.ctx)).rejects.toMatchObject({ code: 'PENDING_NOT_FOUND' });
+  // Re-applying a completed operation is an idempotent no-op (R0-01): it returns the stored result
+  // and does NOT mutate the account a second time.
+  const replay = await runtime.registry.call('demo_set_budget', { ...args, pending_operation_id: preview.pending_operation_id }, runtime.ctx);
+  expect(replay).toMatchObject({ applied: true });
+  expect((await new SyntheticProvider(store).listCampaigns('demo-eur'))[0]?.dailyBudgetMicros).toBe(27_000_000);
   expect(fetch).not.toHaveBeenCalled();
 });
 

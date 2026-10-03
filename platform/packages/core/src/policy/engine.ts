@@ -4,6 +4,8 @@ import type { AdProvider, WriteGuard, WriteOperation, WritePreview, WriteResult 
 import { AuditLog, type AuditEntryStore } from './audit.js';
 import { PendingStore, type PendingOperationStore } from './pending.js';
 import type { Policy } from './policy.js';
+import { isHumanApprover, sameActor, LOCAL_OPERATOR, type ApplyActor } from './actor.js';
+import { classifyWriteRisk, isGenericApiTool } from './risk.js';
 
 export interface ValidationOutcome {
   pendingOperationId: string;
@@ -14,6 +16,14 @@ export interface ValidationOutcome {
 export interface ApplyOutcome {
   result: WriteResult;
   preview: WritePreview;
+}
+
+/** Approval context supplied by the hosting app at apply time. */
+export interface ApplyApproval {
+  /** The actor approving/applying. When omitted, the engine runs in local/library trusted mode. */
+  approver?: ApplyActor;
+  /** Let the requester approve their own change (single-operator demos only). Default false. */
+  allowSelfApproval?: boolean;
 }
 
 function canonicalize(value: unknown): unknown {
@@ -40,9 +50,25 @@ export function hashOperation(op: WriteOperation): string {
 }
 
 /**
+ * Digest of the *material*, state-sensitive fields of a preview. The approver approves a specific
+ * preview; if live state moves between validate and apply so that the effect would differ, the
+ * digest changes and apply refuses rather than silently applying a stale preview (R0-06 / SEC-17).
+ */
+export function previewDigest(preview: WritePreview): string {
+  const canonical = canonicalize({
+    summary: preview.summary,
+    changes: preview.changes,
+    coercions: preview.coercions,
+    budgetDeltas: preview.budgetDeltas,
+  });
+  return createHash('sha256').update(JSON.stringify(canonical)).digest('hex');
+}
+
+/**
  * The single gate for all mutations. Enforces the two-step contract:
  * validate() dry-runs the operation and issues a pending-operation id;
- * apply() only executes an operation whose id, hash, and expiry check out.
+ * apply() atomically claims the pending id, re-checks policy against live state, and only then
+ * executes — exactly once per approval, by a human distinct from the requester.
  */
 export class PolicyEngine {
   constructor(
@@ -55,9 +81,10 @@ export class PolicyEngine {
     return { forcePausedCreation: this.policy.paused_creation };
   }
 
-  async validate(provider: AdProvider, op: WriteOperation): Promise<ValidationOutcome> {
+  async validate(provider: AdProvider, op: WriteOperation, requestedBy?: ApplyActor): Promise<ValidationOutcome> {
     await this.pending.sweep(); // opportunistic cleanup of expired entries
     await this.checkStaticPolicy(op);
+    this.checkToolPolicy(op);
     const preview = await provider.previewWrite(op, this.guard());
     await this.checkBudgetPolicy(op, preview);
 
@@ -70,8 +97,11 @@ export class PolicyEngine {
       opHash: hashOperation(op),
       op,
       preview,
+      previewDigest: previewDigest(preview),
       createdAt: new Date(now).toISOString(),
       expiresAt,
+      state: 'pending',
+      requestedBy,
     });
     await this.audit.append({
       event: 'validated',
@@ -80,48 +110,167 @@ export class PolicyEngine {
       accountId: op.accountId,
       pendingId: id,
       summary: preview.summary,
+      details: { risk: classifyWriteRisk(op), requestedBy },
     });
     return { pendingOperationId: id, preview, expiresAt };
   }
 
-  async apply(provider: AdProvider, op: WriteOperation, pendingId: string): Promise<ApplyOutcome> {
-    // No sweep here: an expired entry must still be readable so the caller
-    // gets PENDING_EXPIRED (actionable) instead of PENDING_NOT_FOUND.
-    const pending = await this.pending.get(pendingId);
-    if (!pending) {
+  async apply(
+    provider: AdProvider,
+    op: WriteOperation,
+    pendingId: string,
+    approval: ApplyApproval = {},
+  ): Promise<ApplyOutcome> {
+    const approver = approval.approver;
+
+    // 1. Peek (no consume) for client errors that must not burn a reusable pending row.
+    const peek = await this.pending.get(pendingId);
+    if (!peek) {
       throw new AdportError(
         'PENDING_NOT_FOUND',
         `No pending operation "${pendingId}". Validate first: call the tool without pending_operation_id.`,
       );
     }
-    if (Date.parse(pending.expiresAt) < Date.now()) {
-      await this.pending.delete(pendingId);
+    if (Date.parse(peek.expiresAt) < Date.now()) {
+      await this.pending.markSuperseded(pendingId).catch(() => {});
       throw new AdportError(
         'PENDING_EXPIRED',
-        `Pending operation ${pendingId} expired at ${pending.expiresAt}. Validate again.`,
+        `Pending operation ${pendingId} expired at ${peek.expiresAt}. Validate again.`,
       );
     }
-    if (pending.provider !== provider.id || pending.opHash !== hashOperation(op)) {
+    // Idempotent replay: a completed apply returns its stored result, never a second write.
+    if ((peek.state ?? 'pending') === 'applied') {
+      return { result: peek.result ?? { applied: true, resourceIds: [] }, preview: peek.preview };
+    }
+    if (peek.provider !== provider.id || peek.opHash !== hashOperation(op)) {
       throw new AdportError(
         'PENDING_MISMATCH',
         'The operation differs from what was validated. Re-validate with the exact arguments you intend to apply.',
       );
     }
-    // Policy may have changed between validate and apply; re-check.
-    await this.checkStaticPolicy(op);
 
-    const result = await provider.applyWrite(op, this.guard());
-    await this.audit.append({
-      event: 'applied',
-      provider: provider.id,
-      tool: op.tool,
-      accountId: op.accountId,
-      pendingId,
-      summary: pending.preview.summary,
-      details: { resourceIds: result.resourceIds },
-    });
-    await this.pending.delete(pendingId);
-    return { result, preview: pending.preview };
+    // 2. Human approval + four-eyes (no consume on failure).
+    this.checkApproval(approver, peek.requestedBy, approval.allowSelfApproval ?? false);
+
+    // 3. Atomic claim: exactly one concurrent apply transitions pending|failed → applying.
+    const claim = await this.pending.claim(pendingId, approver ?? LOCAL_OPERATOR);
+    switch (claim.status) {
+      case 'not_found':
+        throw new AdportError('PENDING_NOT_FOUND', `No pending operation "${pendingId}".`);
+      case 'expired':
+        throw new AdportError('PENDING_EXPIRED', `Pending operation ${pendingId} expired. Validate again.`);
+      case 'in_progress':
+        throw new AdportError(
+          'APPLY_IN_PROGRESS',
+          `Pending operation ${pendingId} is already being applied. A concurrent or prior apply holds it; not re-executing.`,
+        );
+      case 'already_applied':
+        return { result: claim.result ?? { applied: true, resourceIds: [] }, preview: peek.preview };
+      case 'superseded':
+        throw new AdportError('PENDING_SUPERSEDED', `Pending operation ${pendingId} was superseded. Validate again.`);
+      case 'rejected':
+        throw new AdportError('PENDING_REJECTED', `Pending operation ${pendingId} was rejected.`);
+      case 'claimed':
+        break;
+    }
+    const pending = claim.pending;
+
+    try {
+      // 4. Re-validate against LIVE state (R0-06): policy, tool gate, budget caps on a fresh preview.
+      await this.checkStaticPolicy(op);
+      this.checkToolPolicy(op);
+      const fresh = await provider.previewWrite(op, this.guard());
+      await this.checkBudgetPolicy(op, fresh);
+
+      // 5. Immutable preview: refuse to apply if live state diverged from what was approved.
+      if (pending.previewDigest && previewDigest(fresh) !== pending.previewDigest) {
+        await this.pending.markSuperseded(pendingId);
+        await this.audit.append({
+          event: 'rejected',
+          provider: provider.id,
+          tool: op.tool,
+          accountId: op.accountId,
+          pendingId,
+          summary: `Re-preview required: live state changed since approval (${pending.preview.summary} → ${fresh.summary})`.slice(0, 500),
+        });
+        throw new AdportError(
+          'REPREVIEW_REQUIRED',
+          'Live account state changed since this was approved. The approved preview is no longer valid; validate again to review the new effect.',
+          { approvedPreview: pending.preview, currentPreview: fresh },
+        );
+      }
+
+      // 6. Pre-write intent row (SEC-08): a completed-but-uncommitted write is reconstructable.
+      await this.audit.append({
+        event: 'applying',
+        provider: provider.id,
+        tool: op.tool,
+        accountId: op.accountId,
+        pendingId,
+        summary: fresh.summary,
+        details: { risk: classifyWriteRisk(op), approvedBy: approver, requestedBy: pending.requestedBy },
+      });
+
+      const result = await provider.applyWrite(op, this.guard());
+      await this.audit.append({
+        event: 'applied',
+        provider: provider.id,
+        tool: op.tool,
+        accountId: op.accountId,
+        pendingId,
+        summary: fresh.summary,
+        details: { resourceIds: result.resourceIds, approvedBy: approver },
+      });
+      await this.pending.markApplied(pendingId, result);
+      return { result, preview: fresh };
+    } catch (error) {
+      if (error instanceof AdportError && (error.code === 'REPREVIEW_REQUIRED' || error.code === 'POLICY_VIOLATION')) {
+        // Already recorded + state transitioned (superseded/failed-by-reject). Re-throw as-is.
+        if (error.code === 'POLICY_VIOLATION') await this.pending.markFailed(pendingId, error.message).catch(() => {});
+        throw error;
+      }
+      // Provider write threw: the write may or may not have landed. Mark failed (indeterminate),
+      // never write an 'applied' row. A retry is allowed (failed → applying) but is operator-driven.
+      await this.pending.markFailed(pendingId, error instanceof Error ? error.message : String(error));
+      await this.audit.append({
+        event: 'rejected',
+        provider: provider.id,
+        tool: op.tool,
+        accountId: op.accountId,
+        pendingId,
+        summary: `Apply failed (indeterminate): ${error instanceof Error ? error.message : String(error)}`.slice(0, 500),
+      });
+      throw error;
+    }
+  }
+
+  private checkApproval(approver: ApplyActor | undefined, requester: ApplyActor | undefined, allowSelfApproval: boolean): void {
+    // Library/local mode: no hosted session supplied an approver. The local CLI/MCP operator is the
+    // trusted single user. Hosted surfaces ALWAYS pass an approver (see createContext default + the
+    // cloud runtimes), so this branch is never the hosted path.
+    if (approver === undefined) return;
+    if (!isHumanApprover(approver)) {
+      throw new AdportError(
+        'APPROVAL_REQUIRED',
+        'Applying a change requires a human approver. API keys, OAuth clients, and the AI engine may request a change (create a preview) but cannot apply it; a person must approve it.',
+      );
+    }
+    if (sameActor(approver, requester) && !allowSelfApproval) {
+      throw new AdportError(
+        'SELF_APPROVAL_FORBIDDEN',
+        'The person who requested a change cannot approve it. A different person must apply it (or enable self-approval for single-operator demos).',
+      );
+    }
+  }
+
+  /** Fail closed on untyped generic API passthroughs unless policy explicitly allows them (R0-03). */
+  private checkToolPolicy(op: WriteOperation): void {
+    if (isGenericApiTool(op.tool) && !this.policy.allow_generic_api_writes) {
+      throw new AdportError(
+        'GENERIC_WRITE_DISABLED',
+        `Generic API tool "${op.tool}" (risk: ${classifyWriteRisk(op)}) is disabled on the sanctioned write path because it bypasses semantic risk classification. Use a typed operation, or set allow_generic_api_writes in policy to opt in explicitly.`,
+      );
+    }
   }
 
   private async checkStaticPolicy(op: WriteOperation): Promise<void> {

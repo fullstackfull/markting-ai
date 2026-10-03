@@ -17,6 +17,12 @@ export const policySchema = z.object({
   protected_accounts: z.array(z.string()).default([]),
   /** How long a validated pending operation stays applicable. */
   pending_ttl_minutes: z.number().positive().default(15),
+  /**
+   * Allow the generic, untyped provider passthrough tools (`*_api_create/update/delete/remove`)
+   * on the sanctioned write path. Default false: they bypass semantic risk classification, so the
+   * policy engine refuses them unless an operator explicitly opts in (R0-03, fail-closed).
+   */
+  allow_generic_api_writes: z.boolean().default(false),
 });
 
 export type Policy = z.infer<typeof policySchema>;

@@ -50,7 +50,7 @@ export function guardedWriteTool<S extends z.ZodObject<z.ZodRawShape>>(def: {
         payload,
       };
       if (!pending_operation_id) {
-        const outcome = await ctx.engine.validate(provider, op);
+        const outcome = await ctx.engine.validate(provider, op, ctx.writeActor);
         return {
           status: 'pending_validation',
           applied: false,
@@ -61,7 +61,10 @@ export function guardedWriteTool<S extends z.ZodObject<z.ZodRawShape>>(def: {
             'Review the preview. To apply, call this tool again with the same arguments plus pending_operation_id.',
         };
       }
-      const outcome = await ctx.engine.apply(provider, op, pending_operation_id);
+      const outcome = await ctx.engine.apply(provider, op, pending_operation_id, {
+        approver: ctx.writeActor,
+        allowSelfApproval: ctx.allowSelfApproval,
+      });
       return { status: 'applied', applied: true, result: outcome.result, preview: outcome.preview };
     },
   });

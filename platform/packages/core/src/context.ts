@@ -7,6 +7,7 @@ import { builtinTools } from './tools/builtin.js';
 import { ToolRegistry, type AnyToolDefinition, type ToolContext } from './tools/registry.js';
 import { MockProvider, mockTools } from './testing/mock-provider.js';
 import type { FindingsRepository } from './audit/store.js';
+import { LOCAL_OPERATOR, type ApplyActor } from './policy/actor.js';
 
 export interface ProviderModule {
   provider: AdProvider;
@@ -28,6 +29,13 @@ export interface CreateContextOptions {
   authorizeToolCall?: ToolContext['authorizeToolCall'];
   /** Hosted runtimes inject tenant-scoped finding persistence. */
   findings?: FindingsRepository;
+  /**
+   * The actor acting through this runtime. Defaults to the local single-operator (CLI / standalone
+   * MCP) identity. Hosted runtimes override it per request with the real principal.
+   */
+  writeActor?: ApplyActor;
+  /** Permit requester==approver. Defaults true for the local operator; hosted sets it from config. */
+  allowSelfApproval?: boolean;
 }
 
 export interface AdportRuntime {
@@ -66,6 +74,8 @@ export async function createContext(options: CreateContextOptions = {}): Promise
     credentials,
     authorizeToolCall: options.authorizeToolCall,
     findings: options.findings,
+    writeActor: options.writeActor ?? LOCAL_OPERATOR,
+    allowSelfApproval: options.allowSelfApproval ?? (options.writeActor ? false : true),
   };
   ctx.registry = registry;
   return { ctx, registry, policySource: source };

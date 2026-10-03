@@ -296,15 +296,15 @@ export class MetaAdsProvider implements AdProvider {
       case 'meta_create_campaign':
         return this.planCreateCampaign(act, payload, guard);
       case 'meta_set_campaign_status':
-        return this.planSetStatus(payload, 'campaign');
+        return this.planSetStatus(act, payload, 'campaign');
       case 'meta_set_budget':
-        return this.planSetBudget(payload);
+        return this.planSetBudget(act, payload);
       case 'meta_create_ad_set':
         return this.planCreateAdSet(act, payload, guard);
       case 'meta_set_ad_set_status':
-        return this.planSetStatus(payload, 'ad set');
+        return this.planSetStatus(act, payload, 'ad set');
       case 'meta_set_lifetime_budget':
-        return this.planSetLifetimeBudget(payload);
+        return this.planSetLifetimeBudget(act, payload);
       case 'meta_api_create':
         return this.planApiCreate(act, payload, guard);
       case 'meta_api_update':
@@ -316,7 +316,8 @@ export class MetaAdsProvider implements AdProvider {
     }
   }
 
-  private async planSetLifetimeBudget(payload: { object_id: string; lifetime_budget_cents: number }): Promise<WritePlan> {
+  private async planSetLifetimeBudget(act: string, payload: { object_id: string; lifetime_budget_cents: number }): Promise<WritePlan> {
+    await this.assertObjectOwnedByAccount(payload.object_id, act);
     const current = await this.client.get<{ name?: string; lifetime_budget?: string }>(payload.object_id, {
       fields: 'name,lifetime_budget',
     });
@@ -476,11 +477,13 @@ export class MetaAdsProvider implements AdProvider {
   }
 
   private async planSetStatus(
+    act: string,
     payload: { object_id?: string; campaign_id?: string; ad_set_id?: string; status: 'ACTIVE' | 'PAUSED' },
     kind: string,
   ): Promise<WritePlan> {
     const objectId = payload.campaign_id ?? payload.ad_set_id ?? payload.object_id;
     if (!objectId) throw new AdportError('INVALID_INPUT', `meta: missing id for ${kind} status change`);
+    await this.assertObjectOwnedByAccount(objectId, act);
     const current = await this.client.get<{ name?: string; status?: string }>(objectId, {
       fields: 'name,status',
     });
@@ -500,7 +503,8 @@ export class MetaAdsProvider implements AdProvider {
   }
 
   /** Works for both campaigns (CBO) and ad sets — daily_budget lives on either. */
-  private async planSetBudget(payload: { object_id: string; daily_budget_cents: number }): Promise<WritePlan> {
+  private async planSetBudget(act: string, payload: { object_id: string; daily_budget_cents: number }): Promise<WritePlan> {
+    await this.assertObjectOwnedByAccount(payload.object_id, act);
     const current = await this.client.get<{ name?: string; daily_budget?: string }>(payload.object_id, {
       fields: 'name,daily_budget',
     });

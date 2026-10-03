@@ -320,7 +320,7 @@ describe('MetaAdsProvider writes', () => {
     const { impl } = fakeFetch([
       {
         match: (url) => url.includes('/120210000000/') || url.includes('/120210000000?'),
-        reply: { name: 'Prospecting DE', daily_budget: '5000', id: '120210000000' },
+        reply: { name: 'Prospecting DE', daily_budget: '5000', account_id: '426197654150180', id: '120210000000' },
       },
       { match: (url, body) => url.includes('/120210000000') && body.includes('daily_budget'), reply: { success: true } },
     ]);
@@ -344,7 +344,7 @@ describe('MetaAdsProvider writes', () => {
 
   it('fails clearly when the object has no daily_budget', async () => {
     const { impl } = fakeFetch([
-      { match: (url) => url.includes('/120210000000'), reply: { name: 'CBO child adset', id: '120210000000' } },
+      { match: (url) => url.includes('/120210000000'), reply: { name: 'CBO child adset', account_id: '426197654150180', id: '120210000000' } },
     ]);
     const provider = new MetaAdsProvider(new MetaGraphClient(CREDS, 'v25.0', impl));
     await expect(
@@ -448,6 +448,25 @@ describe('MetaAdsProvider writes', () => {
       payload: { object_id: '123', fields: { lifetime_budget: 1 } },
     }, { forcePausedCreation: true })).rejects.toThrow('budget updates require a typed budget tool');
   });
+
+  it('R0-05: typed writes assert object→account ownership before any provider call', async () => {
+    // Object 123 belongs to account 999, not the 426197654150180 account named by the caller.
+    const { impl, calls } = fakeFetch([
+      { match: (url) => url.includes('/123?fields=account_id'), reply: { account_id: '999' } },
+    ]);
+    const provider = new MetaAdsProvider(new MetaGraphClient(CREDS, 'v25.0', impl));
+    const base = { provider: 'meta', accountId: '426197654150180' } as const;
+    for (const op of [
+      { ...base, tool: 'meta_set_budget', kind: 'update' as const, payload: { object_id: '123', daily_budget_cents: 6000 } },
+      { ...base, tool: 'meta_set_lifetime_budget', kind: 'update' as const, payload: { object_id: '123', lifetime_budget_cents: 6000 } },
+      { ...base, tool: 'meta_set_campaign_status', kind: 'update' as const, payload: { object_id: '123', status: 'PAUSED' as const } },
+    ]) {
+      await expect(provider.previewWrite(op, { forcePausedCreation: true })).rejects.toThrow('does not belong');
+      await expect(provider.applyWrite(op, { forcePausedCreation: true })).rejects.toThrow('does not belong');
+    }
+    // The only calls made were the ownership lookups; no mutating POST was issued.
+    expect(calls.every((call) => (call.init.method ?? 'GET') === 'GET')).toBe(true);
+  });
 });
 
 describe('end-to-end through the shared tool registry (policy engine + meta tools)', () => {
@@ -467,7 +486,7 @@ describe('end-to-end through the shared tool registry (policy engine + meta tool
     const { impl } = fakeFetch([
       {
         match: (url) => url.includes('/120210000000'),
-        reply: { name: 'Prospecting DE', daily_budget: '5000', id: '120210000000' },
+        reply: { name: 'Prospecting DE', daily_budget: '5000', account_id: '426197654150180', id: '120210000000' },
       },
     ]);
     const provider = new MetaAdsProvider(new MetaGraphClient(CREDS, 'v25.0', impl));

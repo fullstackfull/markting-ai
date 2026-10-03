@@ -97,12 +97,13 @@ describe('PolicyEngine.apply', () => {
     const outcome = await engine.apply(provider, op, pendingOperationId);
     expect(outcome.result.applied).toBe(true);
     expect(provider.listCampaigns('mock-1').find((c) => c.id === 'c1')?.dailyBudgetMicros).toBe(12_000_000);
-    // Pending id is single-use.
-    await expect(engine.apply(provider, op, pendingOperationId)).rejects.toMatchObject({
-      code: 'PENDING_NOT_FOUND',
-    });
+    // Re-applying the same id is an idempotent no-op: returns the stored result, no second write.
+    const replay = await engine.apply(provider, op, pendingOperationId);
+    expect(replay.result.applied).toBe(true);
+    expect(provider.listCampaigns('mock-1').find((c) => c.id === 'c1')?.dailyBudgetMicros).toBe(12_000_000);
     const events = (await audit.read()).map((e) => e.event);
-    expect(events).toEqual(['validated', 'applied']);
+    // Intent row precedes the write (SEC-08); exactly one apply executed.
+    expect(events).toEqual(['validated', 'applying', 'applied']);
   });
 
   it('rejects apply when the operation differs from what was validated', async () => {

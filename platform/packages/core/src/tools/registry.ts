@@ -3,6 +3,7 @@ import type { CredentialStore } from '../credentials/store.js';
 import type { FindingsRepository } from '../audit/store.js';
 import { AdportError } from '../errors.js';
 import type { PolicyEngine } from '../policy/engine.js';
+import type { ApplyActor } from '../policy/actor.js';
 import type { ProviderRegistry } from '../provider.js';
 
 export interface ToolAnnotations {
@@ -21,6 +22,15 @@ export interface ToolContext {
   authorizeToolCall?: (tool: AnyToolDefinition, input: Record<string, unknown>) => void | Promise<void>;
   /** Hosted runtimes inject a tenant-scoped findings repository. */
   findings?: FindingsRepository;
+  /**
+   * The actor acting through this runtime. Recorded as the requester at validate and used as the
+   * approver at apply. Hosted surfaces set this per request (a human for the dashboard, an
+   * api_client for REST/MCP, the ai_agent for engine proposals); the engine refuses to apply unless
+   * the approver is a human distinct from the requester.
+   */
+  writeActor?: ApplyActor;
+  /** Permit requester==approver (single-operator demos only). Default false in hosted runtimes. */
+  allowSelfApproval?: boolean;
 }
 
 export interface AnyToolDefinition {
