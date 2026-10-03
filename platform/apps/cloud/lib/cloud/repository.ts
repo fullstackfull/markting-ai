@@ -2,12 +2,15 @@ import 'server-only';
 import { randomBytes } from 'node:crypto';
 import type {
   Account,
+  ApplyActor,
   AuditEntry,
   AuditFinding,
+  ClaimResult,
   FindingStatus,
   FindingsRepository,
   PendingOperation,
   Policy,
+  WriteResult,
 } from '@adport/core';
 import { policySchema } from '@adport/core';
 import { db } from '@/lib/db';
@@ -374,55 +377,144 @@ export class PostgresPendingStore {
   async put(operation: PendingOperation): Promise<void> {
     await db()`
       insert into public.pending_operations
-        (id, organization_id, provider, operation_hash, operation, preview, created_by, created_at, expires_at)
+        (id, organization_id, provider, operation_hash, operation, preview, preview_digest,
+         created_by, requested_by_type, requested_by_id, state, created_at, expires_at)
       values
         (${operation.id}, ${this.principal.organizationId}, ${operation.provider}, ${operation.opHash},
          ${db().json(operation.op as never)}, ${db().json(operation.preview as never)},
-         ${this.principal.userId ?? null}, ${operation.createdAt}, ${operation.expiresAt})
+         ${operation.previewDigest ?? null},
+         ${this.principal.userId ?? null}, ${operation.requestedBy?.type ?? null}, ${operation.requestedBy?.id ?? null},
+         'pending', ${operation.createdAt}, ${operation.expiresAt})
     `;
   }
 
   async get(id: string): Promise<PendingOperation | undefined> {
-    const rows = await db()<Array<{
-      id: string;
-      provider: string;
-      operationHash: string;
-      operation: PendingOperation['op'];
-      preview: PendingOperation['preview'];
-      createdAt: Date;
-      expiresAt: Date;
-    }>>`
-      select id, provider, operation_hash, operation, preview, created_at, expires_at
+    const rows = await db()<Array<PendingRowShape>>`
+      select id, provider, operation_hash, operation, preview, preview_digest, state,
+             requested_by_type, requested_by_id, approved_by_type, approved_by_id, result, created_at, expires_at
       from public.pending_operations
-      where id = ${id} and organization_id = ${this.principal.organizationId} and consumed_at is null
+      where id = ${id} and organization_id = ${this.principal.organizationId}
       limit 1
     `;
     const row = rows[0];
-    if (!row) return undefined;
-    return {
-      id: row.id,
-      provider: row.provider,
-      opHash: row.operationHash,
-      op: row.operation,
-      preview: row.preview,
-      createdAt: row.createdAt.toISOString(),
-      expiresAt: row.expiresAt.toISOString(),
-    };
+    return row ? hydratePending(row) : undefined;
   }
 
+  /**
+   * Atomic compare-and-set: exactly one caller transitions a row from `pending` (or a prior
+   * `failed` retry) to `applying`. `UPDATE … WHERE state in ('pending','failed') … RETURNING` takes a
+   * row lock, so two concurrent applies cannot both win — the loser gets zero rows and is told the
+   * current state. This is the cross-process/cross-container guarantee the file store cannot give.
+   */
+  async claim(id: string, approver: ApplyActor): Promise<ClaimResult> {
+    const claimed = await db()<Array<PendingRowShape>>`
+      update public.pending_operations
+        set state = 'applying', consumed_at = now(), claimed_at = now(),
+            approved_by_type = ${approver.type}, approved_by_id = ${approver.id},
+            apply_attempt_id = gen_random_uuid()
+      where id = ${id} and organization_id = ${this.principal.organizationId}
+        and state in ('pending', 'failed') and expires_at > now()
+      returning id, provider, operation_hash, operation, preview, preview_digest, state,
+                requested_by_type, requested_by_id, approved_by_type, approved_by_id, result, created_at, expires_at
+    `;
+    if (claimed[0]) return { status: 'claimed', pending: hydratePending(claimed[0]) };
+
+    // No row claimed: report why from the current state.
+    const current = await db()<Array<{ state: string; expiresAt: Date; result: WriteResult | null }>>`
+      select state, expires_at, result from public.pending_operations
+      where id = ${id} and organization_id = ${this.principal.organizationId} limit 1
+    `;
+    const row = current[0];
+    if (!row) return { status: 'not_found' };
+    if (row.state === 'applied') return { status: 'already_applied', result: row.result ?? undefined };
+    if (row.state === 'applying') return { status: 'in_progress' };
+    if (row.state === 'rejected') return { status: 'rejected' };
+    if (row.state === 'superseded' || row.state === 'expired') return { status: 'superseded' };
+    if (Date.parse(row.expiresAt.toISOString()) <= Date.now()) {
+      return { status: 'expired', pending: { id, provider: '', opHash: '', op: {} as never, preview: {} as never, createdAt: '', expiresAt: row.expiresAt.toISOString() } };
+    }
+    return { status: 'not_found' };
+  }
+
+  async markApplied(id: string, result: WriteResult): Promise<void> {
+    await db()`
+      update public.pending_operations
+        set state = 'applied', applied_at = now(), result = ${db().json(result as never)}
+      where id = ${id} and organization_id = ${this.principal.organizationId} and state = 'applying'
+    `;
+  }
+
+  async markFailed(id: string, reason: string): Promise<void> {
+    await db()`
+      update public.pending_operations
+        set state = 'failed', failed_at = now(), failure_reason = ${reason.slice(0, 500)}
+      where id = ${id} and organization_id = ${this.principal.organizationId} and state = 'applying'
+    `;
+  }
+
+  async markSuperseded(id: string): Promise<void> {
+    await db()`
+      update public.pending_operations
+        set state = 'superseded', consumed_at = coalesce(consumed_at, now())
+      where id = ${id} and organization_id = ${this.principal.organizationId}
+        and state in ('pending', 'applying')
+    `;
+  }
+
+  /** Reject path: consume without applying. */
   async delete(id: string): Promise<void> {
     await db()`
-      update public.pending_operations set consumed_at = now()
-      where id = ${id} and organization_id = ${this.principal.organizationId}
+      update public.pending_operations
+        set state = 'rejected', consumed_at = now()
+      where id = ${id} and organization_id = ${this.principal.organizationId} and consumed_at is null
     `;
   }
 
   async sweep(now = new Date()): Promise<void> {
     await db()`
-      update public.pending_operations set consumed_at = ${now.toISOString()}
-      where organization_id = ${this.principal.organizationId} and consumed_at is null and expires_at < ${now.toISOString()}
+      update public.pending_operations
+        set state = 'expired', consumed_at = ${now.toISOString()}
+      where organization_id = ${this.principal.organizationId} and state = 'pending' and expires_at < ${now.toISOString()}
     `;
   }
+}
+
+interface PendingRowShape {
+  id: string;
+  provider: string;
+  operationHash: string;
+  operation: PendingOperation['op'];
+  preview: PendingOperation['preview'];
+  previewDigest: string | null;
+  state: PendingOperation['state'];
+  requestedByType: string | null;
+  requestedById: string | null;
+  approvedByType: string | null;
+  approvedById: string | null;
+  result: WriteResult | null;
+  createdAt: Date;
+  expiresAt: Date;
+}
+
+function actorFrom(type: string | null, id: string | null): ApplyActor | undefined {
+  return type ? { type: type as ApplyActor['type'], id } : undefined;
+}
+
+function hydratePending(row: PendingRowShape): PendingOperation {
+  return {
+    id: row.id,
+    provider: row.provider,
+    opHash: row.operationHash,
+    op: row.operation,
+    preview: row.preview,
+    previewDigest: row.previewDigest ?? undefined,
+    state: row.state,
+    requestedBy: actorFrom(row.requestedByType, row.requestedById),
+    approvedBy: actorFrom(row.approvedByType, row.approvedById),
+    result: row.result ?? undefined,
+    createdAt: row.createdAt.toISOString(),
+    expiresAt: row.expiresAt.toISOString(),
+  };
 }
 
 export class PostgresAuditStore {

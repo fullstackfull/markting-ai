@@ -2,7 +2,6 @@ import { sessionPrincipal, requireScope } from '@/lib/cloud/auth';
 import { listPendingOperations } from '@/lib/cloud/repository';
 import { apiError, HttpError, noStoreJson } from '@/lib/http';
 import { applyPending } from '@/lib/markting/bridge';
-import { marktingEnv } from '@/lib/markting/env';
 import { markPendingOutcome } from '@/lib/markting/repository';
 import { createBridgeRuntime } from '@/lib/markting/runtime';
 
@@ -19,9 +18,10 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     if (principal.role === 'viewer' || principal.role === 'member') throw new HttpError('Only owners and admins can apply changes.', 403);
     const row = (await listPendingOperations(principal.organizationId, 200)).find((candidate) => candidate.id === id);
     if (!row) throw new HttpError('Pending operation not found, expired, or already applied.', 404);
-    if (row.createdBy && row.createdBy === principal.userId && marktingEnv().MARKTING_ALLOW_SELF_APPROVAL !== 'true') {
-      throw new HttpError('The person who requested a change cannot approve it (set MARKTING_ALLOW_SELF_APPROVAL=true for single-user demos).', 403);
-    }
+    // Four-eyes (human approver, requester≠approver) is enforced in the single policy-engine seam
+    // (createBridgeRuntime sets this session as the human approver), so every write surface — this
+    // route, REST and MCP — inherits it. The engine also correctly handles API/engine-created
+    // pendings that have no `created_by`, which the old route-level check silently exempted (SEC-26).
     const runtime = await createBridgeRuntime(principal);
     const result = await applyPending(runtime, { id: row.id, operation: row.operation as { tool: string; accountId: string; payload: Record<string, unknown> } });
     await markPendingOutcome(principal.organizationId, row.id, 'applied');

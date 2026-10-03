@@ -1,13 +1,29 @@
 import { describe, expect, it } from 'vitest';
-import { createContext, DEFAULT_POLICY, PolicyEngine, type AuditEntry, type PendingOperation } from '@adport/core';
+import { createContext, DEFAULT_POLICY, PolicyEngine, type AuditEntry, type PendingOperation, type ClaimResult, type ApplyActor, type WriteResult } from '@adport/core';
 import { InMemorySandboxStore, SANDBOX_ACCOUNTS, SandboxProvider, sandboxSeed, sandboxTools } from '@/lib/markting/sandbox-provider';
 
 class MemoryPending {
   rows = new Map<string, PendingOperation>();
-  async put(op: PendingOperation) { this.rows.set(op.id, op); }
-  async get(id: string) { return this.rows.get(id); }
+  async put(op: PendingOperation) { this.rows.set(op.id, { ...op, state: op.state ?? 'pending' }); }
+  async get(id: string) { const o = this.rows.get(id); return o ? { ...o } : undefined; }
+  async claim(id: string, approver: ApplyActor): Promise<ClaimResult> {
+    const o = this.rows.get(id);
+    if (!o) return { status: 'not_found' };
+    if (Date.parse(o.expiresAt) < Date.now()) return { status: 'expired', pending: { ...o } };
+    const s = o.state ?? 'pending';
+    if (s === 'applied') return { status: 'already_applied', result: o.result };
+    if (s === 'applying') return { status: 'in_progress' };
+    if (s === 'superseded' || s === 'expired') return { status: 'superseded' };
+    if (s === 'rejected') return { status: 'rejected' };
+    const claimed: PendingOperation = { ...o, state: 'applying', approvedBy: approver };
+    this.rows.set(id, claimed);
+    return { status: 'claimed', pending: { ...claimed } };
+  }
+  async markApplied(id: string, result: WriteResult) { const o = this.rows.get(id); if (o) this.rows.set(id, { ...o, state: 'applied', result }); }
+  async markFailed(id: string) { const o = this.rows.get(id); if (o) this.rows.set(id, { ...o, state: 'failed' }); }
+  async markSuperseded(id: string) { const o = this.rows.get(id); if (o) this.rows.set(id, { ...o, state: 'superseded' }); }
   async delete(id: string) { this.rows.delete(id); }
-  async sweep() {}
+  async sweep(now = new Date()) { for (const [id, op] of this.rows) if (Date.parse(op.expiresAt) < now.getTime()) this.rows.delete(id); }
 }
 class MemoryAudit { entries: Array<Omit<AuditEntry, 'ts'>> = []; async append(entry: Omit<AuditEntry, 'ts'>) { this.entries.push(entry); } }
 

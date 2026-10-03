@@ -51,6 +51,9 @@ export async function runAssistantTurn(principal: TenantPrincipal, input: { thre
   if (proposal && proposal.state === 'awaiting_approval') {
     const demoMode = isDemoMode();
     const [runtime, aliases] = await Promise.all([createBridgeRuntime(principal), loadAliasMap(principal.organizationId, demoMode)]);
+    // The preview (validate) originates from the AI engine's proposal, not the person viewing the
+    // chat. Record the requester as the ai_agent so a human approver is always a distinct actor.
+    runtime.ctx.writeActor = { type: 'ai_agent', id: 'engine' };
     try {
       bridge = await bridgeProposal(proposal, {
         runtime,

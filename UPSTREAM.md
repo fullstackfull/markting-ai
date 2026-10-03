@@ -55,13 +55,28 @@ markting-ai adds lives outside `platform/` and `engine/` (root `docker-compose.y
 | `apps/cloud/components/{nav,shell,auth-screen}.tsx` and every page/component under `apps/cloud/app` and `apps/cloud/components` that held UI copy | inline English replaced by `t()` lookups (dictionaries in `lib/i18n/messages/`) | 2 |
 | `apps/cloud/package.json`, `pnpm-lock.yaml` | added `@fontsource/ibm-plex-sans-arabic` (OFL-1.1) | 2 |
 | `apps/cloud/test/account-picker.test.tsx`, `test/account-selection.test.tsx` | mock `@/lib/i18n/server` so English assertions keep running | 2 |
+| `packages/core/src/policy/engine.ts` | atomic claim→apply, actor-aware approval (human approver, requester≠approver), apply-time policy + budget re-check, immutable-preview digest, pre-write `applying` intent audit, generic-tool gate | P0-A |
+| `packages/core/src/policy/pending.ts` | pending-operation state machine (`PendingState`) + actor/digest/result fields; `claim`/`markApplied`/`markFailed`/`markSuperseded`/`ClaimResult` on the store contract | P0-A |
+| `packages/core/src/policy/policy.ts` | added `allow_generic_api_writes` (default false) | P0-A |
+| `packages/core/src/policy/audit.ts` | added the `applying` intent event to the audit event union | P0-A |
+| `packages/core/src/errors.ts` | added P0-A error codes (`APPROVAL_REQUIRED`, `SELF_APPROVAL_FORBIDDEN`, `GENERIC_WRITE_DISABLED`, `REPREVIEW_REQUIRED`, `APPLY_IN_PROGRESS`, `PENDING_SUPERSEDED`, `PENDING_REJECTED`) | P0-A |
+| `packages/core/src/tools/{registry,write}.ts`, `src/context.ts`, `src/index.ts` | thread `writeActor`/`allowSelfApproval` through `ToolContext`/`createContext`; export the actor and risk modules | P0-A |
+| `packages/meta/src/provider.ts` | assert object→account ownership on typed writes (`meta_set_budget`/`meta_set_lifetime_budget`/`meta_set_campaign_status`/`meta_set_ad_set_status`) before any provider call | P0-A |
+| `packages/{snapchat,spotify}/test/*`, `packages/core/test/{policy-engine,synthetic-provider}.test.ts`, `apps/cloud/test/markting-{bridge,sandbox,snapchat-wire}.test.ts`, `packages/meta/test/meta.test.ts` | updated two-step assertions to the idempotent-replay + state-machine + ownership semantics | P0-A |
+| `apps/cloud/lib/cloud/repository.ts` | `PostgresPendingStore` implements the atomic SQL `claim` (compare-and-set) + state transitions and persists requester/approver/digest | P0-A |
+| `apps/cloud/lib/cloud/runtime.ts` | `principalToActor`; REST/MCP runtimes carry an `api_client` write actor (preview-only, never self-apply) | P0-A |
+| `apps/cloud/lib/markting/runtime.ts` | bridge runtime sets the human approver + configured self-approval | P0-A |
+| `apps/cloud/lib/markting/assistant.ts` | the engine preview records the requester as the `ai_agent` | P0-A |
+| `apps/cloud/app/api/approvals/[id]/apply/route.ts` | four-eyes moved into the policy-engine seam (closes the null-`createdBy` self-approval exemption) | P0-A |
 
 ### `platform/` — new files (no upstream counterpart)
 `apps/cloud/lib/markting/**`, `apps/cloud/app/api/assistant/**`, `apps/cloud/app/api/approvals/**`,
 `apps/cloud/app/api/reports/engine/**`, `apps/cloud/app/dashboard/assistant/**`,
 `apps/cloud/app/dashboard/approvals/approval-actions.tsx`, `apps/cloud/app/dashboard/reports/engine-reports.tsx`,
 `apps/cloud/test/markting-*.test.ts`, `apps/cloud/test/fixtures/engine-proposal.ts`,
-`supabase/migrations/20261002000000_markting_bridge.sql`, `apps/cloud/lib/i18n/**`, `apps/cloud/components/{i18n-provider,locale-switcher}.tsx`, `apps/cloud/app/api/locale/route.ts`, `apps/cloud/test/i18n.test.ts`.
+`supabase/migrations/20261002000000_markting_bridge.sql`, `apps/cloud/lib/i18n/**`, `apps/cloud/components/{i18n-provider,locale-switcher}.tsx`, `apps/cloud/app/api/locale/route.ts`, `apps/cloud/test/i18n.test.ts`,
+`packages/core/src/policy/{actor,risk}.ts` (P0-A), `packages/core/test/policy-engine-phase0.test.ts` (P0-A),
+`supabase/migrations/20261003000000_phase0_write_safety.sql` (P0-A), `apps/cloud/test/pending-claim.database.test.ts` (P0-A).
 
 ### `engine/` (paid-media-agent)
 No file modified. The engine is hosted by `services/engine-demo/serve_demo.py`, which imports the

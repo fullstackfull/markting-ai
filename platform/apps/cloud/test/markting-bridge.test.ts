@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { createContext, DEFAULT_POLICY, hashOperation, PolicyEngine, type AdportRuntime, type AuditEntry, type PendingOperation } from '@adport/core';
+import { createContext, DEFAULT_POLICY, hashOperation, PolicyEngine, type AdportRuntime, type AuditEntry, type PendingOperation, type ClaimResult, type ApplyActor, type WriteResult } from '@adport/core';
 import { applyPending, bridgeProposal, BridgeAccessError, type BridgeRecord } from '@/lib/markting/bridge';
 import { InMemorySandboxStore, SANDBOX_ALIASES, SandboxProvider, sandboxTools } from '@/lib/markting/sandbox-provider';
 import { syntheticProposal } from './fixtures/engine-proposal';
@@ -7,8 +7,24 @@ import { syntheticProposal } from './fixtures/engine-proposal';
 /** In-memory stand-ins for the Postgres pending/audit stores; same contracts as the cloud repository. */
 class MemoryPending {
   rows = new Map<string, PendingOperation>();
-  async put(op: PendingOperation) { this.rows.set(op.id, op); }
-  async get(id: string) { return this.rows.get(id); }
+  async put(op: PendingOperation) { this.rows.set(op.id, { ...op, state: op.state ?? 'pending' }); }
+  async get(id: string) { const o = this.rows.get(id); return o ? { ...o } : undefined; }
+  async claim(id: string, approver: ApplyActor): Promise<ClaimResult> {
+    const o = this.rows.get(id);
+    if (!o) return { status: 'not_found' };
+    if (Date.parse(o.expiresAt) < Date.now()) return { status: 'expired', pending: { ...o } };
+    const s = o.state ?? 'pending';
+    if (s === 'applied') return { status: 'already_applied', result: o.result };
+    if (s === 'applying') return { status: 'in_progress' };
+    if (s === 'superseded' || s === 'expired') return { status: 'superseded' };
+    if (s === 'rejected') return { status: 'rejected' };
+    const claimed: PendingOperation = { ...o, state: 'applying', approvedBy: approver };
+    this.rows.set(id, claimed);
+    return { status: 'claimed', pending: { ...claimed } };
+  }
+  async markApplied(id: string, result: WriteResult) { const o = this.rows.get(id); if (o) this.rows.set(id, { ...o, state: 'applied', result }); }
+  async markFailed(id: string) { const o = this.rows.get(id); if (o) this.rows.set(id, { ...o, state: 'failed' }); }
+  async markSuperseded(id: string) { const o = this.rows.get(id); if (o) this.rows.set(id, { ...o, state: 'superseded' }); }
   async delete(id: string) { this.rows.delete(id); }
   async sweep(now = new Date()) { for (const [id, op] of this.rows) if (Date.parse(op.expiresAt) < now.getTime()) this.rows.delete(id); }
 }
@@ -75,7 +91,7 @@ describe('bridgeProposal: engine proposal → adport pending operation', () => {
     expect(applied).toMatchObject({ status: 'applied', applied: true });
     expect(applySpy).toHaveBeenCalledTimes(1);
     expect((await store.load()).find((campaign) => campaign.id === 'g-103')?.dailyBudgetMicros).toBe(240_000_000);
-    expect(pending.rows.size).toBe(0);
+    expect(pending.rows.get(row.id)?.state).toBe('applied');
   });
 
   it('refuses to apply altered arguments (PENDING_MISMATCH)', async () => {

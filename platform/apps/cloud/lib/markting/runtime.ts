@@ -1,9 +1,9 @@
 import 'server-only';
 import { createContext, PolicyEngine, type AdportRuntime } from '@adport/core';
-import { createTenantRuntime } from '@/lib/cloud/runtime';
+import { createTenantRuntime, principalToActor } from '@/lib/cloud/runtime';
 import { getOrganizationPolicy, PostgresAuditStore, PostgresFindingsStore, PostgresPendingStore } from '@/lib/cloud/repository';
 import type { TenantPrincipal } from '@/lib/cloud/types';
-import { isDemoMode } from './env';
+import { isDemoMode, marktingEnv } from './env';
 import { PostgresSandboxStore } from './repository';
 import { SandboxProvider, sandboxTools } from './sandbox-provider';
 
@@ -16,12 +16,21 @@ import { SandboxProvider, sandboxTools } from './sandbox-provider';
  * log exactly like real ones. The upstream `/mcp` and `/api/v1` routes never use this function.
  */
 export async function createBridgeRuntime(principal: TenantPrincipal): Promise<AdportRuntime> {
-  if (!isDemoMode()) return createTenantRuntime(principal);
+  const allowSelfApproval = marktingEnv().MARKTING_ALLOW_SELF_APPROVAL === 'true';
+  if (!isDemoMode()) {
+    const runtime = await createTenantRuntime(principal);
+    // The dashboard apply path is a human approver; permit the configured self-approval exception.
+    runtime.ctx.writeActor = principalToActor(principal);
+    runtime.ctx.allowSelfApproval = allowSelfApproval;
+    return runtime;
+  }
   const policy = await getOrganizationPolicy(principal.organizationId);
   const provider = new SandboxProvider(new PostgresSandboxStore(principal.organizationId));
   return createContext({
     providerModules: [{ provider, tools: sandboxTools(provider) }],
     engine: new PolicyEngine(policy, new PostgresPendingStore(principal), new PostgresAuditStore(principal)),
     findings: new PostgresFindingsStore(principal.organizationId),
+    writeActor: principalToActor(principal),
+    allowSelfApproval,
   });
 }

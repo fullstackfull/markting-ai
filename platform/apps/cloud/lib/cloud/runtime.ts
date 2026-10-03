@@ -1,5 +1,5 @@
 import 'server-only';
-import { createContext, PolicyEngine, type AdportRuntime, type ProviderModule } from '@adport/core';
+import { createContext, PolicyEngine, type AdportRuntime, type ApplyActor, type ProviderModule } from '@adport/core';
 import { AppleAdsClient, AppleAdsProvider, appleTools } from '@adport/provider-apple';
 import { GoogleAdsProvider, GoogleAdsRestClient, googleTools } from '@adport/provider-google';
 import { MetaAdsProvider, MetaGraphClient, metaTools } from '@adport/provider-meta';
@@ -34,6 +34,16 @@ import { HttpError } from '@/lib/http';
 export interface TenantRuntimeOptions {
   /** Used only immediately after OAuth exchange to discover provider accounts. */
   enforceAccountScope?: boolean;
+}
+
+/**
+ * The write actor for a principal. A signed-in person (session) is the only human; API keys and
+ * external OAuth/MCP clients are non-human `api_client`s, which the policy engine lets request a
+ * change (create a preview) but never apply — so REST/MCP cannot autonomously execute a write.
+ */
+export function principalToActor(principal: TenantPrincipal): ApplyActor {
+  if (principal.userId) return { type: 'human_user', id: principal.userId };
+  return { type: 'api_client', id: principal.apiKeyId ?? principal.oauthTokenId ?? null };
 }
 
 /**
@@ -143,5 +153,9 @@ export async function createTenantRuntime(principal: TenantPrincipal, options: T
     engine,
     authorizeToolCall: enforceAccountScope ? createAccountScopeAuthorizer(enabledAccountIds) : undefined,
     findings: new PostgresFindingsStore(principal.organizationId),
+    // REST/MCP principals are api_clients: they may preview, never self-apply. A human approver on
+    // the dashboard path is set by createBridgeRuntime. Self-approval is off here regardless.
+    writeActor: principalToActor(principal),
+    allowSelfApproval: false,
   });
 }
