@@ -17,14 +17,19 @@ const EXCLUDED_RULES: string[] = [];
 async function scan(page: import('@playwright/test').Page) {
   const results = await new AxeBuilder({ page }).withTags(WCAG).disableRules(EXCLUDED_RULES).analyze();
   const blocking = results.violations.filter((v) => v.impact === 'critical' || v.impact === 'serious');
-  return { blocking, all: results.violations };
+  // Rich, element-level descriptions so a CI failure names the exact node + colors to fix, rather than
+  // just the rule id (otherwise contrast findings are undebuggable without the trace).
+  const describe = blocking.flatMap((v) =>
+    v.nodes.map((n) => `${v.id} [${v.impact}] ${n.target.join(' ')} :: ${(n.failureSummary ?? '').replace(/\s+/g, ' ').trim()}`),
+  );
+  return { blocking, describe, all: results.violations };
 }
 
 test('A11Y-00 @public landing has no critical/serious axe violations', async ({ page }) => {
   await page.goto('/');
   await expect(page.locator('body')).toBeVisible();
-  const { blocking } = await scan(page);
-  expect(blocking.map((v) => `${v.id}: ${v.help}`)).toEqual([]);
+  const { describe } = await scan(page);
+  expect(describe).toEqual([]);
 });
 
 const DASHBOARD = ['/dashboard/workspace', '/dashboard/commerce', '/dashboard/creative', '/dashboard/agency', '/dashboard/executive', '/dashboard/assistant', '/dashboard/recommendations', '/dashboard/data-quality', '/dashboard/governance'];
@@ -33,15 +38,15 @@ for (const route of DASHBOARD) {
   test(`A11Y ${route} (en) has no critical/serious axe violations`, async ({ page }) => {
     await page.goto(route);
     await expect(page.locator('main')).toBeVisible();
-    const { blocking } = await scan(page);
-    expect(blocking.map((v) => `${v.id}: ${v.help}`)).toEqual([]);
+    const { describe } = await scan(page);
+    expect(describe).toEqual([]);
   });
 }
 
-test('A11Y workspace (ar / RTL) has no critical/serious axe violations', async ({ page, context }) => {
-  await context.addCookies([{ name: 'locale', value: 'ar', url: 'http://127.0.0.1:3100' }]);
+test('A11Y workspace (ar / RTL) has no critical/serious axe violations', async ({ page, context, baseURL }) => {
+  await context.addCookies([{ name: 'locale', value: 'ar', url: baseURL ?? 'http://localhost:3100' }]);
   await page.goto('/dashboard/workspace');
   await expect(page.locator('html[dir="rtl"]')).toBeAttached();
-  const { blocking } = await scan(page);
-  expect(blocking.map((v) => `${v.id}: ${v.help}`)).toEqual([]);
+  const { describe } = await scan(page);
+  expect(describe).toEqual([]);
 });

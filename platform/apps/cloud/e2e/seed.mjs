@@ -83,6 +83,24 @@ try {
   for (const org of [orgA, orgB, agency]) await completeOnboarding(org);
 
   console.log(`e2e seed OK: users(buyer=${buyer.slice(0, 8)}, agencyAdmin=${agencyAdmin.slice(0, 8)}, viewer=${viewer.slice(0, 8)}) orgs(A=${orgA.slice(0, 8)}, B=${orgB.slice(0, 8)}, agency=${agency.slice(0, 8)})`);
+
+  // Diagnostic: read back exactly what requireDashboardTenant() sees, under the SAME backend role the
+  // app uses (ADPORT_DB_ROLE=adport_backend), so a dashboard→/onboarding bounce is explained by data,
+  // not guessed. Prints the resolved membership org + onboarding completed_at for the buyer.
+  const role = process.env.ADPORT_DB_ROLE || 'adport_backend';
+  const check = await sql.begin(async (tx) => {
+    await tx.unsafe(`set local role ${role}`);
+    return tx`
+      select membership.organization_id, membership.role, organization.name as organization_name,
+        onboarding.completed_at as onboarding_completed_at
+      from public.organization_memberships membership
+      join public.organizations organization on organization.id = membership.organization_id
+      left join public.organization_onboarding onboarding on onboarding.organization_id = organization.id
+      where membership.user_id = ${buyer}
+      order by membership.created_at asc
+      limit 1`;
+  });
+  console.log(`e2e seed VERIFY (as ${role}): buyer firstOrg=${JSON.stringify(check[0] ?? null)}`);
 } catch (err) {
   console.error('e2e seed FAILED:', err);
   process.exitCode = 1;
