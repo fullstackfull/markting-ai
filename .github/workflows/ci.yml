@@ -64,9 +64,18 @@ jobs:
       - name: Apply migrations forward-only (no destructive reset)
         working-directory: platform
         run: npx --yes supabase@latest migration up --local
-      - name: Export DB URL
+      - name: Export Supabase env (DB URL + Auth API URL/keys for the isolation & OAuth suites)
         working-directory: platform
-        run: echo "SUPABASE_DB_URL=$(npx --yes supabase@latest status -o env | sed -n 's/^DB_URL=\"\(.*\)\"$/\1/p')" >> "$GITHUB_ENV"
+        run: |
+          npx --yes supabase@latest status -o env > "$RUNNER_TEMP/sb.env"
+          get() { sed -n "s/^$1=\"\(.*\)\"\$/\1/p" "$RUNNER_TEMP/sb.env"; }
+          echo "::add-mask::$(get SERVICE_ROLE_KEY)"; echo "::add-mask::$(get SECRET_KEY)"
+          echo "SUPABASE_DB_URL=$(get DB_URL)" >> "$GITHUB_ENV"
+          echo "NEXT_PUBLIC_SUPABASE_URL=$(get API_URL)" >> "$GITHUB_ENV"
+          ANON="$(get ANON_KEY)"; [ -z "$ANON" ] && ANON="$(get PUBLISHABLE_KEY)"
+          echo "NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=$ANON" >> "$GITHUB_ENV"
+          SVC="$(get SERVICE_ROLE_KEY)"; [ -z "$SVC" ] && SVC="$(get SECRET_KEY)"
+          echo "SUPABASE_SECRET_KEY=$SVC" >> "$GITHUB_ENV"
       - name: Install + run DB-gated suites
         working-directory: platform
         run: |

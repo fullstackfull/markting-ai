@@ -48,7 +48,10 @@ export function classifyTrend(series: number[], opts: TrendOptions = {}): TrendR
   const recentMedian = median(recent);
   const mad = median(baseline.map((v) => Math.abs(v - baselineMedian))) || 0;
   const diff = recentMedian - baselineMedian;
-  const direction: TrendResult['direction'] = Math.abs(diff) < (mad || Math.abs(baselineMedian) * 0.02 || 1e-9) ? 'flat' : diff > 0 ? 'up' : 'down';
+  // A move is only directional when it clears BOTH the robust baseline spread (MAD) and a small
+  // relative floor — so a ~1% wiggle around a stable level reads as noise, not a trend.
+  const flatThreshold = Math.max(mad, Math.abs(baselineMedian) * 0.03, 1e-9);
+  const direction: TrendResult['direction'] = Math.abs(diff) < flatThreshold ? 'flat' : diff > 0 ? 'up' : 'down';
 
   // Directional consistency across the recent window relative to the baseline.
   const side = direction === 'up' ? 1 : direction === 'down' ? -1 : 0;
