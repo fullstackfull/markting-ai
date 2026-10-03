@@ -28,6 +28,7 @@ const USERS = [
   { email: 'buyer@e2e.test', name: 'E2E Media Buyer' },
   { email: 'agencyadmin@e2e.test', name: 'E2E Agency Admin' },
   { email: 'viewer@e2e.test', name: 'E2E Viewer' },
+  { email: 'operator@e2e.test', name: 'E2E Platform Operator' },
 ];
 
 async function ensureUser(email, name) {
@@ -69,6 +70,15 @@ try {
   const buyer = await ensureUser(USERS[0].email, USERS[0].name);
   const agencyAdmin = await ensureUser(USERS[1].email, USERS[1].name);
   const viewer = await ensureUser(USERS[2].email, USERS[2].name);
+  const operator = await ensureUser(USERS[3].email, USERS[3].name);
+
+  // Platform operator roster: `operator@e2e.test` is a SUPER_ADMIN (platform authority comes ONLY from
+  // here, never org membership). buyer/viewer are deliberately NOT operators so the admin E2E can prove
+  // a tenant owner and an ordinary tenant user are denied /admin.
+  await sql`
+    insert into public.platform_operators (user_id, role, created_by)
+    values (${operator}, 'SUPER_ADMIN', ${operator})
+    on conflict (user_id) do update set role = excluded.role, status = 'active'`;
 
   // Org A (buyer's workspace), Org B (separate tenant), Agency (multi-client).
   const orgA = await ensureOrg('e2e-org-a', 'E2E Org A', buyer);

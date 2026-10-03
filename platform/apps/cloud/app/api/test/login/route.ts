@@ -16,6 +16,7 @@ const SEEDED_EMAILS = new Set([
   'buyer@e2e.test',
   'agencyadmin@e2e.test',
   'viewer@e2e.test',
+  'operator@e2e.test',
 ]);
 
 export async function GET(request: Request): Promise<Response> {

@@ -1,5 +1,5 @@
 import { defineConfig, devices } from '@playwright/test';
-import { BUYER_STATE } from './e2e/paths';
+import { BUYER_STATE, OPERATOR_STATE } from './e2e/paths';
 
 /**
  * CODE-RC browser E2E — real headless Chromium (pre-installed at PLAYWRIGHT_BROWSERS_PATH).
@@ -58,10 +58,15 @@ export default defineConfig({
   projects: SEEDED
     ? [
         { name: 'setup', testMatch: /auth\.setup\.ts/ },
-        { name: 'public', testMatch: /(journeys|a11y)\.spec\.ts/, grep: /@public/ },
-        { name: 'authed', testMatch: /(journeys|a11y)\.spec\.ts/, grepInvert: /@public/, dependencies: ['setup'], use: { storageState: BUYER_STATE } },
+        { name: 'admin-setup', testMatch: /admin-auth\.setup\.ts/ },
+        { name: 'public', testMatch: /(journeys|a11y|admin)\.spec\.ts/, grep: /@public/ },
+        // authed = seeded media buyer (tenant OWNER, not a platform operator): journeys/a11y + the
+        // @owner-denied admin check. Excludes @public and @operator.
+        { name: 'authed', testMatch: /(journeys|a11y|admin)\.spec\.ts/, grepInvert: /@public|@operator/, dependencies: ['setup'], use: { storageState: BUYER_STATE } },
+        // admin = seeded SUPER_ADMIN operator: only the @operator admin checks.
+        { name: 'admin', testMatch: /admin\.spec\.ts/, grep: /@operator/, dependencies: ['admin-setup'], use: { storageState: OPERATOR_STATE } },
       ]
-    : [{ name: 'public', testMatch: /(journeys|a11y)\.spec\.ts/, grep: /@public/ }],
+    : [{ name: 'public', testMatch: /(journeys|a11y|admin)\.spec\.ts/, grep: /@public/ }],
   webServer: startServer
     ? {
         command: 'node .next/standalone/apps/cloud/server.js',
