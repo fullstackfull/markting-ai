@@ -25,7 +25,7 @@ regexes = [
   '''ZTJlX2NpXzMyYnl0ZV9lbmNyeXB0aW9uX2tleSEhISE=''',
   '''e2e_ci_api_key_pepper_000000000000000000''',
   '''e2e_ci_mcp_oauth_signing_key_0000000000000000''',
-  '''e2e-ci-test-password-123456''',
+  '''E2eCi!Test-Pass-123456''',
   '''e2e_placeholder_[a-z_]*_0+''',
   '''ZTJlX2NpXzMyYnl0ZV9lbmNyeXB0aW9uX2tleS[A-Za-z0-9+/=]*''',
 ]
