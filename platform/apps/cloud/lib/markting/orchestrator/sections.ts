@@ -272,6 +272,37 @@ export type AnswerSection =
  * seed account. Returns undefined for intents answered purely by the composed diagnosis (e.g.
  * PROFITABILITY_DECLINE / DAILY_REVIEW). This is the single dispatcher the Assistant and surfaces share.
  */
+/**
+ * Serialize a section's concrete computed facts into bilingual answer TEXT so the shipped Assistant
+ * chat (which renders the answer's text, not a React section) actually conveys the breakdown/ranking/
+ * rows — closing the gap the independent panel flagged (a computed section the user never saw).
+ */
+export function sectionText(section: AnswerSection, locale: 'en' | 'ar'): { en: string; ar: string } {
+  const pick = (b: BiText) => (locale === 'ar' ? b.ar : b.en);
+  const lines_en: string[] = [section.summary.en];
+  const lines_ar: string[] = [section.summary.ar];
+  const push = (en: string, ar: string) => { lines_en.push(en); lines_ar.push(ar); };
+  switch (section.kind) {
+    case 'scaling': for (const r of section.rows) push(`• ${r.name}: ${r.result.state}`, `• ${r.name}: ${r.result.state}`); break;
+    case 'creative': for (const r of section.rows.slice(0, 8)) push(`• ${r.name} [${r.state}, fatigue ${r.fatigue}, ${r.spendSharePct}% spend]`, `• ${r.name} [${r.state}، إجهاد ${r.fatigue}، ${r.spendSharePct}% إنفاق]`); break;
+    case 'outcomes': for (const r of section.rows) push(`• ${pick(r.title)} — ${r.outcomeClass} (${r.causalStance})`, `• ${pick(r.title)} — ${r.outcomeClass} (${r.causalStance})`); break;
+    case 'memory': for (const r of section.rows) push(`• ${pick(r.value)} [${r.source}/${r.trust}, ${r.dateIso}]`, `• ${pick(r.value)} [${r.source}/${r.trust}، ${r.dateIso}]`); break;
+    case 'experiments': for (const r of section.rows) push(`• ${pick(r.title)} [${r.state}, ${r.readiness}]`, `• ${pick(r.title)} [${r.state}، ${r.readiness}]`); break;
+    case 'portfolio': for (const r of section.rows) push(`• ${r.clientName} (${r.currency}) attention ${r.attentionScore}: ${r.reasons.map(pick).join(', ') || '—'}`, `• ${r.clientName} (${r.currency}) انتباه ${r.attentionScore}: ${r.reasons.map(pick).join('، ') || '—'}`); break;
+    case 'breakdown': for (const a of section.analyses.filter((x) => x.supported)) push(`• ${a.dimension}: ${a.concentration ?? '—'}${a.efficiencySpread ? `, best ${a.efficiencySpread.best.value} / worst ${a.efficiencySpread.worst.value}` : a.protectedDimension ? ' (protected: reported only)' : ''}`, `• ${a.dimension}: ${a.concentration ?? '—'}`); break;
+    case 'crossChannel': { const rk = section.roas.ranking ?? []; push(`• ROAS ${section.roas.comparability.state}: ${rk.map((r) => `${r.provider} ${r.value}`).join(' > ') || 'not comparable'}`, `• ROAS ${section.roas.comparability.state}: ${rk.map((r) => `${r.provider} ${r.value}`).join(' > ') || 'غير قابل للمقارنة'}`); break; }
+    case 'scenario': for (const [name, res] of [['Conservative', section.conservative], ['Balanced', section.balanced], ['Aggressive', section.aggressiveReview]] as const) push(`• ${name}: ${res.moves.map((m) => `${m.candidateId.split(':').pop()} ${m.direction} ${m.deltaMinor}`).join('; ') || 'no responsible move'}`, `• ${name}: ${res.moves.map((m) => `${m.candidateId.split(':').pop()} ${m.direction} ${m.deltaMinor}`).join('؛ ') || 'لا تحرّك مسؤول'}`); break;
+    case 'commerce': if (section.available) push(`• refunds ${section.refundRatePct}%, MER ${section.mer?.value ?? 'UNKNOWN'}, margin ${section.margin?.notComputableReason ? 'UNKNOWN' : section.margin?.contributionMarginPct + '%'}, reconciliation ${section.reconciliation?.state}`, `• الاستردادات ${section.refundRatePct}%، MER ${section.mer?.value ?? 'غير معروف'}`); break;
+    case 'pacing': push(`• status ${section.result.status}, expected ${Math.round(section.result.expectedFraction * 100)}% vs actual ${Math.round(section.result.actualFraction * 100)}%`, `• الحالة ${section.result.status}`); break;
+    case 'forecast': push(`• ${section.horizonDays}d spend ≈ ${section.spend.estimate} (${section.spend.low}–${section.spend.high}), CPA ≈ ${section.cpa.estimate}`, `• الإنفاق لـ ${section.horizonDays} يوم ≈ ${section.spend.estimate}`); break;
+    case 'response': push(`• curve ${section.curve.form}, ${pick(section.saturation.label)}, marginal CPA ${section.marginal.marginalCpa ?? section.marginal.reason ?? '—'}`, `• المنحنى ${section.curve.form}`); break;
+    case 'anomaly': push(`• ${section.report.actionable ? `top z=${section.report.top?.z}, ${section.report.top?.pct}%` : 'no actionable anomaly'}`, `• ${section.report.actionable ? `z=${section.report.top?.z}` : 'لا شذوذ قابل للتنفيذ'}`); break;
+    case 'trend': push(`• CPA ${section.cpa.direction}/${section.cpa.state}, spend ${section.spend.direction}`, `• CPA ${section.cpa.direction}`); break;
+    case 'dataQuality': for (const i of section.issues) push(`• [${i.code}] ${pick(i.label)}`, `• [${i.code}] ${pick(i.label)}`); break;
+  }
+  return { en: lines_en.join('\n'), ar: lines_ar.join('\n') };
+}
+
 export function sectionForIntent(intent: string, acc: SeedAccount, portfolio: SeedClient[] = SEED_PORTFOLIO): AnswerSection | undefined {
   switch (intent) {
     case 'PACING': return buildPacing(acc);

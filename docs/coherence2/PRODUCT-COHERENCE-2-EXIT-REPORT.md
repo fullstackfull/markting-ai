@@ -28,6 +28,16 @@ Phase-0 governed write chain is unchanged.
 - **O — Product coherence:** COHERENT_PRODUCT on seeded data (daily workflow reachable end-to-end), NOT yet live-proven (live data BLOCKED_EXTERNAL) and missing some persona depth + E2E. Conservatively: a coherent product on the demo path, short of live/production-complete.
 - **P — Autonomous optimization:** DISABLED.
 
+## Independent panel (final)
+Two skeptical panels audited the actual code and reproduced 42/50 by running the test. They VERIFIED:
+real-engine computations over a populated seed (no keyword hacks), honest not-now set, no currency
+blending, correct router, and data-science honesty (COGS→UNKNOWN; protected dims never a targeting cut).
+They flagged two issues, now FIXED: (a) the chat didn't convey assistant-routed sections (breakdown/
+cross-channel/memory) — now serialized into the answer text and rendered on the account surface; (b)
+~14 presence-only acceptance checks — now assert real computed properties. Remaining honest caveats they
+confirmed: 20 eval scenarios (not 50), no charts, no browser E2E, no shell client-switcher, section
+engines fed demo figures as platform-reported (deployment marked DEMO).
+
 ## 42-item return — see the chat response accompanying this report.
 
 Autonomous optimization remains DISABLED. Mode-B provider writes remain HELD. No fabricated live

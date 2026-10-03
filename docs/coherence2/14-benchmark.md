@@ -22,3 +22,11 @@ control).
 the *content* for a live account needs live provider/commerce connections, which are BLOCKED_EXTERNAL.
 No question was marked answerable on backend existence alone — each assistant check asserts the real
 computed section or composed diagnosis.
+
+## Acceptance-check hardening (panel-driven)
+After an independent panel noted ~14 assistant checks were presence-only (would pass on an empty-but-
+present section), they were tightened to assert a real computed property: allocation conservation
+(totalMoved+unallocated==extra), forecast estimate>0, cross-channel comparability state + ranking/reasons,
+anomaly report points processed, scaling per-row state present, commerce available+margin present, creative
+rows>0, trend direction defined. The 42/50 count is unchanged (the seed genuinely populates these), but a
+regression that emptied a computation would now fail the benchmark.

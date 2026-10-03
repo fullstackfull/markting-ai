@@ -12,6 +12,7 @@ import type { OrchestratorInput } from './orchestrator';
 import { orchestrator } from './orchestrator';
 import { answerFromResult, type AssistantAnswer, type ModelNarrator, deterministicNarrator } from './answer';
 import type { AnswerSection } from './sections';
+import { sectionText } from './sections';
 
 /** The domain slices the service feeds to the orchestrator, sourced per deployment/connection state. */
 export type GatheredIntelligence = Omit<OrchestratorInput, 'context' | 'intent'>;
@@ -78,6 +79,12 @@ export class AssistantIntelligenceService {
     const result = orchestrator.compose({ context, intent, ...slices });
     const answer = await answerFromResult(result, this.narrator);
     const section = this.gatherer.sections?.(context, intent);
+    if (section) {
+      // Serialize the computed section into the answer TEXT so the shipped chat (which renders text,
+      // not a React section) actually conveys the breakdown/ranking/rows, not just the generic diagnosis.
+      const st = sectionText(section, context.locale ?? 'en');
+      answer.text = { en: `${answer.text.en}\n\n${st.en}`, ar: `${answer.text.ar}\n\n${st.ar}` };
+    }
     return { ...answer, intent, section };
   }
 
