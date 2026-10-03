@@ -65,7 +65,9 @@ export function computeRevenue(input: {
     discounts += o.discountTotal?.minorUnits ?? 0;
     tax += o.taxTotal?.minorUnits ?? 0;
     shipping += o.shippingTotal?.minorUnits ?? 0;
-    refunds += (o.refundedTotal?.minorUnits ?? 0) + (refundsByOrder.get(o.orderId) ?? 0);
+    // PREFER ONE refund source (refund records when present, else the order-level total) — NEVER sum
+    // both, or the same refund is double-counted and net revenue is understated.
+    refunds += refundsByOrder.get(o.orderId) ?? (o.refundedTotal?.minorUnits ?? 0);
   }
 
   let netMinor = grossSales;
@@ -106,11 +108,20 @@ export function refundIntelligence(orders: Order[], refunds: Refund[]): RefundIn
   const currencies = new Set([...orders.map((o) => o.currency), ...refunds.map((r) => r.amount.currency)]);
   const mixedCurrency = currencies.size > 1;
   const currency = orders[0]?.currency;
-  const refundedOrderIds = new Set(refunds.map((r) => r.orderId));
+  const refundsByOrder = new Map<string, number>();
+  for (const r of refunds) refundsByOrder.set(r.orderId, (refundsByOrder.get(r.orderId) ?? 0) + r.amount.minorUnits);
   const full = refunds.filter((r) => r.kind === 'full').length;
   const partial = refunds.filter((r) => r.kind === 'partial').length;
   const grossMinor = orders.reduce((a, o) => a + o.grossTotal.minorUnits, 0);
-  const refundMinor = refunds.reduce((a, r) => a + r.amount.minorUnits, 0);
+  // PREFER ONE refund source per order (refund records else the order-level total) so refunds are
+  // neither double-counted nor silently ignored when only one source is present.
+  let refundMinor = 0; const refundedOrderIds = new Set<string>();
+  for (const o of orders) {
+    const perOrder = refundsByOrder.get(o.orderId) ?? (o.refundedTotal?.minorUnits ?? 0);
+    if (perOrder > 0) { refundMinor += perOrder; refundedOrderIds.add(o.orderId); }
+  }
+  // refunds whose order is not in the batch still count toward the value total (sync-gap safety).
+  for (const [orderId, minor] of refundsByOrder) if (!orders.some((o) => o.orderId === orderId)) { refundMinor += minor; refundedOrderIds.add(orderId); }
   return {
     refundRateByCount: orders.length ? refundedOrderIds.size / orders.length : 0,
     refundRateByValue: mixedCurrency || !grossMinor ? undefined : refundMinor / grossMinor,

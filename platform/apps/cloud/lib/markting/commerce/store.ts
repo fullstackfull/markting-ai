@@ -135,6 +135,17 @@ export function dbSyncStore(): SyncStore {
   };
 }
 
+/**
+ * Resolve a signing-secret REFERENCE to the actual secret. Fails closed: a null/empty ref returns null
+ * (the connection cannot accept webhooks). In production this calls the secret store; absent one, the
+ * ref is used as the secret value (dev/fixture), which still refuses when there is no ref at all.
+ */
+async function dereferenceSigningSecret(ref: string | null): Promise<string | null> {
+  if (!ref || ref.trim() === '') return null;
+  // No external secret store wired in this environment → the ref carries the secret value.
+  return ref;
+}
+
 // ---- WebhookPorts implementation ----
 export function dbWebhookPorts(): WebhookPorts {
   return {
@@ -143,8 +154,13 @@ export function dbWebhookPorts(): WebhookPorts {
         select organization_id, signing_secret_ref from public.markting_store_connections where connection_id = ${connectionId} and status = 'active' limit 1`;
       const r = rows[0];
       if (!r) return null;
-      // In production the signing secret is dereferenced from a secret store via signing_secret_ref.
-      return { organizationId: r.organizationId, signingSecret: r.signingSecretRef ?? '' };
+      // FAIL CLOSED: a connection with no signing secret cannot verify webhooks. Never return '' — an
+      // empty HMAC key is public and would let anyone forge an accepted webhook. In production the
+      // secret is dereferenced from the secret store via signing_secret_ref; a null/empty ref means
+      // this connection cannot accept webhooks yet, so we refuse to resolve it.
+      const secret = await dereferenceSigningSecret(r.signingSecretRef);
+      if (!secret) return null;
+      return { organizationId: r.organizationId, signingSecret: secret };
     },
     async seen(connectionId, externalEventId) {
       const rows = await db()<Array<{ one: number }>>`

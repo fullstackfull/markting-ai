@@ -93,6 +93,16 @@ describeDatabase('Phase 5 commerce store (local database)', () => {
     expect(second.reason).toBe('DUPLICATE');
   });
 
+  it('webhook resolution FAILS CLOSED when a connection has no signing secret', async () => {
+    await upsertStoreConnection(a.organizationId, { connectionId: `conn-nosecret-${a.organizationId}`, storeId: 'salla:s1', platform: 'salla' }); // no signingSecretRef
+    const rawBody = JSON.stringify({ topic: 'orders/create' });
+    const signature = createHmac('sha256', '').update(rawBody, 'utf8').digest('base64'); // attacker uses empty key
+    const env = { connectionId: `conn-nosecret-${a.organizationId}`, platform: 'salla' as const, externalEventId: 'evt-forge', topic: 'orders/create', signature, timestamp: new Date().toISOString(), rawBody };
+    const r = await ingestWebhook(env, dbWebhookPorts());
+    expect(r.accepted).toBe(false);
+    expect(r.reason).toBe('UNKNOWN_CONNECTION'); // refused: no secret → cannot verify, not fail-open
+  });
+
   it('profitability config is insert-only history (traceable)', async () => {
     await saveProfitabilityConfig(a.organizationId, { targets: { targetMer: { basis: 'net', value: 3 } }, source: 'human_config' });
     const cfg = await loadProfitabilityConfig(a.organizationId);

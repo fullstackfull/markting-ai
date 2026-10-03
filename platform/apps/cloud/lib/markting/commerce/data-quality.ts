@@ -46,7 +46,9 @@ export function assessDataQuality(orders: Order[], refunds: Refund[] = [], opts:
     if (!o.currency || !o.grossTotal.currency) err('MISSING_CURRENCY', 'order has no currency');
     if (o.grossTotal.minorUnits < 0 || o.subtotal.minorUnits < 0) err('NEGATIVE_TOTAL', 'order has a negative total');
 
-    const refundedMinor = (o.refundedTotal?.minorUnits ?? 0) + (refundsByOrder.get(o.orderId) ?? 0);
+    // PREFER ONE refund source (records else order-level total) — summing both double-counts and would
+    // trip a false REFUND_EXCEEDS_ORDER that wrongly excludes a valid order from revenue.
+    const refundedMinor = refundsByOrder.get(o.orderId) ?? (o.refundedTotal?.minorUnits ?? 0);
     if (refundedMinor > o.grossTotal.minorUnits) err('REFUND_EXCEEDS_ORDER', `refunds (${refundedMinor}) exceed gross total (${o.grossTotal.minorUnits})`);
 
     if ((o.paymentStatus === 'paid') && !o.paidAt) warn('MISSING_PAID_TIMESTAMP', 'paid order has no paid timestamp');

@@ -23,10 +23,18 @@ export interface MER {
   notComputableReason?: string;
 }
 
-/** MER = merchant revenue / total ad spend, with the basis made explicit. Same-currency only. */
+/**
+ * MER = MERCHANT revenue / total ad spend, with the basis made explicit. Same-currency only.
+ *
+ * The revenue MUST be merchant-sourced: MER is a business-truth metric, so passing platform-attributed
+ * conversion value here (`source: 'platform'`) is REFUSED — the core Phase-5 rule that platform value
+ * is not merchant revenue. `source` defaults to 'merchant'; callers that only hold a CommerceMoney must
+ * assert it came from a RevenueObservation.
+ */
 export function computeMER(input: {
   basis: RevenueBasisLabel;
   revenue: CommerceMoney;
+  source?: 'merchant' | 'platform';
   adSpend: CommerceMoney;
   adSpendScope: string;
   window: { start: string; end: string };
@@ -43,9 +51,15 @@ export function computeMER(input: {
     mixedCurrency,
     trust: input.trust ?? 'PLATFORM_REPORTED',
   };
+  if ((input.source ?? 'merchant') !== 'merchant') return { ...base, notComputableReason: 'revenue is not merchant-sourced — platform-attributed value is not MER revenue' };
   if (mixedCurrency) return { ...base, notComputableReason: 'revenue and ad spend are in different currencies — no governed FX layer' };
   if (input.adSpend.minorUnits <= 0) return { ...base, notComputableReason: 'ad spend is zero/unknown for the window' };
   return { ...base, value: Math.round((input.revenue.minorUnits / input.adSpend.minorUnits) * 100) / 100 };
+}
+
+/** Build MER directly from a RevenueObservation, carrying its merchant source through safely. */
+export function merFromObservation(rev: { source: 'merchant'; netRevenue: CommerceMoney; mixedCurrency: boolean }, adSpend: CommerceMoney, adSpendScope: string, window: { start: string; end: string }, basis: RevenueBasisLabel = 'net'): MER {
+  return computeMER({ basis, revenue: rev.netRevenue, source: rev.source, adSpend, adSpendScope, window });
 }
 
 // ---- Customer identity (5O) ----

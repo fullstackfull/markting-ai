@@ -63,15 +63,37 @@ export function toAnalyticsSafe(order: Order): AnalyticsSafeOrder {
   };
 }
 
-/** Recursively strip forbidden PII keys from an arbitrary object (defense-in-depth for raw bags). */
+/**
+ * PII key matching by SEGMENT/PHRASE (not naive substring), so prefixed/nested variants like
+ * `_billing_email`, `billing_phone`, `customer.first_name`, `shipping_address_1`, `payment_method`,
+ * `ip_address` are caught — while legitimate analytics keys that merely share letters (`paymentStatus`,
+ * `orderNumber`, `customerClass`) are NOT false-positived. Defense-in-depth for raw provider bags;
+ * `toAnalyticsSafe` remains the only model-facing path.
+ */
+const SENSITIVE_SEGMENTS = new Set(['email', 'phone', 'mobile', 'name', 'address', 'zip', 'postcode', 'postal', 'note', 'notes', 'ssn', 'iban', 'card', 'ip', 'pan', 'cvv']);
+const SENSITIVE_PREFIXES = ['address', 'email', 'phone'];
+const SENSITIVE_PHRASES = ['payment method', 'payment details', 'credit card', 'card number', 'card last'];
+
+/** Split a key on camelCase and non-alphanumeric boundaries into lowercased segments. */
+function keyPhrase(key: string): { phrase: string; segments: string[] } {
+  const spaced = key.replace(/([a-z0-9])([A-Z])/g, '$1 $2').replace(/[^A-Za-z0-9]+/g, ' ').trim().toLowerCase();
+  return { phrase: spaced, segments: spaced.split(' ').filter(Boolean) };
+}
+
+function isPiiKey(key: string): boolean {
+  const { phrase, segments } = keyPhrase(key);
+  if (segments.some((s) => SENSITIVE_SEGMENTS.has(s) || SENSITIVE_PREFIXES.some((p) => s.startsWith(p)))) return true;
+  return SENSITIVE_PHRASES.some((p) => phrase.includes(p));
+}
+
+/** Recursively strip forbidden PII keys (by substring token) from an arbitrary object. */
 export function redactPii<T>(value: T): T {
-  const forbidden = new Set<string>(FORBIDDEN_PII_FIELDS as readonly string[]);
   const walk = (v: unknown): unknown => {
     if (Array.isArray(v)) return v.map(walk);
     if (v && typeof v === 'object') {
       const out: Record<string, unknown> = {};
       for (const [k, val] of Object.entries(v as Record<string, unknown>)) {
-        if (forbidden.has(k.toLowerCase())) { out[k] = '[REDACTED]'; continue; }
+        if (isPiiKey(k)) { out[k] = '[REDACTED]'; continue; }
         out[k] = walk(val);
       }
       return out;
@@ -83,14 +105,13 @@ export function redactPii<T>(value: T): T {
 
 /** True if a projection still contains any forbidden field (a test/guard tripwire). */
 export function containsPii(obj: unknown): boolean {
-  const forbidden = new Set<string>(FORBIDDEN_PII_FIELDS as readonly string[]);
   let found = false;
   const walk = (v: unknown): void => {
     if (found) return;
     if (Array.isArray(v)) { v.forEach(walk); return; }
     if (v && typeof v === 'object') {
       for (const [k, val] of Object.entries(v as Record<string, unknown>)) {
-        if (forbidden.has(k.toLowerCase()) && (val as unknown) !== '[REDACTED]') { found = true; return; }
+        if (isPiiKey(k) && (val as unknown) !== '[REDACTED]') { found = true; return; }
         walk(val);
       }
     }

@@ -126,10 +126,15 @@ class SallaConnector extends BaseConnector {
     }));
     const status = str(r.status) ?? 'placed';
     const payment: PaymentStatus = r.paid_at ? 'paid' : status === 'cancelled' ? 'voided' : 'pending';
+    // Salla totals are TAX-INCLUSIVE. Derive a tax/shipping-EXCLUSIVE merchandise subtotal from the
+    // total (like Zid) so the excl-tax revenue basis is honest regardless of whether sub_total carried
+    // tax. Falls back to sub_total only if total is absent.
+    const tax = num(r.tax), shipping = num(r.shipping_cost), total = num(r.total);
+    const subtotalExclTax = total ? total - tax - shipping : num(r.sub_total);
     return this.buildOrder({
       connectionId, externalStoreId: str(r.store_id) ?? '0', externalOrderId: str(r.id) ?? '0', orderNumber: str(r.reference_id),
       createdAt: str(r.created_at) ?? new Date(0).toISOString(), paidAt: str(r.paid_at), fulfilledAt: str(r.shipped_at), cancelledAt: status === 'cancelled' ? str(r.updated_at) : undefined,
-      currency, subtotalMinor: num(r.sub_total), discountMinor: num(r.discount), taxMinor: num(r.tax), shippingMinor: num(r.shipping_cost),
+      currency, subtotalMinor: subtotalExclTax, discountMinor: num(r.discount), taxMinor: tax, shippingMinor: shipping,
       grossMinor: num(r.total), refundedMinor: num(r.refunded),
       stage: mapStage(status), payment, fulfillment: r.shipped_at ? 'fulfilled' : 'unfulfilled', lines, raw: r,
     });
