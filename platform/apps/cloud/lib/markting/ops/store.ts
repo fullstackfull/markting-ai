@@ -29,6 +29,13 @@ export async function createOperation(organizationId: string, op: {
        ${db().json(op.action as never)}, ${op.approvalExpiresAt ?? null}, ${op.traceId ?? null}, now(), now())`;
 }
 
+/** Backend-scoped read of an org's operations (org-filtered; RLS allows only the backend role). */
+export async function listOperations(organizationId: string): Promise<Array<Record<string, unknown>>> {
+  return db()<Array<Record<string, unknown>>>`
+    select operation_id, state, action_type, account_id from public.markting_operations
+    where organization_id = ${organizationId} order by created_at desc limit 5000`;
+}
+
 export async function getOperation(organizationId: string, operationId: string): Promise<{ state: OperationState; claimToken: string | null; requesterUserId: string | null } | null> {
   const rows = await db()<Array<{ state: OperationState; claimToken: string | null; requesterUserId: string | null }>>`
     select state, claim_token, requester_user_id from public.markting_operations where organization_id = ${organizationId} and operation_id = ${operationId} limit 1`;
