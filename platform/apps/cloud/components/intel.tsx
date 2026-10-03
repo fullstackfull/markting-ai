@@ -1,3 +1,4 @@
+import Link from 'next/link';
 import type { Locale } from '@/lib/i18n/config';
 import type { BiText } from '@/lib/markting/intelligence/decision-model';
 import type { AnswerSection } from '@/lib/markting/orchestrator/sections';
@@ -31,7 +32,7 @@ export function SectionView({ section, locale }: { section: AnswerSection; local
     case 'scenario':
       return <div>{([['Conservative', section.conservative], ['Balanced', section.balanced], ['Aggressive (review)', section.aggressiveReview]] as const).map(([name, res]) => <div key={name} style={{ marginBottom: 8 }}><strong>{name}</strong><div className="cell-sub">{res.moves.length ? res.moves.map((m) => `${m.candidateId.split(':').pop()} ${m.direction} ${m.deltaMinor} ${m.currency} (${m.confidence})`).join('; ') : L(locale, 'no responsible move', 'لا تحرّك مسؤول')}</div></div>)}</div>;
     case 'creative':
-      return <table><thead><tr><th>{L(locale, 'Creative', 'الإعلان')}</th><th>{L(locale, 'Hook', 'العنوان')}</th><th>CTR</th><th>{L(locale, 'State', 'الحالة')}</th><th>{L(locale, 'Fatigue', 'الإجهاد')}</th><th>{L(locale, 'Spend %', 'الإنفاق %')}</th></tr></thead><tbody>{section.rows.map((r) => <tr key={r.id}><td>{r.name}</td><td>{r.hook}</td><td>{r.ctr}%</td><td><span className="status neutral">{r.state}</span></td><td>{r.fatigue}</td><td>{r.spendSharePct}%</td></tr>)}</tbody></table>;
+      return <table><thead><tr><th>{L(locale, 'Creative', 'الإعلان')}</th><th>{L(locale, 'Hook', 'العنوان')}</th><th>CTR</th><th>{L(locale, 'State', 'الحالة')}</th><th>{L(locale, 'Fatigue', 'الإجهاد')}</th><th>{L(locale, 'Spend %', 'الإنفاق %')}</th></tr></thead><tbody>{section.rows.map((r) => <tr key={r.id}><td><Link href={`/dashboard/creative/${encodeURIComponent(r.id)}`} prefetch={false}>{r.name}</Link></td><td>{r.hook}</td><td>{r.ctr}%</td><td><span className="status neutral">{r.state}</span></td><td>{r.fatigue}</td><td>{r.spendSharePct}%</td></tr>)}</tbody></table>;
     case 'commerce':
       return section.available
         ? <div><KV label={L(locale, 'Refund rate', 'نسبة الاسترداد')} value={`${section.refundRatePct}%`} /><KV label="MER" value={section.mer?.value ?? L(locale, 'UNKNOWN', 'غير معروف')} /><KV label={L(locale, 'Contribution margin', 'هامش المساهمة')} value={section.margin?.notComputableReason ? L(locale, 'UNKNOWN (COGS missing)', 'غير معروف (COGS مفقود)') : `${section.margin?.contributionMarginPct}%`} /><KV label={L(locale, 'Reconciliation', 'التسوية')} value={`${section.reconciliation?.state} (${section.reconciliation?.sampleSufficiency})`} /><KV label={L(locale, 'AOV change', 'تغيّر متوسط الطلب')} value={section.aovChangePct == null ? '—' : `${section.aovChangePct}%`} /></div>
@@ -45,9 +46,24 @@ export function SectionView({ section, locale }: { section: AnswerSection; local
     case 'dataQuality':
       return <div>{section.issues.length ? section.issues.map((i) => <div key={i.code} className="cell-sub"><span className={`status ${i.severity === 'CRITICAL' ? 'critical' : 'warn'}`}>{i.code}</span> {T(locale, i.label)}</div>) : <p className="cell-sub">{L(locale, 'No data-quality issues.', 'لا مشكلات جودة بيانات.')}</p>}</div>;
     case 'portfolio':
-      return <div><table><thead><tr><th>{L(locale, 'Client', 'العميل')}</th><th>{L(locale, 'Account', 'الحساب')}</th><th>{L(locale, 'Currency', 'العملة')}</th><th>{L(locale, 'Attention', 'الانتباه')}</th><th>{L(locale, 'Why', 'السبب')}</th></tr></thead><tbody>{section.rows.map((r) => <tr key={r.clientId}><td><strong>{r.clientName}</strong></td><td>{r.accountId}</td><td>{r.currency}</td><td><span className={`status ${r.attentionScore >= 50 ? 'critical' : r.attentionScore >= 20 ? 'warn' : 'neutral'}`}>{r.attentionScore}</span></td><td className="cell-sub">{r.reasons.map((x) => T(locale, x)).join('; ') || '—'}</td></tr>)}</tbody></table><p className="cell-sub" style={{ marginTop: 8 }}>{T(locale, section.note)}</p></div>;
+      return <div><table><thead><tr><th>{L(locale, 'Client', 'العميل')}</th><th>{L(locale, 'Account', 'الحساب')}</th><th>{L(locale, 'Currency', 'العملة')}</th><th>{L(locale, 'Attention', 'الانتباه')}</th><th>{L(locale, 'Why', 'السبب')}</th></tr></thead><tbody>{section.rows.map((r) => <tr key={r.clientId}><td><strong>{r.clientName}</strong></td><td><Link href={`/dashboard/accounts/${encodeURIComponent(r.accountId)}`} prefetch={false}>{r.accountId}</Link></td><td>{r.currency}</td><td><span className={`status ${r.attentionScore >= 50 ? 'critical' : r.attentionScore >= 20 ? 'warn' : 'neutral'}`}>{r.attentionScore}</span></td><td className="cell-sub">{r.reasons.map((x) => T(locale, x)).join('; ') || '—'}</td></tr>)}</tbody></table><p className="cell-sub" style={{ marginTop: 8 }}>{T(locale, section.note)}</p></div>;
     case 'breakdown':
       return <div><KV label={L(locale, 'Provider', 'المزوّد')} value={section.provider} />{section.analyses.filter((a) => a.supported).map((a) => <div key={a.dimension} className="cell-sub"><strong>{a.dimension}</strong>: {a.concentration ?? '—'} (HHI {a.spendHHI ?? '—'}){a.efficiencySpread ? `, best ${a.efficiencySpread.best.value} / worst ${a.efficiencySpread.worst.value}` : a.protectedDimension ? ` — ${L(locale, 'protected: reported, never a targeting cut', 'محمي: يُعرض ولا يُستخدم للاستبعاد')}` : ''}</div>)}</div>;
+    case 'campaign':
+      if (!section.found || !section.kpis) return <p className="cell-sub">{T(locale, section.summary)}</p>;
+      return <div>
+        <div className="cell-sub" style={{ display: 'flex', gap: 12, flexWrap: 'wrap', marginBottom: 8 }}>
+          <span>{L(locale, 'Role', 'الدور')}: {section.role}</span><span>{L(locale, 'Currency', 'العملة')}: {section.currency}</span>
+        </div>
+        <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', marginBottom: 8 }}>
+          {([['Spend', section.kpis.spendMinor], ['Conv', section.kpis.conversions], ['CPA', section.kpis.cpaMinor], ['ROAS', section.kpis.roas], ['CTR%', section.kpis.ctr], ['CPM', section.kpis.cpmMinor], ['CPC', section.kpis.cpcMinor]] as const).map(([k, v]) => <span key={k} className="status neutral">{k}: {v}</span>)}
+        </div>
+        <KV label={L(locale, 'Pacing', 'الوتيرة')} value={section.pacing?.status} />
+        <KV label={L(locale, 'CPA trend', 'اتجاه CPA')} value={`${section.trend?.direction} / ${section.trend?.state}`} />
+        <KV label={L(locale, 'Scaling', 'التوسّع')} value={section.scaling?.state} />
+        <KV label={L(locale, 'Creative fatigue', 'إجهاد الإبداع')} value={section.fatigue} />
+        <div className="cell-sub" style={{ marginTop: 8 }}>{L(locale, 'Current vs previous half', 'النصف الحالي مقابل السابق')}: {(section.comparison ?? []).map((c) => `${c.metric} ${c.direction}`).join(', ')}</div>
+      </div>;
     case 'crossChannel':
       return <div><KV label={L(locale, 'ROAS comparability', 'قابلية مقارنة ROAS')} value={section.roas.comparability.state} /><KV label={L(locale, 'Ranking', 'الترتيب')} value={(section.roas.ranking ?? []).map((r) => `${r.provider} ${r.value}`).join(' > ') || L(locale, 'not comparable', 'غير قابل للمقارنة')} />{section.roas.caveat && <p className="cell-sub">{T(locale, section.roas.caveat)}</p>}</div>;
     default:

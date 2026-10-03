@@ -162,6 +162,36 @@ export function buildCreative(acc: SeedAccount): CreativeSection {
   return { kind: 'creative', rows, hooks, concentrationPct, summary: { en: `${rows.length} creatives; ${fatiguing} showing a fatigue signal; top spend concentration ${concentrationPct}%.`, ar: `${rows.length} إعلانات؛ ${fatiguing} تُظهر إشارة إجهاد؛ أعلى تركّز إنفاق ${concentrationPct}%.` } };
 }
 
+// ---------- Creative detail (one creative) ----------
+export interface CreativeDetailSection {
+  kind: 'creativeDetail'; found: boolean; summary: BiText;
+  id: string; name?: string; campaignId?: string; hook?: string; angle?: string; format?: string; cluster?: string;
+  spendMinor?: number; impressions?: number; clicks?: number; conversions?: number; ctr?: number; cpcMinor?: number; cpaMinor?: number; roas?: number;
+  lifecycle?: string; fatigue?: 'NO_SIGNAL' | 'WATCH' | 'FATIGUE_SIGNAL'; fatigueEvidence?: string[];
+  state?: CreativeState; multimodal: 'MULTIMODAL_NOT_CONFIGURED'; testIdea?: BiText;
+}
+export function buildCreativeDetail(acc: SeedAccount, creativeId: string): CreativeDetailSection {
+  const cr = acc.creatives.find((x) => x.id === creativeId);
+  if (!cr) return { kind: 'creativeDetail', found: false, id: creativeId, multimodal: 'MULTIMODAL_NOT_CONFIGURED', summary: { en: 'Creative not found.', ar: 'الإعلان غير موجود.' } };
+  const ctrTrend = classifyTrend(cr.ctrSeries); const freqTrend = classifyTrend(cr.frequencySeries);
+  const fatigue = ctrTrend.direction === 'down' && ctrTrend.state !== 'NOISE' && freqTrend.direction === 'up' ? 'FATIGUE_SIGNAL'
+    : ctrTrend.direction === 'down' && freqTrend.direction === 'up' ? 'WATCH' : 'NO_SIGNAL';
+  const fatigueEvidence: string[] = [];
+  if (ctrTrend.direction === 'down') fatigueEvidence.push(`CTR ${ctrTrend.direction} (${ctrTrend.state})`);
+  if (freqTrend.direction === 'up') fatigueEvidence.push(`frequency ${freqTrend.direction}`);
+  const lifecycle = cr.firstSeenDaysAgo < 14 ? 'NEW' : cr.firstSeenDaysAgo < 45 ? 'MATURE' : fatigue === 'FATIGUE_SIGNAL' ? 'DECLINING' : 'MATURE';
+  const ctr = cr.impressions ? Math.round((cr.clicks / cr.impressions) * 10000) / 100 : 0;
+  const row = buildCreative(acc).rows.find((r) => r.id === creativeId);
+  return {
+    kind: 'creativeDetail', found: true, id: cr.id, name: cr.name, campaignId: cr.campaignId, hook: cr.hook, angle: cr.angle, format: cr.format, cluster: `cluster:${cr.hook}`,
+    spendMinor: cr.spendMinor, impressions: cr.impressions, clicks: cr.clicks, conversions: cr.conversions, ctr,
+    cpcMinor: cr.clicks ? Math.round(cr.spendMinor / cr.clicks) : 0, cpaMinor: cr.conversions ? Math.round(cr.spendMinor / cr.conversions) : 0, roas: 0,
+    lifecycle, fatigue, fatigueEvidence, state: row?.state, multimodal: 'MULTIMODAL_NOT_CONFIGURED',
+    testIdea: fatigue !== 'NO_SIGNAL' ? { en: `Test a fresh hook against "${cr.hook}" to counter the fatigue signal.`, ar: `اختبر عنوانًا جديدًا مقابل "${cr.hook}" لمواجهة إشارة الإجهاد.` } : undefined,
+    summary: { en: `${cr.name} [${lifecycle}, fatigue ${fatigue}] — visual analysis MULTIMODAL_NOT_CONFIGURED.`, ar: `${cr.name} [${lifecycle}، إجهاد ${fatigue}] — تحليل بصري غير مُهيأ.` },
+  };
+}
+
 // ---------- Commerce / profit ----------
 export interface CommerceSection { kind: 'commerce'; summary: BiText; available: boolean; refundRatePct?: number; mer?: MER; margin?: MarginObservation; reconciliation?: ReconciliationResult; aovChangePct?: number; note?: BiText; }
 export function buildCommerce(acc: SeedAccount): CommerceSection {
@@ -240,6 +270,48 @@ export function buildPortfolio(portfolio: SeedClient[] = SEED_PORTFOLIO): Portfo
   return { kind: 'portfolio', rows, summary: { en: `${rows.length} clients ranked by deterministic attention score. "${rows[0]?.clientName}" needs attention first.`, ar: `${rows.length} عملاء مرتبون بدرجة انتباه حتمية. "${rows[0]?.clientName}" يحتاج الانتباه أولًا.` }, note: { en: 'Currencies are never blended into one fake total; each client keeps its own currency.', ar: 'لا تُدمج العملات في إجمالي واحد زائف؛ يحتفظ كل عميل بعملته.' } };
 }
 
+// ---------- Campaign detail (one campaign, all legs) ----------
+export interface CampaignKpis { spendMinor: number; conversions: number; cpaMinor: number; roas: number; ctr: number; cpmMinor: number; cpcMinor: number; revenueMinor: number; }
+export interface CampaignSection {
+  kind: 'campaign'; summary: BiText; found: boolean;
+  campaignId: string; name?: string; role?: string; currency?: string;
+  kpis?: CampaignKpis; comparison?: { metric: string; from: number; to: number; direction: 'up' | 'down' | 'flat' }[];
+  pacing?: PacingResult; trend?: TrendResult; scaling?: ScalingResult;
+  creatives?: CreativeRow[]; fatigue?: 'NO_SIGNAL' | 'WATCH' | 'FATIGUE_SIGNAL' | 'STRONG_FATIGUE_SIGNAL';
+}
+export function buildCampaign(acc: SeedAccount, campaignId: string): CampaignSection {
+  const c = acc.campaigns.find((x) => x.id === campaignId);
+  if (!c) return { kind: 'campaign', found: false, campaignId, summary: { en: 'Campaign not found in this account.', ar: 'الحملة غير موجودة في هذا الحساب.' } };
+  const spend = sum(c.dailySpendMinor); const conv = sum(c.dailyConversions); const rev = sum(c.dailyRevenueMinor);
+  const clicks = sum(c.dailyClicks); const impressions = sum(c.dailyImpressions);
+  const kpis: CampaignKpis = {
+    spendMinor: spend, conversions: conv, revenueMinor: rev,
+    cpaMinor: conv ? Math.round(spend / conv) : 0, roas: roasOf(c),
+    ctr: impressions ? Math.round((clicks / impressions) * 10000) / 100 : 0,
+    cpmMinor: impressions ? Math.round((spend / impressions) * 1000) : 0,
+    cpcMinor: clicks ? Math.round(spend / clicks) : 0,
+  };
+  // current vs previous half of the window (transparent comparison).
+  const [a, b] = half(c.dailySpendMinor); const [ca, cb] = half(c.dailyConversions);
+  const prevSpend = sum(a), curSpend = sum(b), prevConv = sum(ca), curConv = sum(cb);
+  const dir = (from: number, to: number): 'up' | 'down' | 'flat' => (to > from * 1.02 ? 'up' : to < from * 0.98 ? 'down' : 'flat');
+  const comparison = [
+    { metric: 'spend', from: prevSpend, to: curSpend, direction: dir(prevSpend, curSpend) },
+    { metric: 'conversions', from: prevConv, to: curConv, direction: dir(prevConv, curConv) },
+    { metric: 'cpa', from: prevConv ? Math.round(prevSpend / prevConv) : 0, to: curConv ? Math.round(curSpend / curConv) : 0, direction: dir(prevConv ? prevSpend / prevConv : 0, curConv ? curSpend / curConv : 0) },
+  ];
+  const pacing = analyzePacing({ spendToDate: spend, plannedBudget: c.budgetMinor, currency: c.currency, daysElapsed: acc.periodDaysElapsed, daysInPeriod: acc.periodDays, kind: 'period' });
+  const trend = classifyTrend(dailyCpa(c));
+  const stable = trend.state === 'NOISE';
+  const scaling = evaluateScalingReadiness({ spend, conversions: conv, performanceVsTarget: c.targetRoas ? { metric: 'roas', actual: roasOf(c), target: c.targetRoas, targetKnown: c.targetKnown } : undefined, recentlyStable: stable, dataTrust: 'PLATFORM_REPORTED', fresh: true, windowComplete: false, budgetUtilization: spend / c.budgetMinor, attributionReliable: true });
+  const creativeAll = buildCreative(acc).rows.filter((r) => r.campaignId === campaignId);
+  return {
+    kind: 'campaign', found: true, campaignId, name: c.name, role: c.role, currency: c.currency,
+    kpis, comparison, pacing, trend, scaling, creatives: creativeAll, fatigue: c.dominantCreativeFatigue,
+    summary: { en: `${c.name}: CPA ${kpis.cpaMinor}, ROAS ${kpis.roas}, pacing ${pacing.status}, scaling ${scaling.state}.`, ar: `${c.name}: CPA ${kpis.cpaMinor}، ROAS ${kpis.roas}، الوتيرة ${pacing.status}.` },
+  };
+}
+
 // ---------- Breakdown (placement / device / geography / audience) ----------
 export interface BreakdownSection { kind: 'breakdown'; summary: BiText; provider: string; analyses: BreakdownAnalysis[]; }
 export function buildBreakdown(acc: SeedAccount): BreakdownSection {
@@ -265,7 +337,7 @@ export function buildCrossChannel(acc: SeedAccount): CrossChannelSection {
 export type AnswerSection =
   | PacingSection | AnomalySection | ForecastSection | TrendSection | ResponseSection | ScalingSection
   | ScenarioSection | CreativeSection | CommerceSection | OutcomesSection | MemorySection | ExperimentsSection
-  | DataQualitySection | PortfolioSection | BreakdownSection | CrossChannelSection;
+  | DataQualitySection | PortfolioSection | BreakdownSection | CrossChannelSection | CampaignSection;
 
 /**
  * Map a typed intent to the analytical section that answers it, computed by the real engines over the
@@ -299,6 +371,7 @@ export function sectionText(section: AnswerSection, locale: 'en' | 'ar'): { en: 
     case 'anomaly': push(`• ${section.report.actionable ? `top z=${section.report.top?.z}, ${section.report.top?.pct}%` : 'no actionable anomaly'}`, `• ${section.report.actionable ? `z=${section.report.top?.z}` : 'لا شذوذ قابل للتنفيذ'}`); break;
     case 'trend': push(`• CPA ${section.cpa.direction}/${section.cpa.state}, spend ${section.spend.direction}`, `• CPA ${section.cpa.direction}`); break;
     case 'dataQuality': for (const i of section.issues) push(`• [${i.code}] ${pick(i.label)}`, `• [${i.code}] ${pick(i.label)}`); break;
+    case 'campaign': if (section.found && section.kpis) push(`• spend ${section.kpis.spendMinor}, CPA ${section.kpis.cpaMinor}, ROAS ${section.kpis.roas}, CTR ${section.kpis.ctr}%, pacing ${section.pacing?.status}, scaling ${section.scaling?.state}`, `• الإنفاق ${section.kpis.spendMinor}، CPA ${section.kpis.cpaMinor}`); break;
   }
   return { en: lines_en.join('\n'), ar: lines_ar.join('\n') };
 }

@@ -1,7 +1,8 @@
 import { PageHeader } from '@/components/ui';
 import { SectionView, IntelMeta } from '@/components/intel';
 import { requireDashboardTenant } from '@/lib/cloud/dashboard';
-import { loadSection, loadWorkspaceIntelligence } from '@/lib/cloud/intelligence';
+import Link from 'next/link';
+import { loadSection, loadWorkspaceIntelligence, loadCampaignList } from '@/lib/cloud/intelligence';
 import { getT } from '@/lib/i18n/server';
 
 export const metadata = { title: 'Account' };
@@ -28,6 +29,7 @@ export default async function AccountPage({ params }: { params: Promise<{ accoun
     loadSection(tenant, 'CROSS_CHANNEL', scope),
     loadSection(tenant, 'MEMORY_CONTEXT', scope),
   ]);
+  const campaignList = await loadCampaignList(tenant, accountId);
   const L = (en: string, ar: string) => (locale === 'ar' ? ar : en);
   const card = (titleEn: string, titleAr: string, a: typeof pacing) => (
     <section className="card" style={{ marginBottom: 12 }}>
@@ -40,6 +42,12 @@ export default async function AccountPage({ params }: { params: Promise<{ accoun
       <PageHeader title={L('Account Intelligence', 'ذكاء الحساب')} description={accountId} />
       <IntelMeta locale={locale} trustTier={brief.trustTier} live={brief.result.trust.live} source={brief.source} />
       <section className="card" style={{ marginBottom: 12 }}><div className="card-head"><h2>{L('Diagnosis', 'التشخيص')}</h2><span className={`status ${brief.nextAction === 'ATTENTION' ? 'critical' : 'warn'}`}>{brief.nextAction}</span></div><p style={{ whiteSpace: 'pre-line' }}>{locale === 'ar' ? brief.text.ar : brief.text.en}</p></section>
+      {campaignList.length > 0 && (
+        <section className="card" style={{ marginBottom: 12 }}>
+          <div className="card-head"><h2>{L('Campaigns', 'الحملات')}</h2></div>
+          <ul style={{ margin: 0, paddingInlineStart: 18 }}>{campaignList.map((c) => <li key={c.id}><Link href={`/dashboard/accounts/${encodeURIComponent(accountId)}/campaigns/${encodeURIComponent(c.id)}`} prefetch={false}>{c.name}</Link></li>)}</ul>
+        </section>
+      )}
       {card('Pacing', 'الوتيرة', pacing)}
       {card('Anomalies', 'الشذوذ', anomaly)}
       {card('Forecast', 'التوقّع', forecast)}

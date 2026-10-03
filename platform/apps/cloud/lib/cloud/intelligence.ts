@@ -40,6 +40,37 @@ export async function loadSection(tenant: DashboardTenant, intent: IntelligenceI
   return serviceForMode().run(contextForTenant(tenant, extra), intent);
 }
 
+/** Load the campaign-detail section (campaign scope is not a free-text intent, so built directly). */
+export async function loadCampaign(_tenant: DashboardTenant, accountId: string, campaignId: string) {
+  const { buildCampaign } = await import('@/lib/markting/orchestrator/sections');
+  const { seedClientForAccount } = await import('@/lib/markting/orchestrator/seed');
+  if (!isDemoMode()) {
+    return { found: false as const, campaignId, kind: 'campaign' as const, summary: { en: 'No live provider connected — connect a provider to view campaign detail.', ar: 'لا يوجد مزوّد مرتبط — اربط مزوّدًا لعرض تفاصيل الحملة.' } };
+  }
+  return buildCampaign(seedClientForAccount(accountId).account, campaignId);
+}
+
+/** Lightweight campaign list for an account (links on the account surface). */
+export async function loadCampaignList(_tenant: DashboardTenant, accountId: string): Promise<Array<{ id: string; name: string }>> {
+  if (!isDemoMode()) return [];
+  const { seedClientForAccount } = await import('@/lib/markting/orchestrator/seed');
+  return seedClientForAccount(accountId).account.campaigns.map((c) => ({ id: c.id, name: c.name }));
+}
+
+/** Creative-detail section (creative scope is not a free-text intent). */
+export async function loadCreativeDetail(_tenant: DashboardTenant, creativeId: string, accountId?: string) {
+  const { buildCreativeDetail } = await import('@/lib/markting/orchestrator/sections');
+  const { seedClientForAccount, SEED_PORTFOLIO } = await import('@/lib/markting/orchestrator/seed');
+  if (!isDemoMode()) return { found: false as const, id: creativeId, kind: 'creativeDetail' as const, multimodal: 'MULTIMODAL_NOT_CONFIGURED' as const, summary: { en: 'No live provider connected.', ar: 'لا يوجد مزوّد مرتبط.' } };
+  // Find the creative across seeded accounts (creative ids are global in the demo seed).
+  const accounts = accountId ? [seedClientForAccount(accountId).account] : SEED_PORTFOLIO.map((c) => c.account);
+  for (const acc of accounts) {
+    const d = buildCreativeDetail(acc, creativeId);
+    if (d.found) return d;
+  }
+  return buildCreativeDetail(seedClientForAccount(accountId).account, creativeId);
+}
+
 export async function askAssistant(tenant: DashboardTenant, question: string, extra: Partial<IntelligenceRequestContext> = {}): Promise<AssistantAnswer & { intent: IntelligenceIntent }> {
   return serviceForMode().ask(contextForTenant(tenant, extra), question);
 }

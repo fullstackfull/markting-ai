@@ -4,6 +4,7 @@ import { BrandLockup } from '@/components/logos';
 import { Nav, UtilityNav } from '@/components/nav';
 import { SupportWidget } from '@/components/support-widget';
 import { LocaleSwitcher } from '@/components/locale-switcher';
+import { ClientSwitcher } from '@/components/client-switcher';
 import { getT } from '@/lib/i18n/server';
 
 export interface ShellTenant {
@@ -25,6 +26,7 @@ export async function Shell({ tenant, children }: { tenant: ShellTenant; childre
           </Link>
           <div className="workspace">
             <span className="workspace-name">{tenant.organizationName}</span>
+            <ClientSwitcher />
           </div>
         </div>
         <Nav />

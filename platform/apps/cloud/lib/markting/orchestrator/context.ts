@@ -19,6 +19,8 @@ export interface IntelligenceRequestContext {
   permissions: string[];
   /** Account under analysis (provider-namespaced id), when scoped to one. */
   accountId?: string;
+  /** Campaign under analysis, when scoped to one (campaign detail surface). */
+  campaignId?: string;
   /** Provider under analysis, when scoped to one. */
   provider?: string;
   /** The reporting period under analysis. */
