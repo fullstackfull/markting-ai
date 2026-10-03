@@ -35,6 +35,11 @@ export async function loadWorkspaceIntelligence(tenant: DashboardTenant, intent:
   return serviceForMode().run(contextForTenant(tenant, extra), intent);
 }
 
+/** Load a single typed-intent answer (with its analytical section) for a product surface. */
+export async function loadSection(tenant: DashboardTenant, intent: IntelligenceIntent, extra: Partial<IntelligenceRequestContext> = {}) {
+  return serviceForMode().run(contextForTenant(tenant, extra), intent);
+}
+
 export async function askAssistant(tenant: DashboardTenant, question: string, extra: Partial<IntelligenceRequestContext> = {}): Promise<AssistantAnswer & { intent: IntelligenceIntent }> {
   return serviceForMode().ask(contextForTenant(tenant, extra), question);
 }

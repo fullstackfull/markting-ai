@@ -28,6 +28,11 @@ const PRIMARY_ITEMS: NavItem[] = [
   { label: 'nav.workspace', href: '/dashboard/workspace', icon: icon.findings },
   { label: 'nav.assistant', href: '/dashboard/assistant', icon: icon.assistant },
   { label: 'nav.recommendations', href: '/dashboard/recommendations', icon: icon.approvals },
+  { label: 'nav.creative', href: '/dashboard/creative', icon: icon.reports },
+  { label: 'nav.commerce', href: '/dashboard/commerce', icon: icon.billing },
+  { label: 'nav.experiments', href: '/dashboard/experiments', icon: icon.agents },
+  { label: 'nav.agency', href: '/dashboard/agency', icon: icon.team },
+  { label: 'nav.executive', href: '/dashboard/executive', icon: icon.overview },
   { label: 'nav.connections', href: '/dashboard/connections', icon: icon.connections },
   { label: 'nav.accounts', href: '/dashboard/accounts', icon: icon.accounts },
   { label: 'nav.reports', href: '/dashboard/reports', icon: icon.reports },
@@ -37,6 +42,7 @@ const PRIMARY_ITEMS: NavItem[] = [
 ];
 
 const UTILITY_ITEMS: NavItem[] = [
+  { label: 'nav.dataQuality', href: '/dashboard/data-quality', icon: icon.findings },
   { label: 'nav.agents', href: '/dashboard/agents', icon: icon.agents },
   { label: 'nav.policies', href: '/dashboard/policies', icon: icon.policies },
   { label: 'nav.team', href: '/dashboard/team', icon: icon.team },
