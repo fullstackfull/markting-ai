@@ -61,8 +61,8 @@ describeDatabase('Phase-1 RLS fixup — ai_usage + business_context tenant isola
   });
 
   afterAll(async () => {
-    await db()`delete from public.markting_ai_usage where organization_id in ${db()([orgA, orgB])}`;
-    await db()`delete from public.markting_business_context where organization_id in ${db()([orgA, orgB])}`;
+    // adport_backend is not granted DELETE on these append/upsert tables; deleting the organization
+    // removes the child rows via the `on delete cascade` FK (same pattern as the isolation harness).
     await db()`delete from public.organizations where id in ${db()([orgA, orgB])}`;
     for (const id of users) await admin.auth.admin.deleteUser(id);
     await closeDbForTests();
@@ -101,13 +101,14 @@ describeDatabase('Phase-1 RLS fixup — ai_usage + business_context tenant isola
   });
 
   it('the server (db / adport_backend) path still reads both tables for both orgs', async () => {
-    const usage = await db()<Array<{ organization_id: string }>>`
+    // db() applies postgres.camel.column, so organization_id comes back as organizationId.
+    const usage = await db()<Array<{ organizationId: string }>>`
       select organization_id from public.markting_ai_usage where organization_id in ${db()([orgA, orgB])}
     `;
-    expect(new Set(usage.map((r) => r.organization_id))).toEqual(new Set([orgA, orgB]));
-    const ctx = await db()<Array<{ organization_id: string }>>`
+    expect(new Set(usage.map((r) => r.organizationId))).toEqual(new Set([orgA, orgB]));
+    const ctx = await db()<Array<{ organizationId: string }>>`
       select organization_id from public.markting_business_context where organization_id in ${db()([orgA, orgB])}
     `;
-    expect(new Set(ctx.map((r) => r.organization_id))).toEqual(new Set([orgA, orgB]));
+    expect(new Set(ctx.map((r) => r.organizationId))).toEqual(new Set([orgA, orgB]));
   });
 });
