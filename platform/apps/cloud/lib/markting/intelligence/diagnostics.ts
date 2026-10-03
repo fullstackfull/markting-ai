@@ -7,7 +7,7 @@
  * not a guess. Contribution across factors is reported as a share of the total absolute log movement;
  * it is a decomposition, never a causal claim.
  */
-import { aggregate, type Aggregate } from './analysis';
+import { aggregate, funnelDecomposition, type Aggregate, type Direction } from './analysis';
 import { evaluateEvidence, type DataTier } from '../data-trust';
 import { deriveConfidence } from './confidence';
 import type { MetricObservation, CanonicalMetric, EntityLevel } from './model';
@@ -106,11 +106,16 @@ export function diagnoseEntity(input: {
   const ratioActionable = evCur.actionable && evPrev.actionable && !cur.mixedCurrency && !prev.mixedCurrency && !currencyMismatch;
 
   // --- Data-quality signals that do NOT depend on ratio confidence (absolute facts). ---
-  // High spend, zero conversions: a tracking/delivery red flag regardless of sample.
+  // Spend with zero conversions: a tracking/delivery red flag. But on an OPEN (partial) window this is
+  // likely conversion lag, not a broken pixel — so it is CRITICAL only on a closed window, else WATCH.
+  // (Avoids a $2, day-1 "tracking broken" top-priority alarm.)
   if (c.spend > 0 && c.conversions === 0) {
-    diagnoses.push(mk('DATA_QUALITY_ISSUE', input.scope, 'CRITICAL', tier, 'LOW',
-      { en: `Spend recorded with zero conversions this period — tracking or delivery must be checked before any efficiency read.`, ar: `إنفاق مسجّل بدون أي تحويلات في هذه الفترة — يجب فحص التتبّع أو التسليم قبل أي قراءة للكفاءة.` },
-      [ref('metric_delta', input.scope, 'conversions', periods, { spend: round(c.spend), conversions: 0 }, tier, 'conversions === 0 while spend > 0', ccy, attr)]));
+    const partial = cur.complete === false;
+    diagnoses.push(mk('DATA_QUALITY_ISSUE', input.scope, partial ? 'WATCH' : 'CRITICAL', tier, 'LOW',
+      partial
+        ? { en: `Spend with zero conversions, but the window is still open — likely conversion lag; recheck once the window closes.`, ar: `إنفاق بدون تحويلات، لكن الفترة ما زالت مفتوحة — على الأرجح تأخّر في التحويلات؛ أعد الفحص بعد إغلاق الفترة.` }
+        : { en: `Spend recorded with zero conversions over a closed window — tracking or delivery must be checked before any efficiency read.`, ar: `إنفاق مسجّل بدون أي تحويلات خلال فترة مغلقة — يجب فحص التتبّع أو التسليم قبل أي قراءة للكفاءة.` },
+      [ref('metric_delta', input.scope, 'conversions', periods, { spend: round(c.spend), conversions: 0, windowComplete: cur.complete !== false }, tier, 'conversions === 0 while spend > 0', ccy, attr)]));
   }
 
   if (currencyMismatch || cur.mixedCurrency || prev.mixedCurrency) {
@@ -154,9 +159,12 @@ export function diagnoseEntity(input: {
     const cp = pct(p.conversions, c.conversions);
     const sig = signal('conversions', input.scope, p.conversions, c.conversions, convDir, true, ref('metric_delta', input.scope, 'conversions', periods, { from: round(p.conversions), to: round(c.conversions), pct: roundN(cp) }, tier, 'conversions delta', ccy, attr));
     signals.push(sig);
-    diagnoses.push(mk(type, input.scope, convDir === 'down' ? 'ATTENTION' : 'INFO', tier,
+    // A decline on an OPEN window (or windows of unequal length) is likely a partial-data artifact, not
+    // a real drop — soften the severity to WATCH so it doesn't manufacture a top-priority alarm.
+    const declineSeverity = cur.complete === false ? 'WATCH' : 'ATTENTION';
+    diagnoses.push(mk(type, input.scope, convDir === 'down' ? declineSeverity : 'INFO', tier,
       deriveConfidence({ dataTrust: tier, windowComplete: cur.complete, fresh: evCur.actionable || !o.staleness, signalStrengthPct: cp, attributionConsistent }),
-      convDir === 'down' ? { en: `Conversions fell ${fmtPct(cp)}.`, ar: `انخفضت التحويلات بنسبة ${fmtPct(cp)}.` } : { en: `Conversions rose ${fmtPct(cp)}.`, ar: `ارتفعت التحويلات بنسبة ${fmtPct(cp)}.` },
+      convDir === 'down' ? { en: `Conversions fell ${fmtPct(cp)}${cur.complete === false ? ' (window still open — may be partial)' : ''}.`, ar: `انخفضت التحويلات بنسبة ${fmtPct(cp)}${cur.complete === false ? ' (الفترة ما زالت مفتوحة — قد تكون جزئية)' : ''}.` } : { en: `Conversions rose ${fmtPct(cp)}.`, ar: `ارتفعت التحويلات بنسبة ${fmtPct(cp)}.` },
       [sig.evidence]));
   }
   // Conversion-rate decline (ratio — needs evidence).
@@ -184,9 +192,9 @@ export function diagnoseEntity(input: {
       const worse = cpaDir === 'up';
       diagnoses.push(mk(worse ? 'CPA_DETERIORATION' : 'CPA_IMPROVEMENT', input.scope, worse ? 'ATTENTION' : 'INFO', tier,
         deriveConfidence({ dataTrust: tier, ratioBased: true, sampleSize: cur.sampleSize, windowComplete: cur.complete, fresh: evCur.actionable || !o.staleness, signalStrengthPct: cpaP, attributionConsistent }),
-        worse ? { en: `CPA rose ${fmtPct(cpaP)}${factorText(factors, 'en')}`, ar: `ارتفعت تكلفة الاكتساب بنسبة ${fmtPct(cpaP)}${factorText(factors, 'ar')}` } : { en: `CPA improved ${fmtPct(cpaP)}${factorText(factors, 'en')}`, ar: `تحسّنت تكلفة الاكتساب بنسبة ${fmtPct(cpaP)}${factorText(factors, 'ar')}` },
+        worse ? { en: `CPA rose ${fmtPct(cpaP)}${factorText(factors, 'en', cpaDir)}`, ar: `ارتفعت تكلفة الاكتساب بنسبة ${fmtPct(cpaP)}${factorText(factors, 'ar', cpaDir)}` } : { en: `CPA improved ${fmtPct(cpaP)}${factorText(factors, 'en', cpaDir)}`, ar: `تحسّنت تكلفة الاكتساب بنسبة ${fmtPct(cpaP)}${factorText(factors, 'ar', cpaDir)}` },
         [ref('ratio', input.scope, 'cpa', periods, { from: round(p.cpa), to: round(c.cpa), pct: roundN(cpaP) }, tier, 'CPA = spend/conversions; decomposed as ln CPA = ln CPM − ln CTR − ln CVR', ccy, attr)],
-        factors?.map((f) => ({ factor: f.factor, metric: f.metric, sharePct: f.sharePct })) ));
+        driversInDirection(factors, cpaDir) ));
     }
   }
 
@@ -203,9 +211,9 @@ export function diagnoseEntity(input: {
       const worse = roasDir === 'down';
       diagnoses.push(mk(worse ? 'ROAS_DETERIORATION' : 'ROAS_IMPROVEMENT', input.scope, worse ? 'ATTENTION' : 'INFO', tier,
         deriveConfidence({ dataTrust: tier, ratioBased: true, sampleSize: cur.sampleSize, windowComplete: cur.complete, fresh: evCur.actionable || !o.staleness, signalStrengthPct: roasP, attributionConsistent }),
-        worse ? { en: `ROAS fell ${fmtPct(roasP)}${factorText(factors, 'en')}`, ar: `انخفض العائد على الإنفاق الإعلاني بنسبة ${fmtPct(roasP)}${factorText(factors, 'ar')}` } : { en: `ROAS rose ${fmtPct(roasP)}${factorText(factors, 'en')}`, ar: `ارتفع العائد على الإنفاق الإعلاني بنسبة ${fmtPct(roasP)}${factorText(factors, 'ar')}` },
+        worse ? { en: `ROAS fell ${fmtPct(roasP)}${factorText(factors, 'en', roasDir)}`, ar: `انخفض العائد على الإنفاق الإعلاني بنسبة ${fmtPct(roasP)}${factorText(factors, 'ar', roasDir)}` } : { en: `ROAS rose ${fmtPct(roasP)}${factorText(factors, 'en', roasDir)}`, ar: `ارتفع العائد على الإنفاق الإعلاني بنسبة ${fmtPct(roasP)}${factorText(factors, 'ar', roasDir)}` },
         [ref('ratio', input.scope, 'roas', periods, { from: roundN(p.roas), to: roundN(c.roas), pct: roundN(roasP) }, tier, 'ROAS = value/spend; decomposed as ln ROAS = ln conversions + ln AOV − ln spend', ccy, attr)],
-        factors?.map((f) => ({ factor: f.factor, metric: f.metric, sharePct: f.sharePct })) ));
+        driversInDirection(factors, roasDir) ));
     }
   }
 
@@ -236,9 +244,21 @@ export function diagnoseEntity(input: {
       ]);
       diagnoses.push(mk('CPC_PRESSURE', input.scope, 'WATCH', tier,
         deriveConfidence({ dataTrust: tier, windowComplete: cur.complete, signalStrengthPct: cpcP }),
-        { en: `CPC rose ${fmtPct(cpcP)}${factorText(cpcFactors, 'en')}`, ar: `ارتفعت تكلفة النقرة بنسبة ${fmtPct(cpcP)}${factorText(cpcFactors, 'ar')}` },
+        { en: `CPC rose ${fmtPct(cpcP)}${factorText(cpcFactors, 'en', cpcDir)}`, ar: `ارتفعت تكلفة النقرة بنسبة ${fmtPct(cpcP)}${factorText(cpcFactors, 'ar', cpcDir)}` },
         [ref('ratio', input.scope, 'cpc', periods, { from: round(p.cpc), to: round(c.cpc), pct: roundN(cpcP) }, tier, 'CPC = spend/clicks; decomposed as ln CPC = ln CPM − ln CTR (separates media cost from engagement)', ccy)],
-        cpcFactors?.map((f) => ({ factor: f.factor, metric: f.metric, sharePct: f.sharePct })) ));
+        driversInDirection(cpcFactors, cpcDir) ));
+    }
+  }
+
+  // --- Funnel stage collapse (2B): localize a conversion-rate drop to the worst stage. ---
+  if (ratioActionable) {
+    const funnel = funnelDecomposition(input.current, input.previous, input.period, o.staleness);
+    if (funnel.evidence.actionable && funnel.worst && (funnel.worst.deltaPct ?? 0) <= -o.materialPct) {
+      const w = funnel.worst;
+      diagnoses.push(mk('FUNNEL_STAGE_COLLAPSE', input.scope, 'ATTENTION', tier,
+        deriveConfidence({ dataTrust: tier, ratioBased: true, sampleSize: cur.sampleSize, windowComplete: cur.complete, signalStrengthPct: w.deltaPct }),
+        { en: `Funnel drop concentrated at ${w.from}→${w.to}: stage rate ${roundN(w.rateFrom)}%→${roundN(w.rateTo)}% (${fmtPct(w.deltaPct)}).`, ar: `تركّز هبوط المسار عند ${w.from}→${w.to}: معدل المرحلة ${roundN(w.rateFrom)}%→${roundN(w.rateTo)}% (${fmtPct(w.deltaPct)}).` },
+        [ref('funnel_stage', input.scope, 'conversions', periods, { from: String(w.from), to: String(w.to), rateFrom: roundN(w.rateFrom), rateTo: roundN(w.rateTo), deltaPct: roundN(w.deltaPct) }, tier, 'stage-to-stage conversion rate, worst negative delta', ccy, attr)]));
     }
   }
 
@@ -275,9 +295,24 @@ function prioritize(ds: Diagnosis[]): Diagnosis[] {
   return [...ds].sort((a, b) => SEVERITY_RANK[b.severity] - SEVERITY_RANK[a.severity]);
 }
 
-function factorText(factors: FactorShare[] | undefined, lang: 'en' | 'ar'): string {
-  if (!factors || factors.length === 0) return lang === 'en' ? '.' : '.';
-  const top = [...factors].sort((a, b) => b.sharePct - a.sharePct)[0]!;
+/**
+ * Name the dominant factor AMONG THOSE PUSHING THE METRIC IN ITS OBSERVED DIRECTION. The factor dln is
+ * signed so it is positive when it moved the target up; `netDir` is the net move's direction. This
+ * prevents naming an offsetting factor (one that actually moved the metric the other way) as the cause.
+ */
+/** Keep only the factors that pushed the metric in its net (observed) direction, for the diagnosis's
+ *  stored drivers — so recommendation routing keys off the real cause, not an offsetting factor. */
+function driversInDirection(factors: FactorShare[] | undefined, netDir: Direction): Diagnosis['factors'] {
+  if (!factors || netDir === 'flat') return factors?.map((f) => ({ factor: f.factor, metric: f.metric, sharePct: f.sharePct }));
+  const same = factors.filter((f) => f.direction === netDir);
+  return (same.length ? same : factors).map((f) => ({ factor: f.factor, metric: f.metric, sharePct: f.sharePct }));
+}
+
+function factorText(factors: FactorShare[] | undefined, lang: 'en' | 'ar', netDir: Direction): string {
+  if (!factors || factors.length === 0 || netDir === 'flat') return '.';
+  const sameDir = factors.filter((f) => f.direction === netDir);
+  const pool = sameDir.length ? sameDir : factors;
+  const top = [...pool].sort((a, b) => b.sharePct - a.sharePct)[0]!;
   const label = FACTOR_LABELS[top.factor]?.[lang] ?? top.factor;
   return lang === 'en' ? `, driven mostly by ${label} (${top.sharePct}% of the move).` : `، مدفوعًا أساسًا بـ${label} (${top.sharePct}% من الحركة).`;
 }

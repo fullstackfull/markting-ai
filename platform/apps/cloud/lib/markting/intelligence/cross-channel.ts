@@ -60,8 +60,9 @@ export function checkComparability(a: ChannelSummary, b: ChannelSummary): Compar
   if (currencyDiffers || noDateOverlap || lowTrust(a.trustTier) || lowTrust(b.trustTier)) {
     return { state: 'NOT_COMPARABLE', reasons, matched, differed };
   }
-  // Soft differences (attribution/conversion-definition/timezone/date-overlap) → PARTIALLY_COMPARABLE.
-  const soft = differed.some((d) => ['attribution', 'conversionDefinition', 'timezone', 'dateRange(overlap)', 'dateRange(unknown)', 'attribution(unknown)', 'conversionDefinition(unknown)', 'timezone(unknown)'].includes(d));
+  // Soft differences → PARTIALLY_COMPARABLE. An UNKNOWN currency on a channel is soft here (the metric
+  // guard in compareChannels upgrades it to NOT_COMPARABLE for currency-denominated metrics like CPA).
+  const soft = differed.some((d) => ['attribution', 'conversionDefinition', 'timezone', 'currency(unknown)', 'dateRange(overlap)', 'dateRange(unknown)', 'attribution(unknown)', 'conversionDefinition(unknown)', 'timezone(unknown)'].includes(d));
   return { state: soft ? 'PARTIALLY_COMPARABLE' : 'COMPARABLE', reasons: soft ? reasons : ['all comparability dimensions match'], matched, differed };
 }
 
@@ -75,8 +76,11 @@ export interface CrossChannelComparison {
 /** Compare channels on a metric ONLY when the gate allows it; otherwise return the gate alone. */
 export function compareChannels(a: ChannelSummary, b: ChannelSummary, metric: 'roas' | 'cpa'): CrossChannelComparison {
   const comparability = checkComparability(a, b);
-  if (comparability.state === 'NOT_COMPARABLE') {
-    return { comparability, caveat: { en: 'Channels are not comparable; no ranking produced.', ar: 'القنوات غير قابلة للمقارنة؛ لم يُنتَج أي ترتيب.' } };
+  // CPA is currency-denominated: an unknown currency on either channel makes a CPA ranking meaningless,
+  // so upgrade to NOT_COMPARABLE for CPA. (ROAS is unitless and may stay PARTIALLY_COMPARABLE.)
+  const currencyUnknown = !a.currency || !b.currency;
+  if (comparability.state === 'NOT_COMPARABLE' || (metric === 'cpa' && currencyUnknown)) {
+    return { comparability: metric === 'cpa' && currencyUnknown && comparability.state !== 'NOT_COMPARABLE' ? { ...comparability, state: 'NOT_COMPARABLE', reasons: [...comparability.reasons, 'currency unknown on a channel — CPA is not comparable'] } : comparability, caveat: { en: 'Channels are not comparable; no ranking produced.', ar: 'القنوات غير قابلة للمقارنة؛ لم يُنتَج أي ترتيب.' } };
   }
   const va = a.metrics[metric];
   const vb = b.metrics[metric];

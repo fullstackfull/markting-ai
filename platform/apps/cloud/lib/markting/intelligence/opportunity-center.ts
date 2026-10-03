@@ -20,10 +20,14 @@ export interface OpportunityCenter {
 }
 
 const SEV_WEIGHT: Record<Severity, number> = { CRITICAL: 100, ATTENTION: 60, WATCH: 25, INFO: 5 };
+const CONF_MULT: Record<string, number> = { HIGH: 1, MEDIUM: 0.75, LOW: 0.5 };
+const TRUST_MULT: Record<string, number> = { RECONCILED: 1, VALIDATED: 1, PLATFORM_REPORTED: 0.9, UNVERIFIED: 0.6, SYNTHETIC: 0.3 };
 
-function materiality(severity: Severity, spendShare: number): number {
-  // Severity dominates; spend share (0..100) breaks ties and lifts big-money items.
-  return SEV_WEIGHT[severity] + Math.min(40, spendShare * 0.4);
+function materiality(severity: Severity, spendShare: number, confidence?: string, dataTrust?: string): number {
+  // Severity dominates; spend share lifts big-money items; confidence + trust DISCOUNT shaky evidence
+  // so a LOW-confidence / SYNTHETIC ATTENTION item does not outrank a HIGH-confidence, trustworthy one.
+  const base = SEV_WEIGHT[severity] + Math.min(40, spendShare * 0.4);
+  return base * (CONF_MULT[confidence ?? 'MEDIUM'] ?? 0.75) * (TRUST_MULT[dataTrust ?? 'PLATFORM_REPORTED'] ?? 0.9);
 }
 
 export function buildOpportunityCenter(intel: AccountIntelligence): OpportunityCenter {
@@ -45,7 +49,7 @@ export function buildOpportunityCenter(intel: AccountIntelligence): OpportunityC
       return;
     }
     if (d.severity === 'ATTENTION' || d.severity === 'CRITICAL') {
-      needsAttention.push({ entityId: d.scope.entityId, name, severity: d.severity, headline: d.summary, spendShare: share, materiality: materiality(d.severity, share) });
+      needsAttention.push({ entityId: d.scope.entityId, name, severity: d.severity, headline: d.summary, spendShare: share, materiality: materiality(d.severity, share, d.confidence, d.dataTrust) });
     } else {
       monitoring.push({ entityId: d.scope.entityId, name, headline: d.summary });
     }

@@ -14,6 +14,13 @@ import type {
 } from './decision-model';
 import type { ScalingResult, DownscaleResult } from './scaling';
 
+/** Diagnoses that indicate worsening performance — never valid evidence FOR scaling up. */
+const DETERIORATION_TYPES = new Set<string>([
+  'CPA_DETERIORATION', 'ROAS_DETERIORATION', 'CTR_DETERIORATION', 'CPM_PRESSURE', 'CPC_PRESSURE',
+  'CONVERSION_VOLUME_DECLINE', 'CONVERSION_RATE_DECLINE', 'FUNNEL_STAGE_COLLAPSE', 'OVERSPEND_VS_PACING',
+  'FREQUENCY_PRESSURE', 'UNDERDELIVERY', 'TARGET_MISS',
+]);
+
 export interface RecommendationFacts {
   spend: number;
   conversions: number;
@@ -106,10 +113,17 @@ export function generateRecommendations(input: GenerateInput): Recommendation[] 
   }
 
   // Opportunity: a scaling-ready entity becomes a BUDGET_REVIEW (scale) recommendation (not auto-scale).
+  // NEVER cite a deterioration diagnosis as the evidence for scaling — scaling.ts only returns READY
+  // when the campaign is beating a known target, so a positive/neutral diagnosis must back it. If the
+  // only diagnoses are deteriorations, we do not surface a scale recommendation at all (contradiction).
   if (input.scaling?.state === 'READY_FOR_HUMAN_REVIEW' && !seen.has('BUDGET_REVIEW:REVIEW_BUDGET_SCALE')) {
-    const { risk } = classifyRisk({ actionType: 'REVIEW_BUDGET_SCALE', spend: input.facts.spend, conversions: input.facts.conversions, accountSpendShare: input.facts.accountSpendShare, strategicallyImportant: input.facts.strategicallyImportant });
-    const d = input.diagnoses.find((x) => x.type === 'ROAS_IMPROVEMENT' || x.type === 'CPA_IMPROVEMENT') ?? input.diagnoses[0];
-    if (d) recs.push(oppRec(input, id(), 'BUDGET_REVIEW', 'REVIEW_BUDGET_SCALE', d, risk, { en: 'Meets scaling criteria — a human should review a budget increase.', ar: 'يستوفي معايير التوسيع — ينبغي لمراجع بشري النظر في زيادة الميزانية.' }, createdAt, expiresAt, 'POSITIVE_DIRECTION_EXPECTED'));
+    const positive = input.diagnoses.find((x) => x.type === 'ROAS_IMPROVEMENT' || x.type === 'CPA_IMPROVEMENT' || x.type === 'TARGET_BEAT' || x.type === 'CONVERSION_VOLUME_INCREASE');
+    const neutral = input.diagnoses.find((x) => !DETERIORATION_TYPES.has(x.type) && x.type !== 'INSUFFICIENT_EVIDENCE' && x.type !== 'DATA_QUALITY_ISSUE');
+    const d = positive ?? neutral;
+    if (d) {
+      const { risk } = classifyRisk({ actionType: 'REVIEW_BUDGET_SCALE', spend: input.facts.spend, conversions: input.facts.conversions, accountSpendShare: input.facts.accountSpendShare, strategicallyImportant: input.facts.strategicallyImportant });
+      recs.push(oppRec(input, id(), 'BUDGET_REVIEW', 'REVIEW_BUDGET_SCALE', d, risk, { en: 'Beating its target with sufficient stable evidence — a human should review a budget increase.', ar: 'يتجاوز هدفه بأدلة كافية ومستقرة — ينبغي لمراجع بشري النظر في زيادة الميزانية.' }, createdAt, expiresAt, 'POSITIVE_DIRECTION_EXPECTED'));
+    }
   }
   // A strong downscale candidate becomes a PAUSE_REVIEW (not auto-pause).
   if (input.downscale?.state === 'STRONG_REVIEW_CANDIDATE' && !seen.has('PAUSE_REVIEW:REVIEW_PAUSE')) {

@@ -13,12 +13,15 @@ import { evaluateScalingReadiness, evaluateDownscaleCandidacy } from './scaling'
 import { analyzeCrossCampaign, type CrossCampaignReport } from './cross-campaign';
 import { generateRecommendations } from './recommendation';
 import { resolveTargets, evaluateTargetGap } from './targets';
-import { MIN_SAMPLE_FOR_CONFIDENCE, type DataTier } from '../data-trust';
+import { detectAnomalies } from './anomaly';
+import { classifyTrend } from './trend';
+import { analyzeCreatives, type CreativePerf } from './creative';
+import { evaluateEvidence, MIN_SAMPLE_FOR_CONFIDENCE, type DataTier } from '../data-trust';
 import type { BusinessContext } from '../business-context';
 import type { EngineContext } from '../engine-context';
 import type { MetricObservation } from './model';
 import type { DatasetLabel } from './context';
-import type { Diagnosis, Recommendation } from './decision-model';
+import type { BiText, Diagnosis, EvidenceRef, Recommendation } from './decision-model';
 
 export interface AnalyzeInput {
   engineContext: Pick<EngineContext, 'organizationId' | 'timezone' | 'locale'>;
@@ -31,6 +34,11 @@ export interface AnalyzeInput {
   business: BusinessContext;
   pacing?: { plannedBudget: number; daysElapsed: number; daysInPeriod: number };
   options?: DiagnoseOptions;
+  /** Optional daily metric series keyed by entityId (account key = `${accountId}:account`) for the
+   *  anomaly + trend engines. When absent, anomaly/trend are skipped (and stability is not asserted). */
+  dailySpendSeries?: Record<string, number[]>;
+  /** Optional creative-level data for the creative-freshness health dimension (2L). */
+  creatives?: CreativePerf[];
   now?: number;
   idFactory?: () => string;
 }
@@ -63,6 +71,32 @@ export interface AccountIntelligence {
 
 const ACCOUNT_ID = (obs: MetricObservation[]): string => obs[0]?.accountId ?? 'unknown';
 
+/** Not stale per the supplied staleness bound (true when no bound is given — freshness undetermined). */
+function isFresh(agg: ReturnType<typeof aggregate>, dateRange: { start: string; end: string }, staleness?: DiagnoseOptions['staleness']): boolean {
+  if (!staleness) return true;
+  const v = evaluateEvidence({ tier: agg.worstTier, source: 'aggregate', complete: agg.complete, currency: agg.currency, sampleSize: agg.sampleSize, dateRange }, { ...staleness });
+  return !v.reasons.some((r) => r.includes('stale') || r.includes('freshness'));
+}
+/** Stability from a daily series via the trend engine; undefined when no series (never assume stable). */
+function stabilityFrom(series?: number[]): boolean | undefined {
+  if (!series || series.length < 7) return undefined;
+  const t = classifyTrend(series);
+  return !(t.direction === 'down' || t.state === 'STRUCTURAL_SHIFT');
+}
+function attributionConsistent(cur: MetricObservation[], prev: MetricObservation[]): boolean {
+  return (cur[0]?.attribution?.label ?? null) === (prev[0]?.attribution?.label ?? null);
+}
+/** Build an ANOMALY diagnosis from a daily series when a point is both extreme and material. */
+function anomalyDiagnosis(scope: { organizationId: string; accountId: string; entityId: string; entityLevel: 'account' | 'campaign' | 'ad_group' | 'ad' }, series: number[] | undefined, tier: DataTier): Diagnosis | null {
+  if (!series) return null;
+  const r = detectAnomalies(series);
+  if (!r.actionable || !r.top) return null;
+  const sev = r.top.classification === 'CRITICAL' ? 'CRITICAL' : 'ATTENTION';
+  const summary: BiText = { en: `Anomalous daily spend on day ${r.top.index + 1}: ${r.top.value} vs baseline ${r.top.baseline} (${r.top.pct}%).`, ar: `إنفاق يومي شاذ في اليوم ${r.top.index + 1}: ${r.top.value} مقابل الأساس ${r.top.baseline} (${r.top.pct}%).` };
+  const evidence: EvidenceRef = { kind: 'anomaly', metric: 'spend', entityIds: [scope.entityId], entityLevel: scope.entityLevel, values: { index: r.top.index, value: r.top.value, baseline: r.top.baseline, z: r.top.z, pct: r.top.pct ?? null }, dataTrust: tier, calculation: 'robust modified z-score vs rolling baseline, day-of-week deseasonalized' };
+  return { type: 'ANOMALY', scope, severity: sev, summary, evidence: [evidence], confidence: 'MEDIUM', dataTrust: tier };
+}
+
 export function analyzeAccount(input: AnalyzeInput): AccountIntelligence {
   const now = input.now ?? Date.now();
   const org = input.engineContext.organizationId;
@@ -70,18 +104,26 @@ export function analyzeAccount(input: AnalyzeInput): AccountIntelligence {
   const accountId = ACCOUNT_ID(input.currentAccount);
   const targets = resolveTargets(input.business);
   const minConversions = MIN_SAMPLE_FOR_CONFIDENCE;
+  const series = input.dailySpendSeries ?? {};
 
-  // Account-level diagnosis.
+  // Account-level diagnosis (now includes funnel-stage collapse from diagnoseEntity) + anomaly.
   const accountScope = { organizationId: org, accountId, entityId: `${accountId}:account`, entityLevel: 'account' as const, name: 'Account' };
   const { diagnoses: accountDiagnoses } = diagnoseEntity({
     scope: accountScope, current: input.currentAccount, previous: input.previousAccount,
     period: input.period, pacing: input.pacing, options: input.options,
   });
+  const accAnomaly = anomalyDiagnosis(accountScope, series[accountScope.entityId], accAgg.worstTier as DataTier);
+  if (accAnomaly) accountDiagnoses.unshift(accAnomaly);
 
   // Contribution (spend-delta) across campaigns.
   const contribution = campaignContribution(input.currentCampaigns, input.previousCampaigns, 'spend').contributors;
   const shareById = new Map(contribution.map((c) => [c.entityId, c.sharePct]));
   const totalSpend = accAgg.base.spend ?? 0;
+
+  // Creative-freshness signal (2L) from optional creative data (account-wide for now).
+  const creativeFatigueSignal = input.creatives && input.creatives.length
+    ? analyzeCreatives(input.creatives, { now }).fatigue.some((f) => f.verdict === 'FATIGUE_SIGNAL')
+    : undefined;
 
   // Per-campaign intelligence.
   const prevByCampaign = new Map(input.previousCampaigns.map((o) => [o.entity.id, o]));
@@ -89,24 +131,28 @@ export function analyzeAccount(input: AnalyzeInput): AccountIntelligence {
     const prev = prevByCampaign.get(cur.entity.id);
     const scope = { organizationId: org, accountId: cur.accountId, entityId: cur.entity.id, entityLevel: cur.entity.level, name: cur.entity.name };
     const { diagnoses } = diagnoseEntity({ scope, current: [cur], previous: prev ? [prev] : [], period: input.period, options: input.options });
+    const anom = anomalyDiagnosis(scope, series[cur.entity.id], aggregate([cur]).worstTier as DataTier);
+    if (anom) diagnoses.unshift(anom);
     const curAgg = aggregate([cur]);
     const spend = curAgg.base.spend ?? 0;
     const conversions = Math.round(curAgg.base.conversions ?? 0);
     const roas = curAgg.derived.roas;
     const cpa = curAgg.derived.cpa;
+    const fresh = isFresh(curAgg, input.period.current, input.options?.staleness);
+    const recentlyStable = stabilityFrom(series[cur.entity.id]);
+    const attrOk = attributionConsistent([cur], prev ? [prev] : []);
 
-    // Scaling / downscale evaluation for this campaign.
-    const roasGap = roas != null ? evaluateTargetGap('roas', roas, targets.targetRoas, 5) : { gap: 'UNKNOWN' as const, targetKnown: false };
+    // Scaling / downscale evaluation — real freshness/stability/attribution, not hardcoded.
     const scaling = evaluateScalingReadiness({
-      spend, conversions, dataTrust: curAgg.worstTier as DataTier, fresh: true, windowComplete: curAgg.complete,
-      minConversions, attributionReliable: true,
+      spend, conversions, dataTrust: curAgg.worstTier as DataTier, fresh, windowComplete: curAgg.complete,
+      minConversions, attributionReliable: attrOk,
       performanceVsTarget: roas != null && targets.targetRoas ? { metric: 'roas', actual: roas, target: targets.targetRoas.value, targetKnown: targets.targetRoas.status !== 'UNKNOWN' } : undefined,
-      recentlyStable: true,
+      recentlyStable,
     });
     const downscale = evaluateDownscaleCandidacy({
       spend, conversions, observationDays: 14, dataTrust: curAgg.worstTier as DataTier,
       performanceVsTarget: cpa != null && targets.targetCpa ? { metric: 'cpa', actual: cpa, target: targets.targetCpa.value, targetKnown: targets.targetCpa.status !== 'UNKNOWN' } : undefined,
-      minConversions,
+      trendWorsening: recentlyStable === false, minConversions,
     });
 
     const recommendations = generateRecommendations({
@@ -115,7 +161,6 @@ export function analyzeAccount(input: AnalyzeInput): AccountIntelligence {
       diagnoses, facts: { spend, conversions, accountSpendShare: totalSpend > 0 ? spend / totalSpend : 0 },
       scaling, downscale, now, idFactory: input.idFactory,
     });
-    void roasGap;
     return { entityId: cur.entity.id, name: cur.entity.name, diagnoses, recommendations, spendShare: Math.round((shareById.get(cur.entity.id) ?? 0) * 10) / 10 };
   });
 
@@ -127,15 +172,19 @@ export function analyzeAccount(input: AnalyzeInput): AccountIntelligence {
     now, idFactory: input.idFactory,
   });
 
-  // Account health (dimensions).
+  // Account health (dimensions) — now fed conversion-rate, attribution, and creative-fatigue signals.
   const roasActual = accAgg.derived.roas;
   const effGap = roasActual != null ? evaluateTargetGap('roas', roasActual, targets.targetRoas, 5).gap : 'UNKNOWN';
   const pacingResult = input.pacing ? analyzePacing({ spendToDate: totalSpend, plannedBudget: input.pacing.plannedBudget, currency: accAgg.currency, daysElapsed: input.pacing.daysElapsed, daysInPeriod: input.pacing.daysInPeriod, kind: 'period', mixedCurrency: accAgg.mixedCurrency }) : undefined;
   const health = assessHealth({
-    dataTrust: accAgg.worstTier as DataTier, windowComplete: accAgg.complete, fresh: true,
+    dataTrust: accAgg.worstTier as DataTier, windowComplete: accAgg.complete,
+    fresh: isFresh(accAgg, input.period.current, input.options?.staleness),
     conversions: Math.round(accAgg.base.conversions ?? 0), minConversions,
     pacing: pacingResult ? ({ ON_TRACK: 'ON_TRACK', OVERPACING: 'OVERPACING', UNDERPACING: 'UNDERPACING', NOT_EVALUABLE: 'NOT_EVALUABLE' } as const)[pacingResult.status] : undefined,
     efficiencyVsTarget: effGap === 'TARGET_ON' ? 'TARGET_ON' : effGap === 'TARGET_BEAT' ? 'TARGET_BEAT' : effGap === 'TARGET_MISS' ? 'TARGET_MISS' : 'UNKNOWN',
+    conversionRateWorsening: accountDiagnoses.some((d) => d.type === 'CONVERSION_RATE_DECLINE'),
+    attributionConsistent: attributionConsistent(input.currentAccount, input.previousAccount),
+    creativeFatigueSignal,
     trackingOk: !(totalSpend > 0 && (accAgg.base.conversions ?? 0) === 0),
   });
 

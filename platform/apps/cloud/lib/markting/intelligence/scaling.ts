@@ -43,16 +43,24 @@ export function evaluateScalingReadiness(input: ScalingInput): ScalingResult {
   if (input.recentlyStable === false) reasons.push('recent performance is not stable');
 
   const met = targetMet(input.performanceVsTarget);
-  if (input.performanceVsTarget && !input.performanceVsTarget.targetKnown) reasons.push('no configured target; readiness is vs baseline only');
-  if (input.performanceVsTarget && met === false) reasons.push('performance is not beating target');
+  // CRITICAL: scaling must have POSITIVE performance EVIDENCE, not just volume. Without a known target
+  // that the campaign is actually beating, there is no evidence performance is good — never READY.
+  // (A buyer does not scale a campaign just because it has enough conversions; it must be WINNING.)
+  const hasPositivePerformanceEvidence = met === true;
+  if (!input.performanceVsTarget || !input.performanceVsTarget.targetKnown) reasons.push('no configured performance target — cannot confirm the campaign is winning, so not scale-ready on volume alone');
+  else if (met === false) reasons.push('performance is not beating target');
 
   if (reasons.length) {
-    // If the only gaps are soft (no target / baseline-only), it may still be POTENTIALLY_READY.
-    const hard = reasons.some((r) => r.includes('conversions') || r.includes('attribution') || r.includes('not stable') || r.includes('not beating target'));
+    // Hard gaps (thin sample, bad attribution, instability, missing target, or missing the target) block
+    // readiness entirely. "baseline only" without a target is a HARD gap for scaling (no proof it wins).
+    const hard = reasons.some((r) => r.includes('conversions') || r.includes('attribution') || r.includes('not stable') || r.includes('not beating target') || r.includes('cannot confirm'));
     return { state: hard ? 'NOT_READY' : 'POTENTIALLY_READY', reasons, label: lbl(hard ? 'NOT_READY' : 'POTENTIALLY_READY'), metTargets: met === true };
   }
-  // Everything supports it — still only READY_FOR_HUMAN_REVIEW (never auto-scale).
-  return { state: 'READY_FOR_HUMAN_REVIEW', reasons: ['sufficient spend + conversions, stable, meeting target, fresh trustworthy data'], label: lbl('READY_FOR_HUMAN_REVIEW'), metTargets: met === true };
+  // Everything supports it AND the campaign is beating a known target — still only for HUMAN review.
+  if (!hasPositivePerformanceEvidence) {
+    return { state: 'NOT_READY', reasons: ['no positive performance evidence (target beat) to justify scaling'], label: lbl('NOT_READY'), metTargets: false };
+  }
+  return { state: 'READY_FOR_HUMAN_REVIEW', reasons: ['sufficient spend + conversions, stable, BEATING target, fresh trustworthy data'], label: lbl('READY_FOR_HUMAN_REVIEW'), metTargets: true };
 }
 
 function targetMet(p?: ScalingInput['performanceVsTarget']): boolean | undefined {

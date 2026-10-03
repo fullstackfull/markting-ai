@@ -66,7 +66,10 @@ export function detectAnomalies(series: number[], opts: AnomalyOptions = {}): An
     const overall = median(series) || 1;
     const byDow: number[][] = Array.from({ length: 7 }, () => []);
     series.forEach((v, i) => byDow[i % 7]!.push(v));
-    const dowFactor = byDow.map((vals) => (vals.length ? (median(vals) || overall) / overall : 1));
+    // Clamp the seasonal multiplier to a sane band so a low-but-nonzero weekday median cannot
+    // manufacture a huge divisor (and a false anomaly) on low-volume weekdays.
+    const clamp = (x: number) => Math.min(4, Math.max(0.25, x));
+    const dowFactor = byDow.map((vals) => (vals.length ? clamp((median(vals) || overall) / overall) : 1));
     adjusted = series.map((v, i) => (dowFactor[i % 7] ? v / dowFactor[i % 7]! : v));
     seasonallyAdjusted = true;
   }

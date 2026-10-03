@@ -6,6 +6,7 @@ import { HttpError } from '@/lib/http';
 import { bridgeProposal, BridgeAccessError, type BridgeResult } from './bridge';
 import { EngineClient, EngineError } from './engine-client';
 import { isDemoMode, marktingEnv } from './env';
+import { canPreview, resolveRuntimeMode } from './runtime-mode';
 import { beginThreadTurn, claimThread, endThreadTurn, loadAliasMap, recordEngineProposal, threadIdFor } from './repository';
 import { createBridgeRuntime } from './runtime';
 
@@ -56,6 +57,17 @@ export async function runAssistantTurn(principal: TenantPrincipal, input: { thre
     }
   const proposal = outcome.proposal;
   if (proposal && proposal.state === 'awaiting_approval') {
+    // Defense-in-depth (Phase-2 red-team): a write proposal must not even become a PREVIEW in a mode
+    // that forbids previews (LIVE_READ_ONLY / LIVE_RECOMMENDATIONS). The registry's read-only capability
+    // already refuses the write tool there; this asserts the mode gate explicitly before bridging.
+    if (!canPreview(resolveRuntimeMode())) {
+      await client.rejectProposal(String(proposal.proposal_id ?? ''), 'Previews are disabled in this runtime mode; the AI is read-only.').catch(() => {});
+      return {
+        threadId, text: outcome.text, bridge: null,
+        engine: { interrupted: outcome.interrupted, available_actions: outcome.available_actions, receipt: outcome.receipt },
+        demoMode: isDemoMode(),
+      };
+    }
     const demoMode = isDemoMode();
     const [runtime, aliases] = await Promise.all([createBridgeRuntime(principal), loadAliasMap(principal.organizationId, demoMode)]);
     // The preview (validate) originates from the AI engine's proposal, not the person viewing the
