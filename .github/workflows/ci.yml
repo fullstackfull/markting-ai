@@ -37,8 +37,11 @@ jobs:
           cache: pnpm
           cache-dependency-path: platform/pnpm-lock.yaml
       - run: pnpm install --frozen-lockfile
-      - run: pnpm -r typecheck
+      # Build the workspace packages first so their published d.ts exist: consumers (other providers,
+      # the cloud app) import @adport/core and @adport/mcp by package name, which resolves to dist/*
+      # only after a build. A clean CI checkout has no dist, so typecheck must follow build.
       - run: pnpm -r --filter './packages/*' run build
+      - run: pnpm -r typecheck
       - run: pnpm -r --filter './packages/*' run test
       - run: ADPORT_RUN_DATABASE_TESTS=0 pnpm --filter @adport/cloud test
 
@@ -68,6 +71,8 @@ jobs:
         working-directory: platform
         run: |
           pnpm install --frozen-lockfile
+          # Build workspace packages so the cloud app can resolve @adport/core and @adport/mcp by name.
+          pnpm -r --filter './packages/*' run build
           ADPORT_RUN_DATABASE_TESTS=1 pnpm --filter @adport/cloud test
       - name: Stop Supabase
         if: always()

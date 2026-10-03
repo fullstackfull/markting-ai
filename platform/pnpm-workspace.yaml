@@ -3,3 +3,9 @@ packages:
   - "apps/*"
 allowBuilds:
   esbuild: true
+# Security remediation (Phase 2, Workstream 0.1 / 1R). Force patched versions of transitively-pulled
+# dependencies with high-severity advisories so `pnpm audit --prod --audit-level high` is clean without
+# weakening the audit gate. fast-uri stays in the 3.x line for ajv (@modelcontextprotocol/sdk) compat.
+overrides:
+  fast-uri: "^3.1.7"
+  "sharp@<0.35.4": ">=0.35.4"
