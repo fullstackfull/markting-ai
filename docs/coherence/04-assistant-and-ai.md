@@ -20,14 +20,18 @@ Verified: `test/assistant-service.test.ts` — routing (en/ar), the cross-domain
 `DETERMINISTIC_ONLY` source + evidence + unified recommendations, and the honest INSUFFICIENT_EVIDENCE /
 "connect your providers" answer when nothing is wired.
 
-## Status of the live chat — PARTIAL
+## Status of the live chat — DONE for the no-engine case, PARTIAL for the engine-reachable case
 
-The existing chat (`lib/markting/assistant.ts` → Python engine) still handles the governed
-budget-proposal bridge (the one working write-safety feature) and is preserved unchanged. The new
-orchestration path is reachable via the Workspace and Recommendation Center surfaces and the service API.
-Swapping the chat's analytical answers to call `AssistantIntelligenceService` directly (replacing the
-scripted demo engine as the production brain) is the remaining step; it was kept separate here to avoid
-destabilizing the governed bridge.
+`runAssistantTurn` (`lib/markting/assistant.ts`) now falls back to the orchestrator
+(`askAssistantForPrincipal` → `AssistantIntelligenceService`) when the external engine is **unreachable**
+— which is the case in any no-engine/demo deployment (including this environment). So "Ask AI" answers
+via the unified orchestration path there, rather than erroring. The governed budget-proposal bridge is
+untouched and still runs whenever the engine IS reachable, so no write-safety path is bypassed.
+
+**Remaining (PARTIAL):** when a real narration engine is configured and reachable, the chat still uses
+it for analytical answers; routing those through the orchestrator too (so the orchestrator is the brain
+and the model only narrates, even with an engine present) is the next step. This was deliberately scoped
+to the unreachable-engine fallback first to avoid destabilizing the governed bridge.
 
 ## Live model — BLOCKED_EXTERNAL
 

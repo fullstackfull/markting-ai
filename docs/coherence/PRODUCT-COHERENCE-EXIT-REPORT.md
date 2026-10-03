@@ -83,8 +83,21 @@ see `14-benchmark-results.md` for the honest reason (remaining UI breadth + `BLO
     action, trust capping, honesty, review-only.
 31. **Security findings:** 1 P0 CLOSED; no new attack surface from the new read-only surfaces; Program-24
     hardening slices outstanding.
-32. **Independent panel findings:** see the final chat response (panel run against the actual new code
-    and surfaces).
+32. **Independent panel findings:** three skeptical panels (AI-architect+principal-engineer; paid-media+
+    agency-buyer; security+QA+data-scientist) reviewed the actual code. They VERIFIED: the orchestrator
+    composition + reachability from Workspace/Recommendations, the Money/adapter correctness + fail-closed
+    behaviour, the review-only safety guarantee, the RLS P0 fix (and its real-Postgres regression test),
+    and all four data-science corrections as genuinely correct (not merely changed). They flagged three
+    honest issues, now ADDRESSED: (a) benchmark #48 was inflated because the chat Assistant still routed
+    only to the external engine — FIXED by wiring `runAssistantTurn` to fall back to the orchestrator
+    (`askAssistantForPrincipal`) when the engine is unreachable; (b) the Recommendation Center lacked a
+    demo/synthetic banner and showed synthetic commerce recs as "RECONCILED" — FIXED with a page-level
+    "Demo / synthetic data" banner; (c) `money.ts` over-claimed in its docstring that "nothing leaves as
+    a bare number" while the composition still passes some commerce figures as opaque evidence — docstring
+    CORRECTED to state the integration is partial (Program 6/25). One clarification: the RLS regression
+    test runs in the dedicated real-Postgres CI lane (ADPORT_RUN_DATABASE_TESTS=1, green run 24); it is
+    skipped only in the non-DB node lane. The panels found no FALSE correctness claim and no material code
+    defect in the shipped engines/surfaces.
 33. **Tests passed/failed/skipped:** full non-DB cloud suite 733 passed / 82 skipped / 0 failed after
     Wave 3; +12 golden cases; data-science +12; orchestrator +10; assistant-service +6.
 34. **DB tests:** RLS fixup regression test green on real Postgres (CI run 24); existing DB suites green.

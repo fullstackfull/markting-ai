@@ -23,8 +23,13 @@ as a product path. Newly ANSWERABLE_NOW:
 - **#8** "Why did CPA rise?" — composed diagnosis reachable in the Workspace.
 - **#15** "Why is Meta ROAS different from store MER?" — commerce-vs-platform composes into the diagnosis.
 - **#19** "Which creatives are fatiguing?" — creative signals surface as ranked factors + recommendations.
-- **#48** "Ask the assistant 'why is performance down?'" — now a real orchestrated, evidence-backed
-  answer, not a scripted fixture.
+- **#48** "Ask the assistant 'why is performance down?'" — the chat assistant now answers via the
+  unified orchestrator. (Independent panel review initially flagged this as inflated because the chat
+  routed only to the external engine; it was then **fixed**: `runAssistantTurn` falls back to
+  `askAssistantForPrincipal` → the orchestrator when the external engine is unreachable, which is the
+  case in any no-engine/demo deployment. When a real engine is configured it is used instead. So #48 is
+  genuinely reachable via the Assistant in the demo/no-engine deployment, consistent with the synthetic-
+  data caveat below.)
 
 Newly PARTIAL (reachable as a composed factor/recommendation, but no dedicated surface yet): **#9**
 allocation, **#12** scale-safety, **#16** true profit/margin (COGS still UNKNOWN), **#17** prior-outcome

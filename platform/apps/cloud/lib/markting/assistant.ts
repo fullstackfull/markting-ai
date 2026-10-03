@@ -52,7 +52,24 @@ export async function runAssistantTurn(principal: TenantPrincipal, input: { thre
     try {
       outcome = await client.sendMessage(threadId, text);
     } catch (error) {
-      if (error instanceof EngineError) throw new HttpError(error.code === 'unreachable' ? 'The analysis engine is not reachable right now.' : error.message, error.status >= 500 ? 503 : error.status);
+      // Coherence Program 3: when the external narration engine is unreachable, do NOT error — answer
+      // via the unified orchestration path (deterministic, evidence-backed) so "Ask AI" still works.
+      // The governed budget-proposal bridge only applies when the engine IS reachable, so nothing in
+      // the write-safety path is bypassed here.
+      if (error instanceof EngineError && error.code === 'unreachable') {
+        const { askAssistantForPrincipal } = await import('@/lib/cloud/intelligence');
+        const { getLocale } = await import('@/lib/i18n/server');
+        const locale = await getLocale();
+        const answer = await askAssistantForPrincipal(principal, text, { locale });
+        return {
+          threadId,
+          text: locale === 'ar' ? answer.text.ar : answer.text.en,
+          bridge: null,
+          engine: { interrupted: false, available_actions: [], receipt: { source: answer.source, intent: answer.intent, nextAction: answer.nextAction } },
+          demoMode: isDemoMode(),
+        };
+      }
+      if (error instanceof EngineError) throw new HttpError(error.message, error.status >= 500 ? 503 : error.status);
       throw error;
     }
   const proposal = outcome.proposal;

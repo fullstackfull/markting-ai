@@ -21,6 +21,11 @@ export default async function RecommendationsPage() {
         title={L(locale, 'Recommendation Center', 'مركز التوصيات')}
         description={L(locale, 'One review queue across media, creative, commerce and optimization. Every item is review-only — accepting never changes a provider; a change still requires the governed preview and human approval.', 'قائمة مراجعة واحدة عبر الإعلانات والإبداع والتجارة والتحسين. كل عنصر للمراجعة فقط — القبول لا يغيّر أي منصّة؛ أي تغيير يتطلب المعاينة المُدارة وموافقة بشرية.')}
       />
+      {!answer.result.trust.live && (
+        <section className="card" style={{ marginBottom: 12 }}>
+          <span className="status neutral">{L(locale, 'Demo / synthetic data — not live. Per-item trust labels reflect the synthetic fixture, not a live reconciliation.', 'بيانات تجريبية — ليست حيّة. تسميات الموثوقية لكل عنصر تعكس البيانات التجريبية وليست تسوية حيّة.')}</span>
+        </section>
+      )}
       {recs.length === 0 ? (
         <section className="card"><Empty title={L(locale, 'No recommendations', 'لا توجد توصيات')} copy={L(locale, 'When the evidence supports a review, recommendations from every domain appear here.', 'عندما تدعم الأدلة إجراء مراجعة، تظهر هنا توصيات من كل مجال.')} /></section>
       ) : (

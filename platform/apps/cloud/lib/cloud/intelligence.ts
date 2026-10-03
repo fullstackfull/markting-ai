@@ -38,3 +38,24 @@ export async function loadWorkspaceIntelligence(tenant: DashboardTenant, intent:
 export async function askAssistant(tenant: DashboardTenant, question: string, extra: Partial<IntelligenceRequestContext> = {}): Promise<AssistantAnswer & { intent: IntelligenceIntent }> {
   return serviceForMode().ask(contextForTenant(tenant, extra), question);
 }
+
+/**
+ * Orchestrator-backed assistant answer built from a server-derived TenantPrincipal (used by the chat
+ * turn when the external engine is unreachable, so "Ask AI" still answers via the unified path rather
+ * than erroring). Identity is taken from the authenticated principal, never from the question text.
+ */
+export async function askAssistantForPrincipal(
+  principal: { organizationId: string; userId?: string; role?: string; scopes?: string[] },
+  question: string,
+  extra: Partial<IntelligenceRequestContext> = {},
+): Promise<AssistantAnswer & { intent: IntelligenceIntent }> {
+  const context: IntelligenceRequestContext = {
+    organizationId: principal.organizationId,
+    userId: principal.userId ?? 'unknown',
+    permissions: principal.scopes ?? (principal.role ? [principal.role] : []),
+    runtimeMode: resolveRuntimeMode(),
+    locale: 'en',
+    ...extra,
+  };
+  return serviceForMode().ask(context, question);
+}

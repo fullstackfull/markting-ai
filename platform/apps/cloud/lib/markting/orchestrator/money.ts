@@ -9,8 +9,12 @@
  * from the ISO table, fail-closed on an unknown currency) the moment it enters the orchestrator.
  *
  * It intentionally does NOT rewrite commerce internals (that is the Program-25 deprecation, done only
- * after callers migrate). It is the safe boundary adapter: nothing leaves the orchestrator as a
- * `CommerceMoney` or a bare number.
+ * after callers migrate). It is the canonical boundary adapter any surface MUST use when it renders a
+ * monetary amount. Integration is PARTIAL: surfaces that render money (e.g. a dedicated commerce view)
+ * lift through `fromCommerceMoney` here; the current composition still passes some commerce figures
+ * through as opaque evidence detail (bare numbers inside `evidenceDetail`), which the commerce-surface
+ * work (Program 6) will route through this adapter. So this module is the single money model to adopt,
+ * not yet the money model every figure already flows through.
  */
 import { type Money, moneyFromMinor, moneyToMicros, isKnownCurrency } from '@adport/core';
 
