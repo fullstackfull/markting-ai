@@ -4,7 +4,8 @@
  * rbac.canApprove) and holding `manage_billing` never implies ad-write. Keys fail closed: expired,
  * revoked, or out-of-scope → denied.
  */
-import { createHash, randomBytes } from 'node:crypto';
+import { randomBytes } from 'node:crypto';
+import { digestApiKey, safeEqual } from '@/lib/crypto';
 
 export const SERVICE_SCOPES = ['tools:read', 'tools:write', 'reports:read', 'ops:execute'] as const;
 export type ServiceScope = (typeof SERVICE_SCOPES)[number];
@@ -26,7 +27,9 @@ export function mintServiceKey(): { plaintext: string; secretHash: string; keyPr
   const raw = randomBytes(24).toString('base64url');
   const prefix = `mk_${raw.slice(0, 6)}`;
   const plaintext = `${prefix}.${raw}`;
-  return { plaintext, secretHash: createHash('sha256').update(plaintext).digest('hex'), keyPrefix: prefix };
+  // WAVE 0.2: peppered HMAC-SHA256 (not an unsalted digest), matching the api_keys path. The pepper is
+  // a server secret, so a stolen hash cannot be brute-forced offline without it.
+  return { plaintext, secretHash: digestApiKey(plaintext), keyPrefix: prefix };
 }
 
 export type KeyAuthResult = { ok: true; account: ServiceAccount } | { ok: false; reason: 'NOT_FOUND' | 'REVOKED' | 'EXPIRED' | 'OUT_OF_SCOPE' };
@@ -37,7 +40,8 @@ export function authenticateServiceKey(input: {
 }): KeyAuthResult {
   const now = input.now ?? Date.now();
   if (!input.account || !input.storedHash) return { ok: false, reason: 'NOT_FOUND' };
-  if (createHash('sha256').update(input.presented).digest('hex') !== input.storedHash) return { ok: false, reason: 'NOT_FOUND' };
+  // WAVE 0.2: constant-time compare of the peppered HMAC — no early-exit timing oracle on the secret.
+  if (!safeEqual(digestApiKey(input.presented), input.storedHash)) return { ok: false, reason: 'NOT_FOUND' };
   if (input.account.revokedAt) return { ok: false, reason: 'REVOKED' };
   if (input.account.expiresAt && now > Date.parse(input.account.expiresAt)) return { ok: false, reason: 'EXPIRED' };
   if (!input.account.scopes.includes(input.requiredScope)) return { ok: false, reason: 'OUT_OF_SCOPE' };

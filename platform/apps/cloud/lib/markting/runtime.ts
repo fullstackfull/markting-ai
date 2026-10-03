@@ -6,6 +6,7 @@ import type { TenantPrincipal } from '@/lib/cloud/types';
 import { isDemoMode, marktingEnv } from './env';
 import { PostgresSandboxStore } from './repository';
 import { SandboxProvider, sandboxTools } from './sandbox-provider';
+import { KillGuardedProvider } from './ops/kill-guarded-provider';
 
 /**
  * The runtime the bridge previews and applies through.
@@ -25,9 +26,13 @@ export async function createBridgeRuntime(principal: TenantPrincipal): Promise<A
     return runtime;
   }
   const policy = await getOrganizationPolicy(principal.organizationId);
-  const provider = new SandboxProvider(new PostgresSandboxStore(principal.organizationId));
+  const sandbox = new SandboxProvider(new PostgresSandboxStore(principal.organizationId));
+  // WAVE 0: the demo apply path honours the kill switch too, so the control is exercisable end-to-end
+  // (and in CI) without live provider credentials (GAP-SEC-01). sandboxTools call through the same
+  // provider instance, so the guard sits on the one apply seam.
+  const provider = new KillGuardedProvider(sandbox, principal.organizationId);
   return createContext({
-    providerModules: [{ provider, tools: sandboxTools(provider) }],
+    providerModules: [{ provider, tools: sandboxTools(sandbox) }],
     engine: new PolicyEngine(policy, new PostgresPendingStore(principal), new PostgresAuditStore(principal)),
     findings: new PostgresFindingsStore(principal.organizationId),
     writeActor: principalToActor(principal),

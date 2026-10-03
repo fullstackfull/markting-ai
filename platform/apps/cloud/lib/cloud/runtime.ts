@@ -16,6 +16,7 @@ import { cloudProviderApp } from './provider-oauth-extra';
 import { rotateProviderTokens } from './credential-rotation';
 import { providerAllowedForOrganization } from './provider-rollout';
 import { AccountScopedProvider, createAccountScopeAuthorizer } from './account-scope';
+import { KillGuardedProvider } from '@/lib/markting/ops/kill-guarded-provider';
 import { hydrateApple, hydrateMeta, hydrateMicrosoft, hydrateReddit, hydrateTikTok } from './provider-oauth';
 import {
   getOrganizationPolicy,
@@ -64,12 +65,17 @@ export async function createTenantRuntime(principal: TenantPrincipal, options: T
     enforceAccountScope ? listOrganizationAdAccounts(principal.organizationId) : Promise.resolve([]),
   ]);
   const modules: ProviderModule[] = [];
-  const scopeProvider = <T extends ProviderModule['provider']>(provider: T): ProviderModule['provider'] =>
-    enforceAccountScope ? new AccountScopedProvider(provider, enabledAccountIds[provider.id as keyof typeof enabledAccountIds] ?? new Set(),
-      inventory.filter(account => account.provider === provider.id).map(account => ({
-        provider: account.provider, id: account.accountId, name: account.name,
-        currency: account.currency ?? undefined, status: account.status ?? undefined,
-      }))) : provider;
+  const scopeProvider = <T extends ProviderModule['provider']>(provider: T): ProviderModule['provider'] => {
+    const scoped = enforceAccountScope
+      ? new AccountScopedProvider(provider, enabledAccountIds[provider.id as keyof typeof enabledAccountIds] ?? new Set(),
+        inventory.filter(account => account.provider === provider.id).map(account => ({
+          provider: account.provider, id: account.accountId, name: account.name,
+          currency: account.currency ?? undefined, status: account.status ?? undefined,
+        })))
+      : provider;
+    // WAVE 0: the kill switch fails closed on every live provider mutation (GAP-SEC-01).
+    return new KillGuardedProvider(scoped, principal.organizationId);
+  };
   const persistTokens = (provider: keyof ProviderCredentialMap) => {
     let expected = credentials[provider]!;
     return async (tokens: Parameters<typeof rotateProviderTokens>[0]['tokens']) => {
