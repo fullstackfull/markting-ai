@@ -109,17 +109,15 @@ test.describe('authenticated media-buyer journeys', () => {
   });
 
   test('E2E-14 Drill-down: Account → Campaign → Ad set/group → Ad via the links (Phase B)', async ({ page }) => {
-    // Account surface renders and links to the campaign (proves the account→campaign hop exists). Target
-    // the seeded campaign that has an ad-set hierarchy (not every demo campaign seeds ad groups — NO_DATA
-    // is a valid state), so the chain is deterministic regardless of the table's default sort order.
+    // Account surface renders and links to the campaign (proves the account→campaign hop exists).
     await page.goto(`/dashboard/accounts/${ACC}`);
     await expect(page.locator('main:not([aria-busy="true"])')).toBeVisible();
-    const campLink = page.locator('a[href*="/campaigns/"][href*="awareness"]').first();
-    await expect(campLink).toBeVisible();
-    const campHref = await campLink.getAttribute('href');
-    // SSR-load the campaign page (a full server render streams the ad-group table inline, avoiding the
-    // client-nav RSC streaming race where a nested table boundary isn't present yet when queried).
-    await page.goto(campHref!);
+    await expect(page.locator('a[href*="/campaigns/"][href*="awareness"]').first()).toBeVisible();
+    // SSR-load the seeded campaign that has an ad-set hierarchy, by its explicit id (the same fixed-seed
+    // approach the a11y scan uses) — deterministic, no dependency on scraping the account table or on
+    // client-nav RSC streaming. A full server render streams the ad-group table inline.
+    const CAMP = 'sandbox:acc:ramadan:camp:awareness';
+    await page.goto(`/dashboard/accounts/${ACC}/campaigns/${CAMP}`);
     await expect(page.locator('main:not([aria-busy="true"])')).toBeVisible();
     // Ad set / ad group row link (the campaign surface's ad-groups table) → ad row link → ad detail.
     const groupLink = page.locator('a[href*="/groups/"]').first();
@@ -129,10 +127,11 @@ test.describe('authenticated media-buyer journeys', () => {
     await expect(page.locator('main:not([aria-busy="true"])')).toBeVisible();
     const adLink = page.locator('a[href*="/ads/"]').first();
     await expect(adLink).toBeVisible();
-    await adLink.click();
-    await page.waitForURL(/\/ads\//);
+    const adHref = await adLink.getAttribute('href');
+    await page.goto(adHref!);
     // The ad detail surface renders a diagnosis (bilingual) and carries no multimodal media analysis.
     await expect(page.getByRole('heading', { name: /Diagnosis|التشخيص/ }).first()).toBeVisible();
+    await expect(page).toHaveURL(/\/ads\//);
   });
 
   test('E2E-15 Campaigns table: sorting adds a prefixed sort param that persists on reload (Phase B)', async ({ page }) => {

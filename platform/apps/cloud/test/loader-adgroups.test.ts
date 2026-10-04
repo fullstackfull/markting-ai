@@ -22,4 +22,16 @@ describe('loadAdGroupList (the campaign-page loader) in DEMO', () => {
     expect(res.rows.length).toBeGreaterThan(0);
     expect(res.providerId).toBeTruthy();
   });
+
+  it('the full campaign-page loader set resolves without throwing (no sibling loader takes the page down)', async () => {
+    const { loadCampaign, loadSection, loadAdGroupList } = await import('@/lib/cloud/intelligence');
+    const [section, outcomes, groups] = await Promise.all([
+      loadCampaign(tenant, ACC, CAMP),
+      loadSection(tenant, 'OUTCOMES_HISTORY', { locale: 'en', accountId: ACC }, 'last_30_days'),
+      loadAdGroupList(tenant, ACC, CAMP),
+    ]);
+    expect(section).toBeTruthy();
+    expect(outcomes).toBeTruthy();
+    expect(groups.state).toBe('OK');
+  });
 });
