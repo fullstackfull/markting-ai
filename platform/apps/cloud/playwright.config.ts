@@ -57,8 +57,8 @@ export default defineConfig({
   },
   projects: SEEDED
     ? [
-        { name: 'setup', testMatch: /auth\.setup\.ts/ },
-        { name: 'admin-setup', testMatch: /admin-auth\.setup\.ts/ },
+        { name: 'setup', testMatch: /e2e\/auth\.setup\.ts$/ },
+        { name: 'admin-setup', testMatch: /e2e\/admin-auth\.setup\.ts$/ },
         { name: 'public', testMatch: /(journeys|a11y|admin)\.spec\.ts/, grep: /@public/ },
         // authed = seeded media buyer (tenant OWNER, not a platform operator): journeys/a11y + the
         // @owner-denied admin check. Excludes @public and @operator.

@@ -19,6 +19,12 @@ test('@operator platform operator sees the admin plane and read surfaces', async
   await expect(page.locator('.admin-card h2').first()).toContainText(/Users/i);
   await page.goto('/admin/security');
   await expect(page.locator('.admin-card h2').first()).toContainText(/posture/i);
+  await page.goto('/admin/billing');
+  await expect(page.locator('.admin-kpi').first()).toContainText(/MRR/i);
+  await page.goto('/admin/flags');
+  await expect(page.locator('.admin-card h2').first()).toContainText(/Feature flags/i);
+  await page.goto('/admin/audit');
+  await expect(page.locator('.admin-card h2').first()).toContainText(/Global audit/i);
 });
 
 test('@owner-denied a tenant owner cannot reach the admin plane', async ({ page }) => {

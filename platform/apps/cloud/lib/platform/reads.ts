@@ -33,7 +33,7 @@ export async function platformOverview(): Promise<PlatformOverview> {
     db<Array<{ n: number }>>`select count(*)::int as n from public.markting_store_connections where status = 'active'`,
     db<Array<{ n: number; cost: number }>>`select count(*)::int as n, coalesce(sum(estimated_cost_micros), 0)::bigint as cost from public.markting_ai_usage where status != 'local_fallback'`,
     db<Array<{ n: number }>>`select count(*)::int as n from public.organization_onboarding where completed_at is not null`,
-    db<Array<{ n: number }>>`select count(*)::int as n from public.pending_operations where status = 'pending'`,
+    db<Array<{ n: number }>>`select count(*)::int as n from public.pending_operations where state = 'pending'`,
     db<Array<{ n: number }>>`select count(*)::int as n from public.markting_kill_switches where active = true`,
   ]);
   const byStatus: Record<string, number> = {};
@@ -108,6 +108,8 @@ export interface OrgDetail {
   aiRequests: number;
   aiCostMicros: number;
   activeKillSwitches: Array<{ scope: string; scopeKey: string; reason: string | null }>;
+  entitlementOverride: { maxActiveAccounts: number | null; maxMembers: number | null; maxRetentionDays: number | null } | null;
+  aiLimit: { aiDisabled: boolean; maxRequests: number | null; maxCostMicros: number | null } | null;
 }
 
 export async function getOrganizationDetail(id: string): Promise<OrgDetail | null> {
@@ -115,7 +117,7 @@ export async function getOrganizationDetail(id: string): Promise<OrgDetail | nul
   const [org] = await db<Array<{ id: string; name: string; slug: string; createdAt: Date }>>`
     select id, name, slug, created_at as "createdAt" from public.organizations where id = ${id} limit 1`;
   if (!org) return null;
-  const [sub, members, adAccounts, connections, [ai], [onboarding], kills] = await Promise.all([
+  const [sub, members, adAccounts, connections, [ai], [onboarding], kills, [override], [aiLimit]] = await Promise.all([
     db<Array<{ plan: string; status: string; currentPeriodEnd: Date | null; stripeCustomerId: string | null }>>`
       select plan::text as plan, status, current_period_end as "currentPeriodEnd", provider_customer_id as "stripeCustomerId"
       from public.organization_subscriptions where organization_id = ${id} limit 1`,
@@ -137,6 +139,12 @@ export async function getOrganizationDetail(id: string): Promise<OrgDetail | nul
     db<Array<{ scope: string; scopeKey: string; reason: string | null }>>`
       select scope, scope_key as "scopeKey", reason from public.markting_kill_switches
       where active = true and (organization_id = ${id} or organization_id is null)`,
+    db<Array<{ maxActiveAccounts: number | null; maxMembers: number | null; maxRetentionDays: number | null }>>`
+      select max_active_accounts as "maxActiveAccounts", max_members as "maxMembers", max_retention_days as "maxRetentionDays"
+      from public.organization_entitlement_overrides where organization_id = ${id} limit 1`,
+    db<Array<{ aiDisabled: boolean; maxRequests: number | null; maxCostMicros: number | null }>>`
+      select ai_disabled as "aiDisabled", max_requests_per_window as "maxRequests", max_cost_micros_per_window as "maxCostMicros"
+      from public.organization_ai_limits where organization_id = ${id} limit 1`,
   ]);
   return {
     id: org.id, name: org.name, slug: org.slug, createdAt: org.createdAt,
@@ -146,6 +154,8 @@ export async function getOrganizationDetail(id: string): Promise<OrgDetail | nul
     members, adAccounts, connections,
     aiRequests: ai?.n ?? 0, aiCostMicros: Number(ai?.cost ?? 0),
     activeKillSwitches: kills,
+    entitlementOverride: override ?? null,
+    aiLimit: aiLimit ? { aiDisabled: aiLimit.aiDisabled, maxRequests: aiLimit.maxRequests, maxCostMicros: aiLimit.maxCostMicros != null ? Number(aiLimit.maxCostMicros) : null } : null,
   };
 }
 

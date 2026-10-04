@@ -12,9 +12,13 @@ export const ADMIN_NAV: Array<{ href: string; label: string }> = [
   { href: '/admin/commerce', label: 'Commerce' },
   { href: '/admin/system', label: 'System Health' },
   { href: '/admin/governance', label: 'Governance & Safety' },
-  { href: '/admin/security', label: 'Security & Audit' },
+  { href: '/admin/security', label: 'Security Center' },
+  { href: '/admin/audit', label: 'Global Audit' },
   { href: '/admin/support', label: 'Support' },
+  { href: '/admin/data-quality', label: 'Data Quality' },
   { href: '/admin/flags', label: 'Feature Flags' },
+  { href: '/admin/notifications', label: 'Notifications' },
+  { href: '/admin/search', label: 'Search' },
   { href: '/admin/settings', label: 'Settings' },
 ];
 

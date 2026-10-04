@@ -3,6 +3,8 @@ import { notFound } from 'next/navigation';
 import { requirePlatformOperator } from '@/lib/platform/auth';
 import { getOrganizationDetail } from '@/lib/platform/reads';
 import { FreezeForm } from './freeze-form';
+import { AdminActionForm } from '@/components/admin/action-form';
+import { setEntitlementOverride, setOrgAiControl } from '@/lib/platform/ops-actions';
 
 export const dynamic = 'force-dynamic';
 
@@ -45,6 +47,29 @@ export default async function AdminOrganizationDetailPage({ params }: { params: 
             <tbody>{org.activeKillSwitches.map((k, i) => (<tr key={i}><td>{k.scope}</td><td>{k.scopeKey || '—'}</td><td>{k.reason ?? '—'}</td></tr>))}</tbody>
           </table>
         )}
+      </div>
+
+      <div className="admin-card">
+        <h2>Entitlements &amp; AI controls</h2>
+        <p className="admin-note">Per-org overrides feed the single entitlement resolver (plan → override → safety ceiling). AI disable/quota is stored in organization_ai_limits (consumed by the gateway when a live model is wired). SUPER_ADMIN / PLATFORM_OPERATOR; reason-required &amp; audited.</p>
+        <div style={{ display: 'flex', gap: '2rem', flexWrap: 'wrap' }}>
+          <div>
+            <p className="admin-note"><b>Entitlement override</b> (blank = use plan value)</p>
+            <AdminActionForm action={setEntitlementOverride} submitLabel="Save override" hidden={{ organizationId: org.id }}>
+              <input className="admin-input" name="maxActiveAccounts" placeholder="max active accounts" defaultValue={org.entitlementOverride?.maxActiveAccounts ?? ''} />
+              <input className="admin-input" name="maxMembers" placeholder="max members" defaultValue={org.entitlementOverride?.maxMembers ?? ''} />
+              <input className="admin-input" name="maxRetentionDays" placeholder="max retention days" defaultValue={org.entitlementOverride?.maxRetentionDays ?? ''} />
+            </AdminActionForm>
+          </div>
+          <div>
+            <p className="admin-note"><b>AI control</b> {org.aiLimit?.aiDisabled ? <span className="admin-tag bad">AI disabled</span> : <span className="admin-tag ok">AI enabled</span>}</p>
+            <AdminActionForm action={setOrgAiControl} submitLabel="Save AI control" hidden={{ organizationId: org.id }}>
+              <select className="admin-input" name="aiDisabled" defaultValue={org.aiLimit?.aiDisabled ? 'true' : 'false'}><option value="false">AI enabled</option><option value="true">AI disabled</option></select>
+              <input className="admin-input" name="maxRequests" placeholder="max requests / window" defaultValue={org.aiLimit?.maxRequests ?? ''} />
+              <input className="admin-input" name="maxCostMicros" placeholder="max cost micros / window" defaultValue={org.aiLimit?.maxCostMicros ?? ''} />
+            </AdminActionForm>
+          </div>
+        </div>
       </div>
 
       <div className="admin-card">

@@ -52,6 +52,57 @@ export interface OrganizationEntitlement {
   cancelAtPeriodEnd: boolean;
 }
 
+/** Platform-wide safety ceiling applied AFTER any catalog edit or per-org override — safety always wins. */
+const SAFETY_MAX_RETENTION_DAYS = 3650;
+
+/**
+ * Resolve the effective plan for an org: base = the admin-editable catalog row (public.platform_plans)
+ * if present, else the hard-coded {@link PLANS} default (code fallback); then apply the per-org
+ * entitlement override (public.organization_entitlement_overrides), then the safety ceiling. This is
+ * the SINGLE canonical resolver — the admin UI edits the catalog/overrides, never a parallel check.
+ * Fail-safe: any DB error falls back to the hard-coded plan.
+ */
+async function resolveEffectivePlan(organizationId: string, planId: PlanId): Promise<PlanDefinition> {
+  const fallback = PLANS[planId];
+  try {
+    const rows = await db()<Array<{
+      name: string; monthlyPriceEur: number | null; annualPriceEur: number | null;
+      maxActiveAccounts: number | null; maxMembers: number | null; maxRetentionDays: number;
+      writeAccess: boolean; clientWorkspaces: boolean;
+      ovMaxActiveAccounts: number | null; ovMaxMembers: number | null; ovMaxRetentionDays: number | null;
+      ovWriteAccess: boolean | null; ovClientWorkspaces: boolean | null;
+    }>>`
+      select p.name, p.monthly_price_eur, p.annual_price_eur, p.max_active_accounts, p.max_members,
+        p.max_retention_days, p.write_access, p.client_workspaces,
+        o.max_active_accounts as ov_max_active_accounts, o.max_members as ov_max_members,
+        o.max_retention_days as ov_max_retention_days, o.write_access as ov_write_access,
+        o.client_workspaces as ov_client_workspaces
+      from public.platform_plans p
+      left join public.organization_entitlement_overrides o on o.organization_id = ${organizationId}
+      where p.id = ${planId} and p.archived = false
+      limit 1
+    `;
+    const r = rows[0];
+    // Trust the catalog row only if it really is one (defends against a stubbed db() in unit tests and
+    // any unexpected shape): otherwise fall back to the hard-coded plan.
+    if (!r || typeof r.name !== 'string' || typeof r.maxRetentionDays !== 'number') return fallback;
+    const maxRetentionDays = Math.min(r.ovMaxRetentionDays ?? r.maxRetentionDays, SAFETY_MAX_RETENTION_DAYS);
+    return {
+      id: planId,
+      name: r.name,
+      monthlyPriceEur: r.monthlyPriceEur,
+      annualPriceEur: r.annualPriceEur,
+      maxActiveAccounts: r.ovMaxActiveAccounts ?? r.maxActiveAccounts,
+      maxMembers: r.ovMaxMembers ?? r.maxMembers,
+      maxRetentionDays,
+      writeAccess: r.ovWriteAccess ?? r.writeAccess,
+      clientWorkspaces: r.ovClientWorkspaces ?? r.clientWorkspaces,
+    };
+  } catch {
+    return fallback;
+  }
+}
+
 export async function getOrganizationEntitlement(organizationId: string): Promise<OrganizationEntitlement> {
   const rows = await db()<Array<{
     plan: PlanId;
@@ -75,7 +126,7 @@ export async function getOrganizationEntitlement(organizationId: string): Promis
     cancelAtPeriodEnd: false,
   };
   const entitledPlan = ['active', 'trialing', 'past_due'].includes(subscription.status) ? subscription.plan : 'reader';
-  return { ...subscription, plan: PLANS[entitledPlan] };
+  return { ...subscription, plan: await resolveEffectivePlan(organizationId, entitledPlan) };
 }
 
 export async function applyPlanToPrincipal(principal: TenantPrincipal): Promise<TenantPrincipal> {

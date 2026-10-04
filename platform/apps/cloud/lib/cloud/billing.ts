@@ -128,6 +128,9 @@ export async function processStripeEvent(event: Stripe.Event): Promise<'processe
     || event.type === 'customer.subscription.deleted') {
     await applySubscription(event.data.object);
     handled = true;
+  } else if (event.type === 'invoice.payment_failed' || event.type === 'invoice.payment_action_required') {
+    await recordBillingFailure(event.type, event.data.object);
+    handled = true;
   }
   await db()`
     insert into private.billing_events (event_id, event_type)
@@ -135,6 +138,35 @@ export async function processStripeEvent(event: Stripe.Event): Promise<'processe
     on conflict (event_id) do nothing
   `;
   return handled ? 'processed' : 'ignored';
+}
+
+/**
+ * WAVE 8 — persist a payment failure for the platform billing-ops queue. The org is resolved from the
+ * invoice's customer/subscription id (never the payload's claimed org). Best-effort: a failure here
+ * must not break webhook idempotency recording.
+ */
+async function recordBillingFailure(eventType: string, invoice: Stripe.Invoice): Promise<void> {
+  // Stripe type versions vary on where `subscription`/`customer` ids live on an Invoice; read defensively.
+  const inv = invoice as unknown as {
+    customer?: string | { id: string } | null;
+    subscription?: string | { id: string } | null;
+    amount_due?: number | null; currency?: string | null; attempt_count?: number | null; next_payment_attempt?: number | null;
+  };
+  const customerId = typeof inv.customer === 'string' ? inv.customer : inv.customer?.id ?? null;
+  const subscriptionId = typeof inv.subscription === 'string' ? inv.subscription : inv.subscription?.id ?? null;
+  const rows = await db()<Array<{ organizationId: string }>>`
+    select organization_id as "organizationId" from public.organization_subscriptions
+    where (${customerId}::text is not null and provider_customer_id = ${customerId})
+       or (${subscriptionId}::text is not null and provider_subscription_id = ${subscriptionId})
+    limit 1
+  `;
+  const nextAttempt = inv.next_payment_attempt ? new Date(inv.next_payment_attempt * 1000).toISOString() : null;
+  await db()`
+    insert into public.billing_failures
+      (organization_id, provider_customer_id, provider_subscription_id, event_type, amount_due_minor, currency, attempt_count, next_attempt_at)
+    values (${rows[0]?.organizationId ?? null}, ${customerId}, ${subscriptionId}, ${eventType},
+      ${inv.amount_due ?? null}, ${inv.currency ?? null}, ${inv.attempt_count ?? null}, ${nextAttempt})
+  `;
 }
 
 export function resetBillingForTests(): void {
