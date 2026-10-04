@@ -7,6 +7,7 @@ import { BarChart } from '@/components/charts';
 import { AnalyticsTable, type AnalyticsColumn, type ColumnPreset } from '@/components/analytics-table';
 import { requireDashboardTenant } from '@/lib/cloud/dashboard';
 import { authorizeTenantAccount } from '@/lib/cloud/account-authz';
+import { decodeParams } from '@/lib/cloud/route-params';
 import { loadAdGroup, loadSection } from '@/lib/cloud/intelligence';
 import type { AdRow } from '@/lib/markting/orchestrator/sections';
 import { getT } from '@/lib/i18n/server';
@@ -30,7 +31,7 @@ const AD_SORTS = ['name', 'status', 'spend', 'impressions', 'clicks', 'ctr', 'cp
  * state exactly like loadCampaign.
  */
 export default async function AdGroupPage({ params, searchParams }: { params: Promise<{ accountId: string; campaignId: string; groupId: string }>; searchParams: Promise<Record<string, string | string[] | undefined>> }) {
-  const { accountId, campaignId, groupId } = await params;
+  const { accountId, campaignId, groupId } = decodeParams(await params);
   const tenant = await requireDashboardTenant();
   await authorizeTenantAccount(tenant, accountId);
   const { t, locale } = await getT();

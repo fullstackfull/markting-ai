@@ -1,5 +1,6 @@
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
+import { decodeParams } from '@/lib/cloud/route-params';
 import { PageHeader, formatMoneyMinor } from '@/components/ui';
 import { IntelMeta } from '@/components/intel';
 import { requireDashboardTenant } from '@/lib/cloud/dashboard';
@@ -10,7 +11,7 @@ import { resolveRuntimeMode } from '@/lib/markting/runtime-mode';
 export const metadata = { title: 'Creative detail' };
 
 export default async function CreativeDetailPage({ params }: { params: Promise<{ creativeId: string }> }) {
-  const { creativeId } = await params;
+  const { creativeId } = decodeParams(await params);
   const tenant = await requireDashboardTenant();
   const { locale } = await getT();
   const L = (en: string, ar: string) => (locale === 'ar' ? ar : en);

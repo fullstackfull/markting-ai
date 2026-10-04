@@ -5,6 +5,7 @@ import { IntelMeta } from '@/components/intel';
 import { MetricCard, EvidenceCard, StatusChip } from '@/components/kit';
 import { requireDashboardTenant } from '@/lib/cloud/dashboard';
 import { authorizeTenantAccount } from '@/lib/cloud/account-authz';
+import { decodeParams } from '@/lib/cloud/route-params';
 import { loadAd } from '@/lib/cloud/intelligence';
 import { getT } from '@/lib/i18n/server';
 import { resolveRuntimeMode } from '@/lib/markting/runtime-mode';
@@ -22,7 +23,7 @@ export const metadata = { title: 'Ad' };
  * DEMO reads the seed; a live deployment returns the honest not-connected state like loadCampaign.
  */
 export default async function AdPage({ params, searchParams }: { params: Promise<{ accountId: string; campaignId: string; groupId: string; adId: string }>; searchParams: Promise<Record<string, string | string[] | undefined>> }) {
-  const { accountId, campaignId, groupId, adId } = await params;
+  const { accountId, campaignId, groupId, adId } = decodeParams(await params);
   const tenant = await requireDashboardTenant();
   await authorizeTenantAccount(tenant, accountId);
   const { t, locale } = await getT();

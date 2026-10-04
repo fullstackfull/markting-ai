@@ -7,6 +7,7 @@ import { AnalyticsTable, type AnalyticsColumn, type ColumnPreset } from '@/compo
 import { PacingChart, BarChart } from '@/components/charts';
 import { requireDashboardTenant } from '@/lib/cloud/dashboard';
 import { authorizeTenantAccount } from '@/lib/cloud/account-authz';
+import { decodeParams } from '@/lib/cloud/route-params';
 import { loadCampaign, loadSection, loadAdGroupList } from '@/lib/cloud/intelligence';
 import type { AdGroupRow } from '@/lib/markting/orchestrator/sections';
 import { getT } from '@/lib/i18n/server';
@@ -30,7 +31,7 @@ const GROUP_SORTS = ['name', 'status', 'spend', 'impressions', 'clicks', 'ctr', 
  * experiment entry point. Range + freshness are wired exactly like the account page (Phase A).
  */
 export default async function CampaignPage({ params, searchParams }: { params: Promise<{ accountId: string; campaignId: string }>; searchParams: Promise<Record<string, string | string[] | undefined>> }) {
-  const { accountId, campaignId } = await params;
+  const { accountId, campaignId } = decodeParams(await params);
   const tenant = await requireDashboardTenant();
   await authorizeTenantAccount(tenant, accountId);
   const { t, locale } = await getT();

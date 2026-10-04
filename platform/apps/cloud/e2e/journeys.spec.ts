@@ -108,34 +108,48 @@ test.describe('authenticated media-buyer journeys', () => {
     await expect(page.getByText(/E2E Org B/)).toHaveCount(0);
   });
 
-  test('E2E-14 Drill-down: Account → Campaign → Ad set/group → Ad via the links (Phase B)', async ({ page }) => {
-    // The drill chain is Account → Campaign → Ad set/group → Ad. Each level is verified by visiting the
-    // real route (fixed-seed ids, the same deterministic approach the a11y scan uses) and asserting the
-    // DESTINATION renders real seeded content — i.e. the drill surfaces work end-to-end. (The per-row
-    // cross-page link element + URL-state are additionally covered by E2E-15 and the a11y route scan;
-    // asserting destination content here is robust to RSC client-nav streaming of nested tables.)
+  test('E2E-14 Drill-down: Account → Campaign → Ad set/group → Ad via the links (Phase B / C0.4)', async ({ page }) => {
+    // C0.4 — prove the ACTUAL deepest route Workspace→Account→Campaign→Group→Ad, following the real
+    // per-row links (not just typed URLs) AND asserting MEANINGFUL seeded content at EACH level, not
+    // mere route reachability. The ids are composite (colon-delimited) and the links are built with
+    // encodeURIComponent; the route params are decoded server-side (lib/cloud/route-params) so the
+    // deep drill resolves real seed rows end-to-end. This is the surface that proves the fix for the
+    // recorded Phase-B divergence (encoded segments previously never matched the seed).
     const CAMP = 'sandbox:acc:ramadan:camp:awareness';
     const GROUP = 'sandbox:acc:ramadan:camp:awareness:ag:lanterns';
-    const AD = 'sandbox:acc:ramadan:camp:awareness:ag:lanterns:ad:video-a';
     const e = encodeURIComponent;
-    // Account surface renders and links to the campaign (account→campaign hop).
+
+    // Workspace → Account: the workspace renders and the account surface shows its campaigns table.
+    await page.goto('/dashboard/workspace');
+    await expect(page.locator('main:not([aria-busy="true"])')).toBeVisible();
     await page.goto(`/dashboard/accounts/${e(ACC)}`);
     await expect(page.locator('main:not([aria-busy="true"])')).toBeVisible();
-    await expect(page.locator('a[href*="/campaigns/"][href*="awareness"]').first()).toBeVisible();
-    // Campaign detail renders the right campaign content (the seeded name), confirming the drill reads
-    // real seed data for the account/campaign level.
-    await page.goto(`/dashboard/accounts/${e(ACC)}/campaigns/${e(CAMP)}`);
-    await expect(page.getByText(/Awareness|توعية/).first()).toBeVisible();
-    // Ad set/group and ad detail ROUTES are reachable and render without error. (The deterministic
-    // content of these levels — loadAdGroup/loadAd resolving the seeded group "Lanterns" and ad
-    // "Lantern Video A" with found=true — is asserted directly in test/loader-adgroups.test.ts and
-    // test/seed-hierarchy.test.ts, which exercise the exact page loaders; this browser journey smoke-
-    // tests that the routes serve a rendered page.)
-    await page.goto(`/dashboard/accounts/${e(ACC)}/campaigns/${e(CAMP)}/groups/${e(GROUP)}`);
-    await expect(page.locator('main:not([aria-busy="true"])')).toBeVisible();
-    await page.goto(`/dashboard/accounts/${e(ACC)}/campaigns/${e(CAMP)}/groups/${e(GROUP)}/ads/${e(AD)}`);
-    await expect(page.locator('main:not([aria-busy="true"])')).toBeVisible();
+    // Account level content: the seeded campaign row/link is present (real account→campaign data).
+    const campaignLink = page.locator(`a[href*="/campaigns/"][href*="awareness"]`).first();
+    await expect(campaignLink).toBeVisible();
+
+    // Account → Campaign by FOLLOWING the link; campaign detail shows the seeded campaign name.
+    await campaignLink.click();
+    await expect(page).toHaveURL(/\/campaigns\//);
+    await expect(page.getByText(/Ramadan Awareness|توعية/).first()).toBeVisible();
+
+    // Campaign → Group by following the seeded ad-set/group link; group detail shows "Lanterns".
+    const groupLink = page.locator(`a[href*="/groups/"][href*="lanterns"]`).first();
+    await expect(groupLink).toBeVisible();
+    await groupLink.click();
+    await expect(page).toHaveURL(/\/groups\//);
+    await expect(page.getByText(/Lanterns/).first()).toBeVisible();
+
+    // Group → Ad by following the seeded ad link; ad detail shows "Lantern Video A".
+    const adLink = page.locator(`a[href*="/ads/"]`).first();
+    await expect(adLink).toBeVisible();
+    await adLink.click();
     await expect(page).toHaveURL(/\/ads\//);
+    await expect(page.getByText(/Lantern Video A/).first()).toBeVisible();
+
+    // Regression guard (C0.3): an unknown account id is a true 404, never an implicit demo fallback.
+    await page.goto(`/dashboard/accounts/${e('sandbox:acc:does-not-exist')}`);
+    await expect(page.getByText(/Page not found|غير موجودة|غير موجود/).first()).toBeVisible();
   });
 
   test('E2E-15 Campaigns table: sorting adds a prefixed sort param that persists on reload (Phase B)', async ({ page }) => {
