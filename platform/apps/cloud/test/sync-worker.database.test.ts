@@ -37,8 +37,8 @@ describeDatabase('sync queue — durable + atomic claim (local database)', () =>
     const a = await q.enqueue({ organizationId: org, provider: 'meta', syncType: 'INITIAL', idempotencyKey: 'idem-1', now: NOW });
     const b = await q.enqueue({ organizationId: org, provider: 'meta', syncType: 'INITIAL', idempotencyKey: 'idem-1', now: NOW });
     expect(b.id).toBe(a.id);
-    const [{ count }] = await admin<Array<{ count: number }>>`select count(*)::int as count from public.markting_sync_jobs where organization_id = ${org} and idempotency_key = 'idem-1'`;
-    expect(count).toBe(1);
+    const rows = await admin<Array<{ count: number }>>`select count(*)::int as count from public.markting_sync_jobs where organization_id = ${org} and idempotency_key = 'idem-1'`;
+    expect(rows[0]!.count).toBe(1);
   });
 
   it('claim is a single-winner atomic lease (concurrent claims: exactly one wins)', async () => {
