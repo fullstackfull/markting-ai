@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { seedClientForAccount } from '@/lib/markting/orchestrator/seed';
-import { buildCampaign, buildAdGroup, buildCampaignRows } from '@/lib/markting/orchestrator/sections';
+import { buildCampaign, buildAdGroup, buildAd, buildCampaignRows } from '@/lib/markting/orchestrator/sections';
 
 /**
  * PHASE B (B2/B30) — the DEMO seed hierarchy that the drill-down surfaces read. Guards that the demo
@@ -24,6 +24,13 @@ describe('DEMO seed hierarchy for the drill-down chain', () => {
     const g = buildAdGroup(seedClientForAccount(ACC).account, CAMP, GROUP);
     expect(g.found).toBe(true);
     expect(g.ads && g.ads.length).toBeGreaterThan(0);
+    expect(g.name).toMatch(/Lanterns/); // the group-detail page renders this
+  });
+  it('a seeded ad resolves with its name (ad detail page renders real content)', () => {
+    const AD = 'sandbox:acc:ramadan:camp:awareness:ag:lanterns:ad:video-a';
+    const ad = buildAd(seedClientForAccount(ACC).account, CAMP, GROUP, AD);
+    expect(ad.found).toBe(true);
+    expect(ad.name).toMatch(/Lantern Video A/);
   });
   it('a group id under the wrong campaign is not found (nested ownership)', () => {
     const g = buildAdGroup(seedClientForAccount(ACC).account, 'sandbox:acc:ramadan:camp:brandsearch', GROUP);
