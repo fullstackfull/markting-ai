@@ -39,7 +39,7 @@ for (const route of DASHBOARD) {
     await page.goto(route);
     // `.first()` avoids a strict-mode match when the route-group loading.tsx <main> briefly coexists
     // with the page <main> during streaming under parallel CI load.
-    await expect(page.locator('main').first()).toBeVisible();
+    await expect(page.locator('main:not([aria-busy="true"])').first()).toBeVisible();
     const { describe } = await scan(page);
     expect(describe).toEqual([]);
   });

@@ -27,21 +27,21 @@ const ACC = 'sandbox:acc:ramadan';
 test.describe('authenticated media-buyer journeys', () => {
   test('E2E-01 Workspace → Account → Campaign → Recommendation → Experiment', async ({ page }) => {
     await page.goto('/dashboard/workspace');
-    await expect(page.locator('main')).toBeVisible();
+    await expect(page.locator('main:not([aria-busy="true"])')).toBeVisible();
     await page.goto(`/dashboard/accounts/${ACC}`);
-    await expect(page.locator('main')).toBeVisible();
+    await expect(page.locator('main:not([aria-busy="true"])')).toBeVisible();
     // follow a campaign link if present, else navigate directly to the campaign surface
     const campaignLink = page.locator(`a[href*="/campaigns/"]`).first();
     if (await campaignLink.count()) await campaignLink.click();
     await page.goto('/dashboard/recommendations');
-    await expect(page.locator('main')).toBeVisible();
+    await expect(page.locator('main:not([aria-busy="true"])')).toBeVisible();
     await page.goto('/dashboard/experiments');
     await expect(page.getByText(/Experiment|تجربة/i).first()).toBeVisible();
   });
 
   test('E2E-02 Creative library → detail → fatigue → test idea', async ({ page }) => {
     await page.goto('/dashboard/creative');
-    await expect(page.locator('main')).toBeVisible();
+    await expect(page.locator('main:not([aria-busy="true"])')).toBeVisible();
     const creativeLink = page.locator('a[href*="/dashboard/creative/"]').first();
     if (await creativeLink.count()) {
       await creativeLink.click();
@@ -56,7 +56,7 @@ test.describe('authenticated media-buyer journeys', () => {
 
   test('E2E-04 Agency: client health / switch', async ({ page }) => {
     await page.goto('/dashboard/agency');
-    await expect(page.locator('main')).toBeVisible();
+    await expect(page.locator('main:not([aria-busy="true"])')).toBeVisible();
   });
 
   test('E2E-05 Assistant: cross-domain answer surface, no write capability', async ({ page }) => {
@@ -66,7 +66,7 @@ test.describe('authenticated media-buyer journeys', () => {
 
   test('E2E-06 Executive view', async ({ page }) => {
     await page.goto('/dashboard/executive');
-    await expect(page.locator('main')).toBeVisible();
+    await expect(page.locator('main:not([aria-busy="true"])')).toBeVisible();
   });
 
   test('E2E-07 Arabic / RTL workspace', async ({ page, context, baseURL }) => {
