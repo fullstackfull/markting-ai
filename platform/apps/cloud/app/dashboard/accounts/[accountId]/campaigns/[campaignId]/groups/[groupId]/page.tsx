@@ -1,10 +1,12 @@
 import Link from 'next/link';
+import { notFound } from 'next/navigation';
 import { PageHeader, formatMoneyMinor } from '@/components/ui';
 import { SectionView, IntelMeta } from '@/components/intel';
 import { EntityLink, MetricCard, EvidenceCard, StatusChip } from '@/components/kit';
 import { BarChart } from '@/components/charts';
 import { AnalyticsTable, type AnalyticsColumn, type ColumnPreset } from '@/components/analytics-table';
 import { requireDashboardTenant } from '@/lib/cloud/dashboard';
+import { authorizeTenantAccount } from '@/lib/cloud/account-authz';
 import { loadAdGroup, loadSection } from '@/lib/cloud/intelligence';
 import type { AdRow } from '@/lib/markting/orchestrator/sections';
 import { getT } from '@/lib/i18n/server';
@@ -30,6 +32,7 @@ const AD_SORTS = ['name', 'status', 'spend', 'impressions', 'clicks', 'ctr', 'cp
 export default async function AdGroupPage({ params, searchParams }: { params: Promise<{ accountId: string; campaignId: string; groupId: string }>; searchParams: Promise<Record<string, string | string[] | undefined>> }) {
   const { accountId, campaignId, groupId } = await params;
   const tenant = await requireDashboardTenant();
+  await authorizeTenantAccount(tenant, accountId);
   const { t, locale } = await getT();
   const L = (en: string, ar: string) => (locale === 'ar' ? ar : en);
   const T = (b: { en: string; ar: string }) => (locale === 'ar' ? b.ar : b.en);
@@ -57,6 +60,11 @@ export default async function AdGroupPage({ params, searchParams }: { params: Pr
   );
 
   if (!section.found) {
+    // C0.1/C0.3 — in DEMO the seed is the complete universe, so a not-found section means the
+    // campaign▸group parent chain does not hold (wrong-parent URL guess or an unknown id). Return a
+    // true 404 rather than the soft not-connected card, which must remain ONLY for the genuine
+    // live-without-connections case. Never reveals whether the id exists in another tenant.
+    if (demo) notFound();
     return (
       <main className="page">
         <PageHeader title={termLabel} description={`${accountId} · ${campaignId}`} />

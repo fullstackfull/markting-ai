@@ -1,10 +1,12 @@
 import Link from 'next/link';
+import { notFound } from 'next/navigation';
 import { PageHeader, formatMoneyMinor } from '@/components/ui';
 import { SectionView, IntelMeta } from '@/components/intel';
 import { EntityLink } from '@/components/kit';
 import { AnalyticsTable, type AnalyticsColumn, type ColumnPreset } from '@/components/analytics-table';
 import { PacingChart, BarChart } from '@/components/charts';
 import { requireDashboardTenant } from '@/lib/cloud/dashboard';
+import { authorizeTenantAccount } from '@/lib/cloud/account-authz';
 import { loadCampaign, loadSection, loadAdGroupList } from '@/lib/cloud/intelligence';
 import type { AdGroupRow } from '@/lib/markting/orchestrator/sections';
 import { getT } from '@/lib/i18n/server';
@@ -30,6 +32,7 @@ const GROUP_SORTS = ['name', 'status', 'spend', 'impressions', 'clicks', 'ctr', 
 export default async function CampaignPage({ params, searchParams }: { params: Promise<{ accountId: string; campaignId: string }>; searchParams: Promise<Record<string, string | string[] | undefined>> }) {
   const { accountId, campaignId } = await params;
   const tenant = await requireDashboardTenant();
+  await authorizeTenantAccount(tenant, accountId);
   const { t, locale } = await getT();
   const L = (en: string, ar: string) => (locale === 'ar' ? ar : en);
   const sp = await searchParams;
@@ -42,6 +45,9 @@ export default async function CampaignPage({ params, searchParams }: { params: P
     loadBusinessContext(tenant.organizationId),
   ]);
   const demo = resolveRuntimeMode() === 'DEMO';
+  // C0.1/C0.3 — DEMO seed is the complete universe; a not-found campaign means the account▸campaign
+  // chain does not hold (wrong-parent URL guess or unknown id) → true 404, never a cross-tenant oracle.
+  if (demo && !section.found) notFound();
   const term = adGroupTerm(groupList.providerId || 'sandbox');
   const termLabel = L(term.en, term.ar);
 

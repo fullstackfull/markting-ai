@@ -1,4 +1,5 @@
 import Link from 'next/link';
+import { notFound } from 'next/navigation';
 import { PageHeader, formatMoneyMinor } from '@/components/ui';
 import { IntelMeta } from '@/components/intel';
 import { requireDashboardTenant } from '@/lib/cloud/dashboard';
@@ -17,6 +18,9 @@ export default async function CreativeDetailPage({ params }: { params: Promise<{
   const demo = resolveRuntimeMode() === 'DEMO';
   const T = (en: string, ar: string) => (locale === 'ar' ? ar : en);
   if (!d.found) {
+    // C0.3 — DEMO seed is the complete creative universe; an unknown creative id is a true 404, not a
+    // soft card. The not-connected card stays only for the genuine live-without-connections case.
+    if (demo) notFound();
     return <main className="page"><PageHeader title={L('Creative', 'الإعلان')} description={creativeId} /><section className="card"><p className="cell-sub">{locale === 'ar' ? d.summary.ar : d.summary.en}</p></section></main>;
   }
   return (

@@ -4,6 +4,7 @@ import { IntelMeta } from '@/components/intel';
 import { BlockedState } from '@/components/kit';
 import { AnalyticsTable, type AnalyticsColumn } from '@/components/analytics-table';
 import { requireDashboardTenant } from '@/lib/cloud/dashboard';
+import { authorizeTenantAccount } from '@/lib/cloud/account-authz';
 import { loadBreakdownExplorer } from '@/lib/cloud/intelligence';
 import type { ExplorerValueRow } from '@/lib/cloud/breakdown-explorer';
 import { getT } from '@/lib/i18n/server';
@@ -30,6 +31,7 @@ const BREAKDOWN_SORTS = ['value', 'spend', 'conversions', 'cpa', 'roas', 'share'
 export default async function BreakdownsPage({ params, searchParams }: { params: Promise<{ accountId: string }>; searchParams: Promise<Record<string, string | string[] | undefined>> }) {
   const { accountId } = await params;
   const tenant = await requireDashboardTenant();
+  await authorizeTenantAccount(tenant, accountId);
   const { t, locale } = await getT();
   const L = (en: string, ar: string) => (locale === 'ar' ? ar : en);
   const sp = await searchParams;

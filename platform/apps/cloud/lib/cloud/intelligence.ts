@@ -78,7 +78,9 @@ export async function loadCampaign(_tenant: DashboardTenant, accountId: string, 
   if (!isDemoMode()) {
     return { found: false as const, campaignId, kind: 'campaign' as const, summary: { en: 'No live provider connected — connect a provider to view campaign detail.', ar: 'لا يوجد مزوّد مرتبط — اربط مزوّدًا لعرض تفاصيل الحملة.' } };
   }
-  return buildCampaign(seedClientForAccount(accountId).account, campaignId);
+  const client = seedClientForAccount(accountId);
+  if (!client) return { found: false as const, campaignId, kind: 'campaign' as const, summary: { en: 'Account not found.', ar: 'الحساب غير موجود.' } };
+  return buildCampaign(client.account, campaignId);
 }
 
 /**
@@ -90,7 +92,8 @@ export async function loadCampaignList(_tenant: DashboardTenant, accountId: stri
   const { buildCampaignRows } = await import('@/lib/markting/orchestrator/sections');
   if (!isDemoMode()) return [];
   const { seedClientForAccount } = await import('@/lib/markting/orchestrator/seed');
-  return buildCampaignRows(seedClientForAccount(accountId).account);
+  const client = seedClientForAccount(accountId);
+  return client ? buildCampaignRows(client.account) : [];
 }
 
 /**
@@ -106,7 +109,9 @@ export async function loadAdGroupList(_tenant: DashboardTenant, accountId: strin
   if (!isDemoMode()) return { state: 'NOT_CONNECTED', providerId: '', rows: [] };
   const { buildCampaign } = await import('@/lib/markting/orchestrator/sections');
   const { seedClientForAccount } = await import('@/lib/markting/orchestrator/seed');
-  const section = buildCampaign(seedClientForAccount(accountId).account, campaignId);
+  const client = seedClientForAccount(accountId);
+  if (!client) return { state: 'NO_DATA', providerId: '', rows: [] };
+  const section = buildCampaign(client.account, campaignId);
   const rows = section.adGroups ?? [];
   return { state: rows.length ? 'OK' : 'NO_DATA', providerId: section.providerId ?? '', currency: section.currency, rows };
 }
@@ -116,7 +121,9 @@ export async function loadAdGroup(_tenant: DashboardTenant, accountId: string, c
   const { buildAdGroup } = await import('@/lib/markting/orchestrator/sections');
   const { seedClientForAccount } = await import('@/lib/markting/orchestrator/seed');
   if (!isDemoMode()) return { kind: 'adGroup' as const, found: false as const, campaignId, adGroupId, summary: { en: 'No live provider connected — connect a provider to view ad set / ad group detail.', ar: 'لا يوجد مزوّد مرتبط — اربط مزوّدًا لعرض تفاصيل مجموعة الإعلانات.' } };
-  return buildAdGroup(seedClientForAccount(accountId).account, campaignId, adGroupId);
+  const client = seedClientForAccount(accountId);
+  if (!client) return { kind: 'adGroup' as const, found: false as const, campaignId, adGroupId, summary: { en: 'Account not found.', ar: 'الحساب غير موجود.' } };
+  return buildAdGroup(client.account, campaignId, adGroupId);
 }
 
 /** Ad list for an ad set / ad group. */
@@ -124,7 +131,9 @@ export async function loadAdList(_tenant: DashboardTenant, accountId: string, ca
   if (!isDemoMode()) return { state: 'NOT_CONNECTED', rows: [] };
   const { buildAdGroup } = await import('@/lib/markting/orchestrator/sections');
   const { seedClientForAccount } = await import('@/lib/markting/orchestrator/seed');
-  const section = buildAdGroup(seedClientForAccount(accountId).account, campaignId, adGroupId);
+  const client = seedClientForAccount(accountId);
+  if (!client) return { state: 'NO_DATA', rows: [] };
+  const section = buildAdGroup(client.account, campaignId, adGroupId);
   const rows = section.ads ?? [];
   return { state: rows.length ? 'OK' : 'NO_DATA', currency: section.currency, rows };
 }
@@ -134,21 +143,25 @@ export async function loadAd(_tenant: DashboardTenant, accountId: string, campai
   const { buildAd } = await import('@/lib/markting/orchestrator/sections');
   const { seedClientForAccount } = await import('@/lib/markting/orchestrator/seed');
   if (!isDemoMode()) return { kind: 'ad' as const, found: false as const, campaignId, adGroupId, adId, summary: { en: 'No live provider connected — connect a provider to view ad detail.', ar: 'لا يوجد مزوّد مرتبط — اربط مزوّدًا لعرض تفاصيل الإعلان.' } };
-  return buildAd(seedClientForAccount(accountId).account, campaignId, adGroupId, adId);
+  const client = seedClientForAccount(accountId);
+  if (!client) return { kind: 'ad' as const, found: false as const, campaignId, adGroupId, adId, summary: { en: 'Account not found.', ar: 'الحساب غير موجود.' } };
+  return buildAd(client.account, campaignId, adGroupId, adId);
 }
 
 /** Creative-detail section (creative scope is not a free-text intent). */
 export async function loadCreativeDetail(_tenant: DashboardTenant, creativeId: string, accountId?: string) {
   const { buildCreativeDetail } = await import('@/lib/markting/orchestrator/sections');
-  const { seedClientForAccount, SEED_PORTFOLIO } = await import('@/lib/markting/orchestrator/seed');
+  const { seedClientForAccount, SEED_PORTFOLIO, PRIMARY_CLIENT } = await import('@/lib/markting/orchestrator/seed');
   if (!isDemoMode()) return { found: false as const, id: creativeId, kind: 'creativeDetail' as const, multimodal: 'MULTIMODAL_NOT_CONFIGURED' as const, summary: { en: 'No live provider connected.', ar: 'لا يوجد مزوّد مرتبط.' } };
-  // Find the creative across seeded accounts (creative ids are global in the demo seed).
-  const accounts = accountId ? [seedClientForAccount(accountId).account] : SEED_PORTFOLIO.map((c) => c.account);
+  // Find the creative across seeded accounts (creative ids are global in the demo seed). An explicit but
+  // unknown accountId yields no accounts (C0.3 — no implicit substitution) → a not-found creative detail.
+  const scoped = accountId ? seedClientForAccount(accountId) : PRIMARY_CLIENT;
+  const accounts = accountId ? (scoped ? [scoped.account] : []) : SEED_PORTFOLIO.map((c) => c.account);
   for (const acc of accounts) {
     const d = buildCreativeDetail(acc, creativeId);
     if (d.found) return d;
   }
-  return buildCreativeDetail(seedClientForAccount(accountId).account, creativeId);
+  return buildCreativeDetail((scoped ?? PRIMARY_CLIENT).account, creativeId);
 }
 
 /**
@@ -166,7 +179,9 @@ export async function loadBreakdownExplorer(_tenant: DashboardTenant, accountId:
     return buildBreakdownExplorerView({ providerId: '', connected: false, requested, rawRowsFor: () => [] });
   }
   const { seedClientForAccount } = await import('@/lib/markting/orchestrator/seed');
-  const acc = seedClientForAccount(accountId).account;
+  const client = seedClientForAccount(accountId);
+  if (!client) return buildBreakdownExplorerView({ providerId: '', connected: false, requested, rawRowsFor: () => [] });
+  const acc = client.account;
   const providerId = acc.nativeAdProvider ?? acc.provider;
   return buildBreakdownExplorerView({
     providerId,

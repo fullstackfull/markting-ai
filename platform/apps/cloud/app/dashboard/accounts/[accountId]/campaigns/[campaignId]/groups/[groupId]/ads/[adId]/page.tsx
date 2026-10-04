@@ -1,8 +1,10 @@
 import Link from 'next/link';
+import { notFound } from 'next/navigation';
 import { PageHeader, formatMoneyMinor } from '@/components/ui';
 import { IntelMeta } from '@/components/intel';
 import { MetricCard, EvidenceCard, StatusChip } from '@/components/kit';
 import { requireDashboardTenant } from '@/lib/cloud/dashboard';
+import { authorizeTenantAccount } from '@/lib/cloud/account-authz';
 import { loadAd } from '@/lib/cloud/intelligence';
 import { getT } from '@/lib/i18n/server';
 import { resolveRuntimeMode } from '@/lib/markting/runtime-mode';
@@ -22,6 +24,7 @@ export const metadata = { title: 'Ad' };
 export default async function AdPage({ params, searchParams }: { params: Promise<{ accountId: string; campaignId: string; groupId: string; adId: string }>; searchParams: Promise<Record<string, string | string[] | undefined>> }) {
   const { accountId, campaignId, groupId, adId } = await params;
   const tenant = await requireDashboardTenant();
+  await authorizeTenantAccount(tenant, accountId);
   const { t, locale } = await getT();
   const L = (en: string, ar: string) => (locale === 'ar' ? ar : en);
   const T = (b: { en: string; ar: string }) => (locale === 'ar' ? b.ar : b.en);
@@ -47,6 +50,10 @@ export default async function AdPage({ params, searchParams }: { params: Promise
   );
 
   if (!section.found) {
+    // C0.1/C0.3 — DEMO seed is the complete universe; a not-found ad means the
+    // campaign▸group▸ad chain does not hold (wrong-parent URL guess or unknown id) → true 404,
+    // never a cross-tenant oracle. The soft not-connected card stays only for the live case.
+    if (demo) notFound();
     return (
       <main className="page">
         <PageHeader title={t('adgroups.adFallback')} description={`${accountId} · ${adId}`} />

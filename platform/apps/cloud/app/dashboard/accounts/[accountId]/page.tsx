@@ -4,6 +4,7 @@ import { SectionView, IntelMeta } from '@/components/intel';
 import { EntityLink } from '@/components/kit';
 import { AnalyticsTable, type AnalyticsColumn } from '@/components/analytics-table';
 import { requireDashboardTenant } from '@/lib/cloud/dashboard';
+import { authorizeTenantAccount } from '@/lib/cloud/account-authz';
 import { loadSection, loadWorkspaceIntelligence, loadCampaignList } from '@/lib/cloud/intelligence';
 import type { CampaignRow } from '@/lib/markting/orchestrator/sections';
 import { getT } from '@/lib/i18n/server';
@@ -26,6 +27,7 @@ const CAMPAIGN_SORTS = ['name', 'spend', 'conversions', 'ctr', 'cpa', 'roas', 't
 export default async function AccountPage({ params, searchParams }: { params: Promise<{ accountId: string }>; searchParams: Promise<Record<string, string | string[] | undefined>> }) {
   const { accountId } = await params;
   const tenant = await requireDashboardTenant();
+  await authorizeTenantAccount(tenant, accountId);
   const { locale } = await getT();
   const sp = await searchParams;
   const selection = parseRangeParam(typeof sp.range === 'string' ? sp.range : undefined);

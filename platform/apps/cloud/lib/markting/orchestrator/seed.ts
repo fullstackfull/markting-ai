@@ -394,7 +394,13 @@ export const SEED_PORTFOLIO: SeedClient[] = [
 export const PRIMARY_CLIENT = SEED_PORTFOLIO[0]!;
 
 /** Find a client by account id (surfaces pass an accountId scope). */
-export function seedClientForAccount(accountId?: string): SeedClient {
+/**
+ * Resolve a seed client by account id. With no account id, returns the primary client (the explicit
+ * "no account specified" default). PHASE C0.3: a NON-EMPTY but UNKNOWN account id returns undefined —
+ * it NEVER silently substitutes the primary client — so callers surface NOT_FOUND instead of showing
+ * another account's data under the wrong id.
+ */
+export function seedClientForAccount(accountId?: string): SeedClient | undefined {
   if (!accountId) return PRIMARY_CLIENT;
-  return SEED_PORTFOLIO.find((c) => c.account.accountId === accountId) ?? PRIMARY_CLIENT;
+  return SEED_PORTFOLIO.find((c) => c.account.accountId === accountId);
 }

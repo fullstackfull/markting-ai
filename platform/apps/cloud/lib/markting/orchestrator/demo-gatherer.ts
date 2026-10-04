@@ -15,7 +15,7 @@ import type { Diagnosis } from '../intelligence/decision-model';
 import type { CommerceDiagnosis, CommerceRecommendation } from '../commerce/diagnostics';
 import type { CreativeRecommendation } from '../creative/recommendations';
 import { sectionForIntent } from './sections';
-import { seedClientForAccount, SEED_PORTFOLIO } from './seed';
+import { seedClientForAccount, SEED_PORTFOLIO, PRIMARY_CLIENT } from './seed';
 
 export const emptyGatherer: IntelligenceGatherer = {
   async gather() {
@@ -30,7 +30,7 @@ export const emptyGatherer: IntelligenceGatherer = {
 
 export const demoGatherer: IntelligenceGatherer = {
   sections(context, intent) {
-    return sectionForIntent(intent, seedClientForAccount(context.accountId).account, SEED_PORTFOLIO);
+    return sectionForIntent(intent, (seedClientForAccount(context.accountId) ?? PRIMARY_CLIENT).account, SEED_PORTFOLIO);
   },
   async gather(context) {
     const org = context.organizationId;
