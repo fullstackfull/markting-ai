@@ -31,7 +31,7 @@ describeDatabase('audit_events append-only (local database)', () => {
   it('adport_backend can INSERT a tenant audit event', async () => {
     await admin.begin(async (tx) => {
       await tx.unsafe('set local role adport_backend');
-      await tx`insert into public.audit_events (organization_id, event, summary) values (${org}, 'connected', 'appended')`;
+      await tx`insert into public.audit_events (organization_id, event, provider, tool, account_id, summary) values (${org}, 'connected', 'meta', 'connect', 'act_1', 'appended')`;
     });
     const rows = await admin<Array<{ n: number }>>`select count(*)::int as n from public.audit_events where organization_id = ${org}`;
     expect(rows[0]!.n).toBeGreaterThanOrEqual(1);
