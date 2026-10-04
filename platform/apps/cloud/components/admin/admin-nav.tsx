@@ -9,6 +9,7 @@ export const ADMIN_NAV: Array<{ href: string; label: string }> = [
   { href: '/admin/billing', label: 'Plans & Billing' },
   { href: '/admin/ai', label: 'AI Operations' },
   { href: '/admin/providers', label: 'Providers' },
+  { href: '/admin/integrations', label: 'Integrations' },
   { href: '/admin/commerce', label: 'Commerce' },
   { href: '/admin/system', label: 'System Health' },
   { href: '/admin/governance', label: 'Governance & Safety' },

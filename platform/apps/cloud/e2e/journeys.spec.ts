@@ -97,4 +97,14 @@ test.describe('authenticated media-buyer journeys', () => {
     // The buyer belongs to Org A; Org B's name must never appear in their session.
     await expect(page.getByText(/E2E Org B/).first()).toHaveCount(0);
   });
+
+  test('E2E-12 Connection Center renders canonical provider cards (own org only)', async ({ page }) => {
+    await page.goto('/dashboard/connections');
+    await expect(page.locator('main:not([aria-busy="true"])')).toBeVisible();
+    // The canonical model renders one card per ad provider; an unconnected provider shows NOT_CONFIGURED.
+    await expect(page.locator('.connection-card').first()).toBeVisible();
+    await expect(page.getByText(/NOT_CONFIGURED/).first()).toBeVisible();
+    // No cross-tenant leakage of another org's name.
+    await expect(page.getByText(/E2E Org B/)).toHaveCount(0);
+  });
 });

@@ -800,3 +800,38 @@ a:focus-visible, button:focus-visible, summary:focus-visible, [tabindex]:focus-v
 .admin-note { font-size: 0.72rem; color: var(--admin-faint); }
 .admin-search { display: flex; gap: 0.5rem; margin-bottom: 0.9rem; }
 @media (max-width: 760px) { .admin-root { grid-template-columns: 1fr; } .admin-side { position: static; height: auto; flex-direction: row; flex-wrap: wrap; } }
+
+/* ===== Connections & Integrations Control Plane ===== */
+.status.bad { color: var(--danger); }
+.callout.warn { border-inline-start-color: var(--warning); }
+.inline-note.danger { color: var(--danger); }
+.inline-link { color: var(--orange-dark); font-weight: 600; font-size: 0.75rem; }
+.button.ghost { border-color: transparent; background: transparent; color: var(--faint); padding: 0.2rem 0.5rem; }
+
+.connection-cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 22rem), 1fr)); gap: 1rem; }
+.connection-card { display: flex; flex-direction: column; gap: 0.6rem; border: 1px solid var(--line); border-radius: var(--radius); background: var(--paper); padding: 1rem 1.1rem; box-shadow: var(--shadow-card); }
+.connection-card-head { display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap; }
+.connection-card-title { font-weight: 640; margin-inline-end: auto; }
+.connection-meta { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0.35rem 0.9rem; margin: 0; }
+.connection-meta div { display: flex; flex-direction: column; }
+.connection-meta dt { color: var(--faint); font: 620 0.55rem var(--font-mono); letter-spacing: 0.06em; text-transform: uppercase; }
+.connection-meta dd { margin: 0; font-size: 0.8rem; color: var(--ink); }
+.connection-actions { display: flex; flex-wrap: wrap; gap: 0.4rem; align-items: center; margin-top: 0.2rem; }
+.connection-action-form { display: inline-flex; align-items: center; gap: 0.35rem; }
+.connection-feedback { margin-top: 0.3rem; }
+.scope-list { display: flex; flex-wrap: wrap; gap: 0.3rem; padding: 0; list-style: none; }
+.scope-list li { border: 1px solid var(--line-soft); border-radius: 0.4rem; padding: 0.1rem 0.4rem; }
+
+.wizard-backdrop { position: fixed; inset: 0; z-index: 50; display: grid; place-items: center; background: rgba(15, 15, 20, 0.45); padding: 1rem; }
+.wizard-panel { width: min(100%, 34rem); max-height: 90vh; overflow: auto; display: flex; flex-direction: column; gap: 0.7rem; border: 1px solid var(--line); border-radius: var(--radius); background: var(--paper); padding: 1.2rem 1.3rem; box-shadow: var(--shadow-card); }
+.wizard-head { display: flex; align-items: center; justify-content: space-between; gap: 1rem; }
+.wizard-head h2 { margin: 0; font-size: 1rem; }
+.wizard-foot { display: flex; justify-content: space-between; gap: 0.5rem; margin-top: 0.4rem; }
+
+/* Admin integrations extras */
+.admin-kpis { display: grid; grid-template-columns: repeat(auto-fill, minmax(8.5rem, 1fr)); gap: 0.6rem; }
+.admin-list { margin: 0.3rem 0 0; padding-inline-start: 1.1rem; font-size: 0.78rem; color: #c9ccd4; display: grid; gap: 0.25rem; }
+.admin-list li { line-height: 1.5; }
+
+.admin-actions-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(14rem, 1fr)); gap: 0.9rem; }
+.admin-actions-grid h3 { margin: 0 0 0.3rem; }

@@ -25,11 +25,31 @@ test('@operator platform operator sees the admin plane and read surfaces', async
   await expect(page.locator('.admin-card h2').first()).toContainText(/Feature flags/i);
   await page.goto('/admin/audit');
   await expect(page.locator('.admin-card h2').first()).toContainText(/Global audit/i);
+  // Integration Operations Center + provider drill-down + connection search.
+  await page.goto('/admin/integrations');
+  await expect(page.locator('.admin-card h2').first()).toContainText(/Integration fleet overview/i);
+  await expect(page.getByText(/Provider capability catalog/i)).toBeVisible();
+  await page.goto('/admin/integrations/google');
+  await expect(page.locator('.admin-card h2').first()).toContainText(/Google Ads/i);
+  await page.goto('/admin/integrations/search?q=google');
+  await expect(page.locator('.admin-card h2').first()).toContainText(/Connection search/i);
 });
 
-test('@owner-denied a tenant owner cannot reach the admin plane', async ({ page }) => {
+test('@operator the integration center never renders secret/token material', async ({ page }) => {
+  await page.goto('/admin/integrations/google');
+  const body = (await page.locator('body').innerText()).toLowerCase();
+  // No raw token/secret material should ever reach the admin DOM.
+  for (const forbidden of ['refresh_token', 'access_token', 'ciphertext', 'client_secret', 'bearer ']) {
+    expect(body, forbidden).not.toContain(forbidden);
+  }
+});
+
+test('@owner-denied a tenant owner cannot reach the admin plane or integrations center', async ({ page }) => {
   await page.goto('/admin');
   await expect(page.locator('.admin-brand')).toHaveCount(0);
+  await page.goto('/admin/integrations');
+  await expect(page.locator('.admin-brand')).toHaveCount(0);
+  await expect(page.getByText(/Integration fleet overview/i)).toHaveCount(0);
 });
 
 test('@public an unauthenticated visitor cannot reach the admin plane', async ({ page }) => {

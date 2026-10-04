@@ -15,6 +15,8 @@ import type {
 import { policySchema } from '@adport/core';
 import { db } from '@/lib/db';
 import { decryptSecret, digestApiKey, digestState, encryptSecret } from '@/lib/crypto';
+import { connectionRegistry } from '@/lib/connections/registry';
+import { classifyConnectionError } from '@/lib/connections/classify';
 import { PlanLimitError, type UpgradePlanId } from './plan-limit';
 import type {
   CloudProvider,
@@ -136,13 +138,16 @@ export async function upsertProviderConnection<P extends CloudProvider>(input: {
   selectionId?: string;
 }): Promise<string> {
   return db().begin(async (sql) => {
+    const authType = connectionRegistry(input.provider)?.authType ?? null;
     const rows = await sql<Array<{ id: string }>>`
       insert into public.connections
-        (organization_id, provider, status, external_subject, external_label, scopes, connected_by, last_verified_at, last_error, revoked_at, account_selection_id)
+        (organization_id, provider, status, external_subject, external_label, scopes, connected_by, last_verified_at, last_error, revoked_at, account_selection_id,
+         connection_type, auth_type, last_authenticated_at, health_state, error_classification, reauth_required)
       values
         (${input.organizationId}, ${input.provider}, 'connected', ${input.externalSubject ?? null},
          ${input.externalLabel ?? `${input.provider} connection`},
-         ${input.scopes ?? []}, ${input.userId}, now(), null, null, ${input.selectionId ?? null})
+         ${input.scopes ?? []}, ${input.userId}, now(), null, null, ${input.selectionId ?? null},
+         'ad_platform', ${authType}, now(), 'CONNECTED', null, false)
       on conflict (organization_id, provider) do update set
         status = 'connected',
         external_subject = excluded.external_subject,
@@ -153,7 +158,13 @@ export async function upsertProviderConnection<P extends CloudProvider>(input: {
         last_verified_at = now(),
         last_error = null,
         account_selection_id = excluded.account_selection_id,
-        revoked_at = null
+        revoked_at = null,
+        auth_type = excluded.auth_type,
+        last_authenticated_at = now(),
+        updated_by = excluded.connected_by,
+        health_state = 'CONNECTED',
+        error_classification = null,
+        reauth_required = false
       returning id
     `;
     const connectionId = rows[0]!.id;
@@ -198,6 +209,7 @@ export async function loadProviderCredentials(organizationId: string, includePen
     from private.provider_credentials credential
     join public.connections connection on connection.id = credential.connection_id
     where credential.organization_id = ${organizationId} and connection.status = 'connected'
+      and connection.disabled_at is null
       and (${includePendingSelection} or connection.account_selection_id is null)
   `;
   const credentials: Partial<Record<CloudProvider, StoredProviderCredential & { connectionId: string }>> = {};
@@ -238,13 +250,19 @@ export async function setConnectionVerification(
   if (result.ok) {
     await db()`
       update public.connections set status = 'connected', external_label = ${result.label},
-        external_subject = ${result.subject ?? null}, last_verified_at = now(), last_error = null, revoked_at = null
+        external_subject = ${result.subject ?? null}, last_verified_at = now(), last_authenticated_at = now(),
+        last_error = null, error_classification = null, health_state = 'CONNECTED', reauth_required = false, revoked_at = null
       where organization_id = ${organizationId} and provider = ${provider}
         and (${selectionId ?? null}::uuid is null or account_selection_id = ${selectionId ?? null}::uuid)
     `;
   } else {
+    // Classify the failure deterministically so health + status downstream are canonical, not free-text.
+    const { errorClass } = classifyConnectionError(result.error);
+    const healthState = errorClass === 'TOKEN_EXPIRED' || errorClass === 'AUTH_ERROR' ? 'AUTH_EXPIRED'
+      : errorClass === 'RATE_LIMIT' ? 'RATE_LIMITED' : 'ERROR';
     await db()`
-      update public.connections set status = 'error', last_error = ${result.error}, last_verified_at = now()
+      update public.connections set status = 'error', last_error = ${result.error},
+        error_classification = ${errorClass}, health_state = ${healthState}, last_verified_at = now()
       where organization_id = ${organizationId} and provider = ${provider}
         and (${selectionId ?? null}::uuid is null or account_selection_id = ${selectionId ?? null}::uuid)
     `;
