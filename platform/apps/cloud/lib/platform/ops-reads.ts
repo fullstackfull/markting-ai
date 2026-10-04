@@ -20,7 +20,7 @@ export async function billingOverview(): Promise<BillingOverview> {
   const [[mrr], byStatus, [trials], [failures]] = await Promise.all([
     db<Array<{ mrr: number; n: number }>>`
       select coalesce(sum(p.monthly_price_eur), 0)::bigint as mrr, count(*)::int as n
-      from public.organization_subscriptions s join public.platform_plans p on p.id = s.plan
+      from public.organization_subscriptions s join public.platform_plans p on p.id = s.plan::text
       where s.status in ('active', 'past_due')`,
     db<Array<{ status: string; n: number }>>`select status, count(*)::int as n from public.organization_subscriptions group by status`,
     db<Array<{ n: number }>>`select count(*)::int as n from public.organization_subscriptions where status = 'trialing'`,
