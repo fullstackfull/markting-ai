@@ -87,17 +87,18 @@ export class InMemorySyncQueue implements SyncQueueStore {
   get(id: string): SyncJob | undefined { const j = this.jobs.get(id); return j && { ...j }; }
 }
 
+// db() applies postgres.camel.column, so reads come back camelCased.
 type Row = {
-  id: string; organization_id: string; provider: string; sync_type: SyncType; state: SyncJob['state'];
-  idempotency_key: string; priority: number; attempts: number; not_before_ms: string | number;
-  lease_expires_at_ms: string | number | null; enqueued_at_ms: string | number; last_error: string | null;
+  id: string; organizationId: string; provider: string; syncType: SyncType; state: SyncJob['state'];
+  idempotencyKey: string; priority: number; attempts: number; notBeforeMs: string | number;
+  leaseExpiresAtMs: string | number | null; enqueuedAtMs: string | number; lastError: string | null;
 };
 function rowToJob(r: Row): SyncJob {
   return {
-    id: r.id, organizationId: r.organization_id, provider: r.provider, type: r.sync_type, state: r.state,
-    idempotencyKey: r.idempotency_key, priority: r.priority, attempts: r.attempts,
-    notBeforeMs: Number(r.not_before_ms), leaseExpiresAtMs: r.lease_expires_at_ms == null ? undefined : Number(r.lease_expires_at_ms),
-    enqueuedAtMs: Number(r.enqueued_at_ms), lastError: r.last_error ?? undefined,
+    id: r.id, organizationId: r.organizationId, provider: r.provider, type: r.syncType, state: r.state,
+    idempotencyKey: r.idempotencyKey, priority: r.priority, attempts: r.attempts,
+    notBeforeMs: Number(r.notBeforeMs), leaseExpiresAtMs: r.leaseExpiresAtMs == null ? undefined : Number(r.leaseExpiresAtMs),
+    enqueuedAtMs: Number(r.enqueuedAtMs), lastError: r.lastError ?? undefined,
   };
 }
 

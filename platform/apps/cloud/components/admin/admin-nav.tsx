@@ -12,6 +12,7 @@ export const ADMIN_NAV: Array<{ href: string; label: string }> = [
   { href: '/admin/integrations', label: 'Integrations' },
   { href: '/admin/commerce', label: 'Commerce' },
   { href: '/admin/system', label: 'System Health' },
+  { href: '/admin/incidents', label: 'Incidents' },
   { href: '/admin/governance', label: 'Governance & Safety' },
   { href: '/admin/security', label: 'Security Center' },
   { href: '/admin/audit', label: 'Global Audit' },
