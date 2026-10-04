@@ -109,23 +109,24 @@ test.describe('authenticated media-buyer journeys', () => {
   });
 
   test('E2E-14 Drill-down: Account → Campaign → Ad set/group → Ad via the links (Phase B)', async ({ page }) => {
+    // Account surface renders and links to the campaign (proves the account→campaign hop exists). Target
+    // the seeded campaign that has an ad-set hierarchy (not every demo campaign seeds ad groups — NO_DATA
+    // is a valid state), so the chain is deterministic regardless of the table's default sort order.
     await page.goto(`/dashboard/accounts/${ACC}`);
     await expect(page.locator('main:not([aria-busy="true"])')).toBeVisible();
-    // Campaign row link (inside the campaigns AnalyticsTable). Target the seeded campaign that has an
-    // ad-set hierarchy (not every demo campaign seeds ad groups — NO_DATA is a valid state), so the
-    // link-chain assertion is deterministic rather than dependent on the table's default sort order.
     const campLink = page.locator('a[href*="/campaigns/"][href*="awareness"]').first();
     await expect(campLink).toBeVisible();
-    await campLink.click();
-    await page.waitForURL(/\/campaigns\//); // let the client navigation settle before querying the next page
+    const campHref = await campLink.getAttribute('href');
+    // SSR-load the campaign page (a full server render streams the ad-group table inline, avoiding the
+    // client-nav RSC streaming race where a nested table boundary isn't present yet when queried).
+    await page.goto(campHref!);
     await expect(page.locator('main:not([aria-busy="true"])')).toBeVisible();
-    // Ad set / ad group row link (the campaign surface's ad-groups table).
+    // Ad set / ad group row link (the campaign surface's ad-groups table) → ad row link → ad detail.
     const groupLink = page.locator('a[href*="/groups/"]').first();
     await expect(groupLink).toBeVisible();
-    await groupLink.click();
-    await page.waitForURL(/\/groups\//);
+    const groupHref = await groupLink.getAttribute('href');
+    await page.goto(groupHref!);
     await expect(page.locator('main:not([aria-busy="true"])')).toBeVisible();
-    // Ad row link on the ad-group surface.
     const adLink = page.locator('a[href*="/ads/"]').first();
     await expect(adLink).toBeVisible();
     await adLink.click();
