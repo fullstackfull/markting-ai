@@ -108,6 +108,38 @@ test.describe('authenticated media-buyer journeys', () => {
     await expect(page.getByText(/E2E Org B/)).toHaveCount(0);
   });
 
+  test('E2E-14 Drill-down: Account → Campaign → Ad set/group → Ad via the links (Phase B)', async ({ page }) => {
+    await page.goto(`/dashboard/accounts/${ACC}`);
+    await expect(page.locator('main:not([aria-busy="true"])')).toBeVisible();
+    // Campaign row link (inside the campaigns AnalyticsTable).
+    await page.locator('a[href*="/campaigns/"]').first().click();
+    await expect(page.locator('main:not([aria-busy="true"])')).toBeVisible();
+    // Ad set / ad group row link (the campaign surface's ad-groups table).
+    const groupLink = page.locator('a[href*="/groups/"]').first();
+    await expect(groupLink).toBeVisible();
+    await groupLink.click();
+    await expect(page.locator('main:not([aria-busy="true"])')).toBeVisible();
+    // Ad row link on the ad-group surface.
+    const adLink = page.locator('a[href*="/ads/"]').first();
+    await expect(adLink).toBeVisible();
+    await adLink.click();
+    // The ad detail surface renders a diagnosis (bilingual) and carries no multimodal media analysis.
+    await expect(page.getByRole('heading', { name: /Diagnosis|التشخيص/ }).first()).toBeVisible();
+    await expect(page).toHaveURL(/\/ads\//);
+  });
+
+  test('E2E-15 Campaigns table: sorting adds a prefixed sort param that persists on reload (Phase B)', async ({ page }) => {
+    await page.goto(`/dashboard/accounts/${ACC}`);
+    await expect(page.locator('main:not([aria-busy="true"])')).toBeVisible();
+    // The ROAS column is the only control whose accessible name contains "ROAS" (locale-robust).
+    await page.getByRole('button', { name: /ROAS/ }).first().click();
+    await expect(page).toHaveURL(/c_sort=roas/);
+    // The URL state is refreshable/shareable — it survives a reload.
+    await page.reload();
+    await expect(page).toHaveURL(/c_sort=roas/);
+    await expect(page.locator('main:not([aria-busy="true"])')).toBeVisible();
+  });
+
   test('E2E-13 Workspace has a date-range control + freshness/window disclosure (Phase A)', async ({ page }) => {
     await page.goto('/dashboard/workspace');
     await expect(page.locator('main:not([aria-busy="true"])')).toBeVisible();

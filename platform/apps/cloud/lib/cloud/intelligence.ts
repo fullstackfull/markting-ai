@@ -81,11 +81,60 @@ export async function loadCampaign(_tenant: DashboardTenant, accountId: string, 
   return buildCampaign(seedClientForAccount(accountId).account, campaignId);
 }
 
-/** Lightweight campaign list for an account (links on the account surface). */
-export async function loadCampaignList(_tenant: DashboardTenant, accountId: string): Promise<Array<{ id: string; name: string }>> {
+/**
+ * Campaign rows for an account (the account-surface AnalyticsTable). DEMO reads the seed and returns the
+ * computed per-campaign KPIs + CPA trend; a live deployment with nothing wired returns an empty list
+ * (the surface then shows the honest NOT_CONNECTED empty state, never demo content).
+ */
+export async function loadCampaignList(_tenant: DashboardTenant, accountId: string) {
+  const { buildCampaignRows } = await import('@/lib/markting/orchestrator/sections');
   if (!isDemoMode()) return [];
   const { seedClientForAccount } = await import('@/lib/markting/orchestrator/seed');
-  return seedClientForAccount(accountId).account.campaigns.map((c) => ({ id: c.id, name: c.name }));
+  return buildCampaignRows(seedClientForAccount(accountId).account);
+}
+
+/**
+ * PHASE B (B22) — the explicit drill-down data state. NO_DATA = the (seed) source has no rows at this
+ * level; NOT_CONNECTED = live with no provider wired; NOT_SUPPORTED_BY_PROVIDER = a connected provider
+ * whose adapter does not return this level (reportingLevelSupport NOT_SUPPORTED/NOT_IMPLEMENTED). These
+ * are distinct states the surface renders differently — an empty table is never passed off as "no data".
+ */
+export type DrillState = 'OK' | 'NO_DATA' | 'NOT_CONNECTED' | 'NOT_SUPPORTED_BY_PROVIDER';
+
+/** Ad set / ad group list for a campaign (the campaign-surface AnalyticsTable). */
+export async function loadAdGroupList(_tenant: DashboardTenant, accountId: string, campaignId: string): Promise<{ state: DrillState; providerId: string; currency?: string; rows: import('@/lib/markting/orchestrator/sections').AdGroupRow[] }> {
+  if (!isDemoMode()) return { state: 'NOT_CONNECTED', providerId: '', rows: [] };
+  const { buildCampaign } = await import('@/lib/markting/orchestrator/sections');
+  const { seedClientForAccount } = await import('@/lib/markting/orchestrator/seed');
+  const section = buildCampaign(seedClientForAccount(accountId).account, campaignId);
+  const rows = section.adGroups ?? [];
+  return { state: rows.length ? 'OK' : 'NO_DATA', providerId: section.providerId ?? '', currency: section.currency, rows };
+}
+
+/** Ad-group detail section (ad-group scope is not a free-text intent, so built directly). */
+export async function loadAdGroup(_tenant: DashboardTenant, accountId: string, campaignId: string, adGroupId: string) {
+  const { buildAdGroup } = await import('@/lib/markting/orchestrator/sections');
+  const { seedClientForAccount } = await import('@/lib/markting/orchestrator/seed');
+  if (!isDemoMode()) return { kind: 'adGroup' as const, found: false as const, campaignId, adGroupId, summary: { en: 'No live provider connected — connect a provider to view ad set / ad group detail.', ar: 'لا يوجد مزوّد مرتبط — اربط مزوّدًا لعرض تفاصيل مجموعة الإعلانات.' } };
+  return buildAdGroup(seedClientForAccount(accountId).account, campaignId, adGroupId);
+}
+
+/** Ad list for an ad set / ad group. */
+export async function loadAdList(_tenant: DashboardTenant, accountId: string, campaignId: string, adGroupId: string): Promise<{ state: DrillState; currency?: string; rows: import('@/lib/markting/orchestrator/sections').AdRow[] }> {
+  if (!isDemoMode()) return { state: 'NOT_CONNECTED', rows: [] };
+  const { buildAdGroup } = await import('@/lib/markting/orchestrator/sections');
+  const { seedClientForAccount } = await import('@/lib/markting/orchestrator/seed');
+  const section = buildAdGroup(seedClientForAccount(accountId).account, campaignId, adGroupId);
+  const rows = section.ads ?? [];
+  return { state: rows.length ? 'OK' : 'NO_DATA', currency: section.currency, rows };
+}
+
+/** Ad detail section (ad scope is not a free-text intent, so built directly). */
+export async function loadAd(_tenant: DashboardTenant, accountId: string, campaignId: string, adGroupId: string, adId: string) {
+  const { buildAd } = await import('@/lib/markting/orchestrator/sections');
+  const { seedClientForAccount } = await import('@/lib/markting/orchestrator/seed');
+  if (!isDemoMode()) return { kind: 'ad' as const, found: false as const, campaignId, adGroupId, adId, summary: { en: 'No live provider connected — connect a provider to view ad detail.', ar: 'لا يوجد مزوّد مرتبط — اربط مزوّدًا لعرض تفاصيل الإعلان.' } };
+  return buildAd(seedClientForAccount(accountId).account, campaignId, adGroupId, adId);
 }
 
 /** Creative-detail section (creative scope is not a free-text intent). */

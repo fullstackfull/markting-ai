@@ -23,7 +23,7 @@ import { reconcile, type ReconciliationResult } from '../commerce/reconciliation
 import { analyzeBreakdown, type BreakdownAnalysis, type BreakdownDimension, type BreakdownRow } from '../intelligence/audience';
 import { compareChannels, type ChannelSummary, type CrossChannelComparison } from '../intelligence/cross-channel';
 import { CURRENCY_EXPONENTS } from '@adport/core';
-import type { SeedAccount, SeedCampaign, SeedClient, SeedCreative } from './seed';
+import type { SeedAccount, SeedAd, SeedAdGroup, SeedCampaign, SeedClient, SeedCreative, SeedDailySeries } from './seed';
 import { SEED_PORTFOLIO } from './seed';
 
 const sum = (xs: number[]): number => xs.reduce((a, b) => a + b, 0);
@@ -43,7 +43,78 @@ const half = <T,>(xs: T[]): [T[], T[]] => [xs.slice(0, Math.floor(xs.length / 2)
 const money = (minorUnits: number, currency: string) => ({ minorUnits, currency });
 const cpaOf = (c: SeedCampaign) => { const conv = sum(c.dailyConversions); return conv ? Math.round(sum(c.dailySpendMinor) / conv) : 0; };
 const roasOf = (c: SeedCampaign) => { const sp = sum(c.dailySpendMinor); return sp ? Math.round((sum(c.dailyRevenueMinor) / sp) * 100) / 100 : 0; };
-const dailyCpa = (c: SeedCampaign) => c.dailySpendMinor.map((s, i) => (c.dailyConversions[i] ? s / c.dailyConversions[i]! : 0));
+
+// ---------- PHASE B (B7–B10): level-generic computations ----------
+// Every level (campaign / ad_group / ad) carries the same daily-series shape, so KPIs, the current-vs-
+// previous comparison, and the per-day CPA/CTR/CPM trend series are computed by ONE set of helpers and
+// fed to the SAME deterministic engines (classifyTrend / detectSaturation). No level re-implements them.
+const dailyCpaSeries = (e: SeedDailySeries) => e.dailySpendMinor.map((s, i) => (e.dailyConversions[i] ? s / e.dailyConversions[i]! : 0));
+const dailyCtrSeries = (e: SeedDailySeries) => e.dailyImpressions.map((imp, i) => (imp ? ((e.dailyClicks[i] ?? 0) / imp) * 100 : 0));
+const dailyCpmSeries = (e: SeedDailySeries) => e.dailyImpressions.map((imp, i) => (imp ? ((e.dailySpendMinor[i] ?? 0) / imp) * 1000 : 0));
+const dailyCpa = dailyCpaSeries; // back-compat alias (campaign callers)
+
+function kpisFrom(e: SeedDailySeries): CampaignKpis {
+  const spend = sum(e.dailySpendMinor), conv = sum(e.dailyConversions), rev = sum(e.dailyRevenueMinor);
+  const clicks = sum(e.dailyClicks), impressions = sum(e.dailyImpressions);
+  return {
+    spendMinor: spend, conversions: conv, revenueMinor: rev,
+    cpaMinor: conv ? Math.round(spend / conv) : 0, roas: spend ? Math.round((rev / spend) * 100) / 100 : 0,
+    ctr: impressions ? Math.round((clicks / impressions) * 10000) / 100 : 0,
+    cpmMinor: impressions ? Math.round((spend / impressions) * 1000) : 0,
+    cpcMinor: clicks ? Math.round(spend / clicks) : 0,
+  };
+}
+
+const dirOf = (from: number, to: number): 'up' | 'down' | 'flat' => (to > from * 1.02 ? 'up' : to < from * 0.98 ? 'down' : 'flat');
+
+/** Current-vs-previous-half comparison (transparent, no hidden baseline) — shared by every level. */
+function comparisonFrom(e: SeedDailySeries): MetricComparison[] {
+  const [a, b] = half(e.dailySpendMinor); const [ca, cb] = half(e.dailyConversions);
+  const prevSpend = sum(a), curSpend = sum(b), prevConv = sum(ca), curConv = sum(cb);
+  return [
+    { metric: 'spend', from: prevSpend, to: curSpend, direction: dirOf(prevSpend, curSpend) },
+    { metric: 'conversions', from: prevConv, to: curConv, direction: dirOf(prevConv, curConv) },
+    { metric: 'cpa', from: prevConv ? Math.round(prevSpend / prevConv) : 0, to: curConv ? Math.round(curSpend / curConv) : 0, direction: dirOf(prevConv ? prevSpend / prevConv : 0, curConv ? curSpend / curConv : 0) },
+  ];
+}
+
+/**
+ * The deterministic, evidence-backed diagnosis shared by the ad_group and ad drill-downs. It describes
+ * ONLY what the engines computed (CPA trend + a CTR-falling/CPM-rising creative-fatigue signal) and lists
+ * the raw before/after numbers as evidence. It contains NO hard-coded recommendation text — the finding
+ * is the computation, exactly like the campaign-level trend/saturation sections.
+ */
+function diagnoseSeries(e: SeedDailySeries, currency: string): { diagnosis: BiText; evidence: string[]; cpaTrend: TrendResult; ctrTrend: TrendResult } {
+  const cpaTrend = classifyTrend(dailyCpaSeries(e));
+  const ctrTrend = classifyTrend(dailyCtrSeries(e));
+  const cpmTrend = classifyTrend(dailyCpmSeries(e));
+  const [a, b] = half(e.dailySpendMinor); const [ca, cb] = half(e.dailyConversions);
+  const prevSpend = sum(a), curSpend = sum(b), prevConv = sum(ca), curConv = sum(cb);
+  const prevCpa = prevConv ? Math.round(prevSpend / prevConv) : 0, curCpa = curConv ? Math.round(curSpend / curConv) : 0;
+  const en: string[] = [], ar: string[] = [];
+  if (cpaTrend.direction === 'up' && cpaTrend.state !== 'NOISE') {
+    en.push(`CPA is rising (${minorText(prevCpa, currency)} → ${minorText(curCpa, currency)})`);
+    ar.push(`CPA في ارتفاع (${minorText(prevCpa, currency)} ← ${minorText(curCpa, currency)})`);
+  } else if (cpaTrend.direction === 'down' && cpaTrend.state !== 'NOISE') {
+    en.push(`CPA is improving (${minorText(prevCpa, currency)} → ${minorText(curCpa, currency)})`);
+    ar.push(`CPA يتحسّن (${minorText(prevCpa, currency)} ← ${minorText(curCpa, currency)})`);
+  }
+  const fatigue = ctrTrend.direction === 'down' && ctrTrend.state !== 'NOISE' && cpmTrend.direction === 'up';
+  if (fatigue) {
+    en.push('CTR is falling while CPM rises — a creative-fatigue signal');
+    ar.push('CTR ينخفض بينما يرتفع CPM — إشارة إجهاد إبداعي');
+  }
+  if (!en.length) { en.push('No material efficiency deterioration in this window'); ar.push('لا تدهور جوهري في الكفاءة خلال هذه الفترة'); }
+  const evidence = [
+    `spend ${minorText(curSpend, currency)} (prev ${minorText(prevSpend, currency)})`,
+    `conversions ${curConv} (prev ${prevConv})`,
+    `CPA ${minorText(curCpa, currency)} (prev ${minorText(prevCpa, currency)})`,
+    `CPA trend ${cpaTrend.direction}/${cpaTrend.state}`,
+    `CTR trend ${ctrTrend.direction}/${ctrTrend.state}`,
+    `CPM trend ${cpmTrend.direction}/${cpmTrend.state}`,
+  ];
+  return { diagnosis: { en: `${en.join('; ')}.`, ar: `${ar.join('؛ ')}.` }, evidence, cpaTrend, ctrTrend };
+}
 
 const WINDOW = { start: '2026-09-16', end: '2026-10-03' };
 
@@ -297,43 +368,129 @@ export function buildPortfolio(portfolio: SeedClient[] = SEED_PORTFOLIO): Portfo
 
 // ---------- Campaign detail (one campaign, all legs) ----------
 export interface CampaignKpis { spendMinor: number; conversions: number; cpaMinor: number; roas: number; ctr: number; cpmMinor: number; cpcMinor: number; revenueMinor: number; }
+export interface MetricComparison { metric: string; from: number; to: number; direction: 'up' | 'down' | 'flat' }
+
+/** PHASE B — the provider-native level below a campaign, summarized for the ad-groups table. */
+export interface AdGroupRow {
+  id: string; name: string; status: string; entityType: string;
+  spendMinor: number; conversions: number; clicks: number; impressions: number;
+  ctr: number; cpaMinor: number; cpmMinor: number; roas: number; spendSharePct: number; currency: string;
+}
+/** PHASE B — a single ad, summarized for the ads table on the ad-group detail page. */
+export interface AdRow {
+  id: string; name: string; status: string;
+  spendMinor: number; conversions: number; clicks: number; impressions: number;
+  ctr: number; cpaMinor: number; cpmMinor: number; roas: number; spendSharePct: number; currency: string;
+}
+
+const adGroupRowFrom = (g: SeedAdGroup, currency: string, totalSpend: number): AdGroupRow => {
+  const k = kpisFrom(g);
+  return { id: g.id, name: g.name, status: g.status, entityType: g.entityType, spendMinor: k.spendMinor, conversions: k.conversions, clicks: sum(g.dailyClicks), impressions: sum(g.dailyImpressions), ctr: k.ctr, cpaMinor: k.cpaMinor, cpmMinor: k.cpmMinor, roas: k.roas, spendSharePct: totalSpend ? Math.round((k.spendMinor / totalSpend) * 1000) / 10 : 0, currency };
+};
+const adRowFrom = (ad: SeedAd, currency: string, totalSpend: number): AdRow => {
+  const k = kpisFrom(ad);
+  return { id: ad.id, name: ad.name, status: ad.status, spendMinor: k.spendMinor, conversions: k.conversions, clicks: sum(ad.dailyClicks), impressions: sum(ad.dailyImpressions), ctr: k.ctr, cpaMinor: k.cpaMinor, cpmMinor: k.cpmMinor, roas: k.roas, spendSharePct: totalSpend ? Math.round((k.spendMinor / totalSpend) * 1000) / 10 : 0, currency };
+};
+
 export interface CampaignSection {
   kind: 'campaign'; summary: BiText; found: boolean;
   campaignId: string; name?: string; role?: string; currency?: string;
-  kpis?: CampaignKpis; comparison?: { metric: string; from: number; to: number; direction: 'up' | 'down' | 'flat' }[];
+  kpis?: CampaignKpis; comparison?: MetricComparison[];
   pacing?: PacingResult; trend?: TrendResult; scaling?: ScalingResult;
   creatives?: CreativeRow[]; fatigue?: 'NO_SIGNAL' | 'WATCH' | 'FATIGUE_SIGNAL' | 'STRONG_FATIGUE_SIGNAL';
+  /** PHASE B — the campaign's ad sets / ad groups (empty when none seeded), plus the native vocabulary. */
+  adGroups?: AdGroupRow[];
+  providerId?: string;
 }
 export function buildCampaign(acc: SeedAccount, campaignId: string): CampaignSection {
   const c = acc.campaigns.find((x) => x.id === campaignId);
   if (!c) return { kind: 'campaign', found: false, campaignId, summary: { en: 'Campaign not found in this account.', ar: 'الحملة غير موجودة في هذا الحساب.' } };
-  const spend = sum(c.dailySpendMinor); const conv = sum(c.dailyConversions); const rev = sum(c.dailyRevenueMinor);
-  const clicks = sum(c.dailyClicks); const impressions = sum(c.dailyImpressions);
-  const kpis: CampaignKpis = {
-    spendMinor: spend, conversions: conv, revenueMinor: rev,
-    cpaMinor: conv ? Math.round(spend / conv) : 0, roas: roasOf(c),
-    ctr: impressions ? Math.round((clicks / impressions) * 10000) / 100 : 0,
-    cpmMinor: impressions ? Math.round((spend / impressions) * 1000) : 0,
-    cpcMinor: clicks ? Math.round(spend / clicks) : 0,
-  };
-  // current vs previous half of the window (transparent comparison).
-  const [a, b] = half(c.dailySpendMinor); const [ca, cb] = half(c.dailyConversions);
-  const prevSpend = sum(a), curSpend = sum(b), prevConv = sum(ca), curConv = sum(cb);
-  const dir = (from: number, to: number): 'up' | 'down' | 'flat' => (to > from * 1.02 ? 'up' : to < from * 0.98 ? 'down' : 'flat');
-  const comparison = [
-    { metric: 'spend', from: prevSpend, to: curSpend, direction: dir(prevSpend, curSpend) },
-    { metric: 'conversions', from: prevConv, to: curConv, direction: dir(prevConv, curConv) },
-    { metric: 'cpa', from: prevConv ? Math.round(prevSpend / prevConv) : 0, to: curConv ? Math.round(curSpend / curConv) : 0, direction: dir(prevConv ? prevSpend / prevConv : 0, curConv ? curSpend / curConv : 0) },
-  ];
-  const pacing = analyzePacing({ spendToDate: spend, plannedBudget: c.budgetMinor, currency: c.currency, daysElapsed: acc.periodDaysElapsed, daysInPeriod: acc.periodDays, kind: 'period' });
+  const kpis = kpisFrom(c);
+  const comparison = comparisonFrom(c);
+  const pacing = analyzePacing({ spendToDate: kpis.spendMinor, plannedBudget: c.budgetMinor, currency: c.currency, daysElapsed: acc.periodDaysElapsed, daysInPeriod: acc.periodDays, kind: 'period' });
   const trend = classifyTrend(dailyCpa(c));
   const stable = trend.state === 'NOISE';
-  const scaling = evaluateScalingReadiness({ spend, conversions: conv, performanceVsTarget: c.targetRoas ? { metric: 'roas', actual: roasOf(c), target: c.targetRoas, targetKnown: c.targetKnown } : undefined, recentlyStable: stable, dataTrust: 'PLATFORM_REPORTED', fresh: true, windowComplete: false, budgetUtilization: spend / c.budgetMinor, attributionReliable: true });
+  const scaling = evaluateScalingReadiness({ spend: kpis.spendMinor, conversions: kpis.conversions, performanceVsTarget: c.targetRoas ? { metric: 'roas', actual: roasOf(c), target: c.targetRoas, targetKnown: c.targetKnown } : undefined, recentlyStable: stable, dataTrust: 'PLATFORM_REPORTED', fresh: true, windowComplete: false, budgetUtilization: kpis.spendMinor / c.budgetMinor, attributionReliable: true });
   const creativeAll = buildCreative(acc).rows.filter((r) => r.campaignId === campaignId);
+  const groups = c.adGroups ?? [];
+  const groupsTotal = sum(groups.map((g) => sum(g.dailySpendMinor)));
+  const adGroups = groups.map((g) => adGroupRowFrom(g, c.currency, groupsTotal));
   return {
     kind: 'campaign', found: true, campaignId, name: c.name, role: c.role, currency: c.currency,
     kpis, comparison, pacing, trend, scaling, creatives: creativeAll, fatigue: c.dominantCreativeFatigue,
+    adGroups, providerId: acc.nativeAdProvider ?? acc.provider,
     summary: { en: `${c.name}: CPA ${minorText(kpis.cpaMinor, c.currency)}, ROAS ${kpis.roas}, pacing ${pacing.status}, scaling ${scaling.state}.`, ar: `${c.name}: CPA ${minorText(kpis.cpaMinor, c.currency)}، ROAS ${kpis.roas}، الوتيرة ${pacing.status}.` },
+  };
+}
+
+// ---------- PHASE B (B7): campaign list rows for the account-level AnalyticsTable ----------
+export interface CampaignRow {
+  id: string; name: string; role: string; currency: string;
+  spendMinor: number; conversions: number; clicks: number; impressions: number;
+  ctr: number; cpaMinor: number; cpmMinor: number; roas: number;
+  trendDir: 'up' | 'down' | 'flat'; trendState: string; trendScore: number; spendSharePct: number;
+}
+export function buildCampaignRows(acc: SeedAccount): CampaignRow[] {
+  const total = sum(acc.campaigns.map((c) => sum(c.dailySpendMinor)));
+  return acc.campaigns.map((c) => {
+    const k = kpisFrom(c);
+    const t = classifyTrend(dailyCpa(c));
+    // CPA rising is WORSE, so a higher trendScore sorts the most-deteriorating campaign to the top.
+    const trendScore = (t.direction === 'up' ? 2 : t.direction === 'down' ? 0 : 1) + (t.state !== 'NOISE' ? 0.5 : 0) * (t.direction === 'up' ? 1 : t.direction === 'down' ? -1 : 0);
+    return { id: c.id, name: c.name, role: c.role, currency: c.currency, spendMinor: k.spendMinor, conversions: k.conversions, clicks: sum(c.dailyClicks), impressions: sum(c.dailyImpressions), ctr: k.ctr, cpaMinor: k.cpaMinor, cpmMinor: k.cpmMinor, roas: k.roas, trendDir: t.direction, trendState: t.state, trendScore, spendSharePct: total ? Math.round((k.spendMinor / total) * 1000) / 10 : 0 };
+  });
+}
+
+// ---------- PHASE B (B8): ad-group detail (one ad set / ad group, with its ads) ----------
+export interface AdGroupSection {
+  kind: 'adGroup'; found: boolean; summary: BiText;
+  accountId?: string; campaignId: string; adGroupId: string; providerId?: string;
+  name?: string; status?: string; entityType?: string; currency?: string; campaignName?: string;
+  kpis?: CampaignKpis; comparison?: MetricComparison[]; trend?: TrendResult;
+  diagnosis?: BiText; evidence?: string[]; ads?: AdRow[];
+}
+export function buildAdGroup(acc: SeedAccount, campaignId: string, adGroupId: string): AdGroupSection {
+  const c = acc.campaigns.find((x) => x.id === campaignId);
+  const g = c?.adGroups?.find((x) => x.id === adGroupId);
+  if (!c || !g) return { kind: 'adGroup', found: false, campaignId, adGroupId, summary: { en: 'Ad set / ad group not found in this campaign.', ar: 'مجموعة الإعلانات غير موجودة في هذه الحملة.' } };
+  const kpis = kpisFrom(g);
+  const comparison = comparisonFrom(g);
+  const trend = classifyTrend(dailyCpa(g));
+  const { diagnosis, evidence } = diagnoseSeries(g, c.currency);
+  const adsTotal = sum(g.ads.map((a) => sum(a.dailySpendMinor)));
+  const ads = g.ads.map((a) => adRowFrom(a, c.currency, adsTotal));
+  return {
+    kind: 'adGroup', found: true, accountId: acc.accountId, campaignId, adGroupId, providerId: acc.nativeAdProvider ?? acc.provider,
+    name: g.name, status: g.status, entityType: g.entityType, currency: c.currency, campaignName: c.name,
+    kpis, comparison, trend, diagnosis, evidence, ads,
+    summary: { en: `${g.name}: CPA ${minorText(kpis.cpaMinor, c.currency)}, ROAS ${kpis.roas}, ${g.ads.length} ads.`, ar: `${g.name}: CPA ${minorText(kpis.cpaMinor, c.currency)}، ROAS ${kpis.roas}، ${g.ads.length} إعلانات.` },
+  };
+}
+
+// ---------- PHASE B (B9): ad detail (one ad) ----------
+export interface AdSection {
+  kind: 'ad'; found: boolean; summary: BiText;
+  accountId?: string; campaignId: string; adGroupId: string; adId: string; providerId?: string;
+  name?: string; status?: string; currency?: string; campaignName?: string; adGroupName?: string; entityType?: string;
+  impressions?: number; clicks?: number;
+  kpis?: CampaignKpis; comparison?: MetricComparison[]; trend?: TrendResult;
+  diagnosis?: BiText; evidence?: string[];
+}
+export function buildAd(acc: SeedAccount, campaignId: string, adGroupId: string, adId: string): AdSection {
+  const c = acc.campaigns.find((x) => x.id === campaignId);
+  const g = c?.adGroups?.find((x) => x.id === adGroupId);
+  const ad = g?.ads.find((x) => x.id === adId);
+  if (!c || !g || !ad) return { kind: 'ad', found: false, campaignId, adGroupId, adId, summary: { en: 'Ad not found in this ad set / ad group.', ar: 'الإعلان غير موجود في مجموعة الإعلانات.' } };
+  const kpis = kpisFrom(ad);
+  const comparison = comparisonFrom(ad);
+  const trend = classifyTrend(dailyCpa(ad));
+  const { diagnosis, evidence } = diagnoseSeries(ad, c.currency);
+  return {
+    kind: 'ad', found: true, accountId: acc.accountId, campaignId, adGroupId, adId, providerId: acc.nativeAdProvider ?? acc.provider,
+    name: ad.name, status: ad.status, currency: c.currency, campaignName: c.name, adGroupName: g.name, entityType: g.entityType,
+    impressions: sum(ad.dailyImpressions), clicks: sum(ad.dailyClicks),
+    kpis, comparison, trend, diagnosis, evidence,
+    summary: { en: `${ad.name}: CPA ${minorText(kpis.cpaMinor, c.currency)}, ROAS ${kpis.roas}, CTR ${kpis.ctr}%.`, ar: `${ad.name}: CPA ${minorText(kpis.cpaMinor, c.currency)}، ROAS ${kpis.roas}، CTR ${kpis.ctr}%.` },
   };
 }
 

@@ -1,26 +1,33 @@
-import { PageHeader } from '@/components/ui';
+import { PageHeader, formatMoneyMinor } from '@/components/ui';
 import { SectionView, IntelMeta } from '@/components/intel';
+import { EntityLink } from '@/components/kit';
+import { AnalyticsTable, type AnalyticsColumn } from '@/components/analytics-table';
 import { requireDashboardTenant } from '@/lib/cloud/dashboard';
-import Link from 'next/link';
 import { loadSection, loadWorkspaceIntelligence, loadCampaignList } from '@/lib/cloud/intelligence';
+import type { CampaignRow } from '@/lib/markting/orchestrator/sections';
 import { getT } from '@/lib/i18n/server';
 import { RangeControl } from '@/components/range-control';
 import { FreshnessBar } from '@/components/freshness-bar';
 import { parseRangeParam } from '@/lib/cloud/date-range';
+import { parseTableState, applyTableState, type TableColumnSpec } from '@/lib/cloud/table-state';
 import { loadBusinessContext } from '@/lib/markting/business-context';
 
 export const metadata = { title: 'Account' };
+
+// Allowed sort keys mirror the column keys — a sort param outside this set is ignored (no injection).
+const CAMPAIGN_SORTS = ['name', 'spend', 'conversions', 'ctr', 'cpa', 'roas', 'trend'] as const;
 
 /**
  * Account Intelligence — one connected drill-down (diagnosis → pacing → anomaly → forecast → creative
  * → commerce → outcomes) for one account, composed from the orchestrator. The user does not hop across
  * unrelated modules: each leg is a section of the same composed view.
  */
-export default async function AccountPage({ params, searchParams }: { params: Promise<{ accountId: string }>; searchParams: Promise<{ range?: string }> }) {
+export default async function AccountPage({ params, searchParams }: { params: Promise<{ accountId: string }>; searchParams: Promise<Record<string, string | string[] | undefined>> }) {
   const { accountId } = await params;
   const tenant = await requireDashboardTenant();
   const { locale } = await getT();
-  const selection = parseRangeParam((await searchParams).range);
+  const sp = await searchParams;
+  const selection = parseRangeParam(typeof sp.range === 'string' ? sp.range : undefined);
   const scope = { locale, accountId } as const;
   const [brief, pacing, anomaly, forecast, creative, commerce, outcomes, breakdown, crossChannel, memory, business] = await Promise.all([
     loadWorkspaceIntelligence(tenant, 'PROFITABILITY_DECLINE', scope, selection),
@@ -37,6 +44,29 @@ export default async function AccountPage({ params, searchParams }: { params: Pr
   ]);
   const campaignList = await loadCampaignList(tenant, accountId);
   const L = (en: string, ar: string) => (locale === 'ar' ? ar : en);
+  const money = (v: number, row: CampaignRow) => formatMoneyMinor(v, row.currency, locale);
+  const campaignHref = (id: string) => `/dashboard/accounts/${encodeURIComponent(accountId)}/campaigns/${encodeURIComponent(id)}?range=${encodeURIComponent(typeof sp.range === 'string' ? sp.range : 'last_30_days')}`;
+  const campaignColumns: Array<AnalyticsColumn<CampaignRow>> = [
+    { key: 'name', header: { en: 'Campaign', ar: 'الحملة' }, sortable: true, render: (r) => (<><EntityLink href={campaignHref(r.id)} label={r.name} /><div className="cell-sub">{r.role}</div></>) },
+    { key: 'spend', header: { en: 'Spend', ar: 'الإنفاق' }, numeric: true, sortable: true, render: (r) => money(r.spendMinor, r) },
+    { key: 'conversions', header: { en: 'Conv.', ar: 'التحويلات' }, numeric: true, sortable: true, render: (r) => String(r.conversions) },
+    { key: 'ctr', header: { en: 'CTR', ar: 'CTR' }, numeric: true, sortable: true, defaultVisible: false, render: (r) => `${r.ctr}%` },
+    { key: 'cpa', header: { en: 'CPA', ar: 'CPA' }, numeric: true, sortable: true, render: (r) => money(r.cpaMinor, r) },
+    { key: 'roas', header: { en: 'ROAS', ar: 'ROAS' }, numeric: true, sortable: true, render: (r) => `${r.roas}×` },
+    { key: 'spendShare', header: { en: 'Spend %', ar: 'الإنفاق %' }, numeric: true, render: (r) => `${r.spendSharePct}%` },
+    { key: 'trend', header: { en: 'CPA trend', ar: 'اتجاه CPA' }, sortable: true, render: (r) => <span className={`status ${r.trendDir === 'up' && r.trendState !== 'NOISE' ? 'warn' : 'neutral'}`}>{r.trendDir} / {r.trendState}</span> },
+  ];
+  const campaignSpecs: Array<TableColumnSpec<CampaignRow>> = [
+    { key: 'name', searchText: (r) => `${r.name} ${r.role}`, sortValue: (r) => r.name },
+    { key: 'spend', numeric: true, sortValue: (r) => r.spendMinor },
+    { key: 'conversions', numeric: true, sortValue: (r) => r.conversions },
+    { key: 'ctr', numeric: true, sortValue: (r) => r.ctr },
+    { key: 'cpa', numeric: true, sortValue: (r) => r.cpaMinor || null },
+    { key: 'roas', numeric: true, sortValue: (r) => r.roas },
+    { key: 'trend', numeric: true, sortValue: (r) => r.trendScore },
+  ];
+  const campaignState = parseTableState(sp, { prefix: 'c', defaultSort: 'spend', defaultDir: 'desc', allowedSorts: CAMPAIGN_SORTS });
+  const campaignPage = applyTableState(campaignList, campaignState, campaignSpecs);
   const card = (titleEn: string, titleAr: string, a: typeof pacing) => (
     <section className="card" style={{ marginBottom: 12 }}>
       <div className="card-head"><h2>{L(titleEn, titleAr)}</h2></div>
@@ -53,7 +83,16 @@ export default async function AccountPage({ params, searchParams }: { params: Pr
       {campaignList.length > 0 && (
         <section className="card" style={{ marginBottom: 12 }}>
           <div className="card-head"><h2>{L('Campaigns', 'الحملات')}</h2></div>
-          <ul style={{ margin: 0, paddingInlineStart: 18 }}>{campaignList.map((c) => <li key={c.id}><Link href={`/dashboard/accounts/${encodeURIComponent(accountId)}/campaigns/${encodeURIComponent(c.id)}`} prefetch={false}>{c.name}</Link></li>)}</ul>
+          <AnalyticsTable
+            prefix="c"
+            caption={{ en: 'Campaigns for this account', ar: 'حملات هذا الحساب' }}
+            columns={campaignColumns}
+            page={campaignPage}
+            state={campaignState}
+            rowKey={(r) => r.id}
+            locale={locale}
+            searchable
+          />
         </section>
       )}
       {card('Pacing', 'الوتيرة', pacing)}

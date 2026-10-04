@@ -3,6 +3,7 @@
  * Add an area here when you create a new module. Keys are addressed as `area.key`.
  */
 import { accounts } from './accounts';
+import { adgroups } from './adgroups';
 import { agents } from './agents';
 import { approvals } from './approvals';
 import { assistant } from './assistant';
@@ -21,7 +22,7 @@ import { reports } from './reports';
 import { support } from './support';
 import { team } from './team';
 
-const areas = { accounts, agents, approvals, assistant, audit, auth, billing, common, connections, findings, misc, nav, onboarding, overview, policies, reports, support, team };
+const areas = { accounts, adgroups, agents, approvals, assistant, audit, auth, billing, common, connections, findings, misc, nav, onboarding, overview, policies, reports, support, team };
 
 type Areas = typeof areas;
 export type Messages = { [K in keyof Areas]: Areas[K]['en'] };
