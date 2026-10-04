@@ -13,7 +13,7 @@ import type {
   WriteResult,
 } from '@adport/core';
 import { policySchema } from '@adport/core';
-import { db } from '@/lib/db';
+import { db, withTenant } from '@/lib/db';
 import { decryptSecret, digestApiKey, digestState, encryptSecret } from '@/lib/crypto';
 import { connectionRegistry } from '@/lib/connections/registry';
 import { classifyConnectionError } from '@/lib/connections/classify';
@@ -137,7 +137,8 @@ export async function upsertProviderConnection<P extends CloudProvider>(input: {
   scopes?: string[];
   selectionId?: string;
 }): Promise<string> {
-  return db().begin(async (sql) => {
+  // withTenant adds the RLS backstop clamp on top of the per-statement org scoping below.
+  return withTenant(input.organizationId, async (sql) => {
     const authType = connectionRegistry(input.provider)?.authType ?? null;
     const rows = await sql<Array<{ id: string }>>`
       insert into public.connections
@@ -318,7 +319,8 @@ export async function createApiKey(input: {
 }): Promise<{ id: string; key: string; prefix: string }> {
   const key = `adp_${randomBytes(32).toString('base64url')}`;
   const prefix = key.slice(0, 12);
-  return db().begin(async (sql) => {
+  // withTenant adds the RLS backstop clamp on top of the per-statement org scoping below.
+  return withTenant(input.organizationId, async (sql) => {
     const rows = await sql<Array<{ id: string }>>`
       insert into public.api_keys (organization_id, name, key_prefix, secret_hash, scopes, created_by)
       values (${input.organizationId}, ${input.name}, ${prefix}, ${digestApiKey(key)}, ${input.scopes}, ${input.userId})
@@ -355,7 +357,8 @@ export async function authenticateApiKey(key: string): Promise<TenantPrincipal |
 }
 
 export async function revokeApiKey(principal: TenantPrincipal, id: string): Promise<boolean> {
-  return db().begin(async (sql) => {
+  // withTenant adds the RLS backstop clamp on top of the per-statement org scoping below.
+  return withTenant(principal.organizationId, async (sql) => {
     const rows = await sql<Array<{ id: string }>>`
       update public.api_keys set revoked_at = now()
       where id = ${id} and organization_id = ${principal.organizationId} and revoked_at is null

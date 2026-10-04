@@ -845,3 +845,20 @@ a:focus-visible, button:focus-visible, summary:focus-visible, [tabindex]:focus-v
 .range-custom input[type="date"] { border: 1px solid var(--line); border-radius: 0.4rem; padding: 0.2rem 0.4rem; font-size: 0.74rem; background: #fff; }
 .freshness-bar { border: 1px solid var(--line-soft); border-radius: 0.6rem; padding: 0.5rem 0.75rem; background: var(--paper); }
 .freshness-bar strong { color: var(--faint); font-weight: 620; }
+
+/* Phase B — professional analytics table (B5/B6). Reuses .table-wrap/.numeric/.status/.cell-sub. */
+.analytics-table { display: flex; flex-direction: column; gap: 0.55rem; }
+.table-toolbar { display: flex; flex-wrap: wrap; gap: 0.5rem; align-items: center; justify-content: space-between; }
+.table-toolbar-end { display: flex; flex-wrap: wrap; gap: 0.5rem; align-items: center; margin-inline-start: auto; }
+.preset-tabs { display: flex; flex-wrap: wrap; gap: 0.35rem; }
+.table-search { border: 1px solid var(--line); border-radius: 0.5rem; padding: 0.28rem 0.6rem; font-size: 0.78rem; background: #fff; min-width: 10rem; }
+.table-note { margin: 0.1rem 0; }
+.table-empty { padding: 1rem; text-align: center; border: 1px dashed var(--line); border-radius: 0.6rem; }
+.th-sort { background: none; border: 0; padding: 0; font: inherit; color: inherit; cursor: pointer; letter-spacing: inherit; }
+.th-sort.active { color: var(--orange-dark); }
+.table-footer { display: flex; align-items: center; justify-content: space-between; gap: 0.6rem; flex-wrap: wrap; }
+.table-pager { display: inline-flex; align-items: center; gap: 0.5rem; }
+.col-toggle { position: relative; }
+.col-toggle-menu { position: absolute; inset-inline-end: 0; margin-top: 0.3rem; background: #fff; border: 1px solid var(--line); border-radius: 0.5rem; padding: 0.5rem 0.6rem; display: flex; flex-direction: column; gap: 0.3rem; z-index: 20; min-width: 11rem; box-shadow: 0 6px 20px rgba(0,0,0,0.08); }
+.col-toggle-item { display: flex; align-items: center; gap: 0.4rem; font-size: 0.76rem; white-space: nowrap; }
+@media (max-width: 640px) { .table-toolbar-end { margin-inline-start: 0; } }
