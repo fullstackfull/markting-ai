@@ -74,11 +74,15 @@ export function TablePager({ prefix, page, pageCount }: { prefix: string; page: 
   const { locale } = useI18n();
   if (pageCount <= 1) return null;
   const goto = (n: number) => set({ page: String(n) }, false);
+  const atStart = page <= 1;
+  const atEnd = page >= pageCount;
   return (
     <div className="table-pager" role="navigation" aria-label={lbl(locale, 'Pagination', 'ترقيم الصفحات')}>
-      <button type="button" className="range-chip" disabled={page <= 1} onClick={() => goto(page - 1)}>{lbl(locale, 'Prev', 'السابق')}</button>
+      <button type="button" className="range-chip" disabled={atStart} aria-label={lbl(locale, 'First page', 'الصفحة الأولى')} onClick={() => goto(1)}>«</button>
+      <button type="button" className="range-chip" disabled={atStart} onClick={() => goto(page - 1)}>{lbl(locale, 'Prev', 'السابق')}</button>
       <span className="cell-sub" aria-live="polite">{lbl(locale, 'Page', 'صفحة')} {page} / {pageCount}</span>
-      <button type="button" className="range-chip" disabled={page >= pageCount} onClick={() => goto(page + 1)}>{lbl(locale, 'Next', 'التالي')}</button>
+      <button type="button" className="range-chip" disabled={atEnd} onClick={() => goto(page + 1)}>{lbl(locale, 'Next', 'التالي')}</button>
+      <button type="button" className="range-chip" disabled={atEnd} aria-label={lbl(locale, 'Last page', 'الصفحة الأخيرة')} onClick={() => goto(pageCount)}>»</button>
     </div>
   );
 }

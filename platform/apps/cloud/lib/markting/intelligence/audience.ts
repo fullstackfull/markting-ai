@@ -34,7 +34,17 @@ export interface BreakdownAnalysis {
   notes: BiText[];
 }
 
-/** Per-provider breakdown support (foundation; extended as provider read parity lands in 2Z). */
+/**
+ * ANALYSIS-LAYER feasibility only — whether `analyzeBreakdown` will run its concentration/efficiency
+ * math for a (dimension, provider) pair given rows it is handed (today: the SYNTHETIC seed). This is
+ * NOT the live reporting-capability source of truth and must NOT be used to decide what the UI offers:
+ * the single live-capability authority is the connection registry (`reportingDimensionSupport` /
+ * `reachableBreakdownDimensions` in lib/connections/registry.ts), and the Breakdown Explorer gates on
+ * THAT first (see lib/cloud/breakdown-explorer.ts). No provider feeds a breakdown into the normalized
+ * report path, so this map never licenses showing live breakdown data — it only governs the seed
+ * analysis. Phase C note: when raw breakdown tools are wired into a canonical rows path, fold this into
+ * the registry so there is exactly one capability matrix.
+ */
 export const PROVIDER_BREAKDOWN_SUPPORT: Record<string, Partial<Record<BreakdownDimension, boolean>>> = {
   meta: { placement: true, device: true, geography: true, age: true, gender: true, audience_segment: true },
   google: { placement: true, device: true, geography: true, age: true, gender: true, audience_segment: false },
