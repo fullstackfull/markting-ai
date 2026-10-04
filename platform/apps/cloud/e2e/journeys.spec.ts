@@ -111,8 +111,10 @@ test.describe('authenticated media-buyer journeys', () => {
   test('E2E-14 Drill-down: Account → Campaign → Ad set/group → Ad via the links (Phase B)', async ({ page }) => {
     await page.goto(`/dashboard/accounts/${ACC}`);
     await expect(page.locator('main:not([aria-busy="true"])')).toBeVisible();
-    // Campaign row link (inside the campaigns AnalyticsTable).
-    await page.locator('a[href*="/campaigns/"]').first().click();
+    // Campaign row link (inside the campaigns AnalyticsTable). Target the seeded campaign that has an
+    // ad-set hierarchy (not every demo campaign seeds ad groups — NO_DATA is a valid state), so the
+    // link-chain assertion is deterministic rather than dependent on the table's default sort order.
+    await page.locator('a[href*="/campaigns/"][href*="awareness"]').first().click();
     await expect(page.locator('main:not([aria-busy="true"])')).toBeVisible();
     // Ad set / ad group row link (the campaign surface's ad-groups table).
     const groupLink = page.locator('a[href*="/groups/"]').first();

@@ -63,12 +63,12 @@ describeDatabase('tenant RLS backstop — adport_backend org clamp (local databa
       const own = await tx<Array<{ id: string }>>`select id from public.findings where organization_id = ${orgA}`;
       const other = await tx<Array<{ id: string }>>`select id from public.findings where organization_id = ${orgB}`;
       // Even without a WHERE clause the backstop must hide org B.
-      const unscoped = await tx<Array<{ organizationId: string }>>`select organization_id from public.findings`;
+      const unscoped = await tx<Array<{ organization_id: string }>>`select organization_id from public.findings`;
       return { own, other, unscoped };
     });
     expect(result.own.map((r) => r.id)).toContain('f-a');
     expect(result.other).toEqual([]);
-    expect(new Set(result.unscoped.map((r) => r.organizationId))).toEqual(new Set([orgA]));
+    expect(new Set(result.unscoped.map((r) => r.organization_id))).toEqual(new Set([orgA]));
   });
 
   it('org A (GUC set) canNOT INSERT a row for org B (with check fails)', async () => {
@@ -107,17 +107,17 @@ describeDatabase('tenant RLS backstop — adport_backend org clamp (local databa
     const rows = await admin.begin(async (tx) => {
       await tx.unsafe('set local role adport_backend');
       // No set_config here: the restrictive policy is a no-op when the GUC is unset.
-      return tx<Array<{ organizationId: string }>>`select organization_id from public.findings where organization_id in ${tx([orgA, orgB])}`;
+      return tx<Array<{ organization_id: string }>>`select organization_id from public.findings where organization_id in ${tx([orgA, orgB])}`;
     });
-    expect(new Set(rows.map((r) => r.organizationId))).toEqual(new Set([orgA, orgB]));
+    expect(new Set(rows.map((r) => r.organization_id))).toEqual(new Set([orgA, orgB]));
   });
 
   it('adport_platform_admin SELECT role is unaffected (still reads cross-tenant, read-only)', async () => {
     const rows = await admin.begin(async (tx) => {
       await tx.unsafe('set local role adport_platform_admin');
-      return tx<Array<{ organizationId: string }>>`select organization_id from public.findings where organization_id in ${tx([orgA, orgB])}`;
+      return tx<Array<{ organization_id: string }>>`select organization_id from public.findings where organization_id in ${tx([orgA, orgB])}`;
     });
-    expect(new Set(rows.map((r) => r.organizationId))).toEqual(new Set([orgA, orgB]));
+    expect(new Set(rows.map((r) => r.organization_id))).toEqual(new Set([orgA, orgB]));
     // The admin read role has no write grant — a write must fail regardless of the backstop.
     await expect(
       admin.begin(async (tx) => {
