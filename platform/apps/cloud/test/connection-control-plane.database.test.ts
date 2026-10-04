@@ -29,9 +29,11 @@ describeDatabase('CONNECTIONS control plane (local database)', () => {
     orgA = await makeOrg();
     orgB = await makeOrg();
     // Seed a connected Google connection on org A with the new canonical columns populated.
+    // connected_by is NOT NULL → use org A's owner membership.
+    const [owner] = await admin<Array<{ userId: string }>>`select user_id as "userId" from public.organization_memberships where organization_id = ${orgA} limit 1`;
     await admin`
-      insert into public.connections (organization_id, provider, status, external_label, scopes, connection_type, auth_type, last_authenticated_at, health_state, token_expires_at)
-      values (${orgA}, 'google', 'connected', 'Org A Google', array['https://www.googleapis.com/auth/adwords'], 'ad_platform', 'oauth2_pkce', now(), 'CONNECTED', now() + interval '30 days')`;
+      insert into public.connections (organization_id, provider, status, external_label, scopes, connected_by, connection_type, auth_type, last_authenticated_at, health_state, token_expires_at)
+      values (${orgA}, 'google', 'connected', 'Org A Google', array['https://www.googleapis.com/auth/adwords'], ${owner!.userId}, 'ad_platform', 'oauth2_pkce', now(), 'CONNECTED', now() + interval '30 days')`;
   });
 
   afterAll(async () => {

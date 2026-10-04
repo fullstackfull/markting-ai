@@ -128,7 +128,7 @@ export async function detectConnectionIncidents(): Promise<ConnectionIncident[]>
     db<Array<{ provider: string; n: number }>>`select provider, count(*)::int as n from public.connections where error_classification = 'RATE_LIMIT' or health_state = 'RATE_LIMITED' group by provider having count(*) >= 3`,
     db<Array<{ provider: string; n: number }>>`select provider, count(*)::int as n from public.connections where token_expires_at is not null and token_expires_at < now() + interval '7 days' group by provider having count(*) >= 3`,
     db<Array<{ n: number }>>`select count(*)::int as n from public.connections where reauth_required`,
-    db<Array<{ platform: string; n: number }>>`select platform, count(*)::int as n from public.markting_commerce_sync_state s join public.markting_store_connections c on c.connection_id = s.connection_id and c.organization_id = s.organization_id where s.consecutive_errors > 0 group by platform having count(*) >= 3`,
+    db<Array<{ platform: string; n: number }>>`select s.platform as platform, count(*)::int as n from public.markting_commerce_sync_state s where s.consecutive_errors > 0 group by s.platform having count(*) >= 3`,
   ]);
   const incidents: ConnectionIncident[] = [];
   for (const r of authSpikes) incidents.push({ kind: 'auth_failure_spike', severity: 'critical', provider: r.provider, count: r.n, title: `Auth failure spike — ${providerLabel(r.provider)}`, detail: `${r.n} connections for ${providerLabel(r.provider)} have auth/token errors. Likely an app-credential or provider-side incident.`, dedupeKey: `auth_spike:${r.provider}` });
