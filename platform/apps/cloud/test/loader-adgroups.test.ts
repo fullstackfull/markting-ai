@@ -23,6 +23,18 @@ describe('loadAdGroupList (the campaign-page loader) in DEMO', () => {
     expect(res.providerId).toBeTruthy();
   });
 
+  it('loadAdGroup + loadAd (the group/ad PAGE loaders) resolve found with real content', async () => {
+    const { loadAdGroup, loadAd } = await import('@/lib/cloud/intelligence');
+    const GROUP = 'sandbox:acc:ramadan:camp:awareness:ag:lanterns';
+    const AD = 'sandbox:acc:ramadan:camp:awareness:ag:lanterns:ad:video-a';
+    const g = await loadAdGroup(tenant, ACC, CAMP, GROUP);
+    expect(g.found).toBe(true);
+    expect('name' in g && g.name).toMatch(/Lanterns/);
+    const ad = await loadAd(tenant, ACC, CAMP, GROUP, AD);
+    expect(ad.found).toBe(true);
+    expect('name' in ad && ad.name).toMatch(/Lantern Video A/);
+  });
+
   it('the full campaign-page loader set resolves without throwing (no sibling loader takes the page down)', async () => {
     const { loadCampaign, loadSection, loadAdGroupList } = await import('@/lib/cloud/intelligence');
     const [section, outcomes, groups] = await Promise.all([

@@ -117,19 +117,21 @@ test.describe('authenticated media-buyer journeys', () => {
     const CAMP = 'sandbox:acc:ramadan:camp:awareness';
     const GROUP = 'sandbox:acc:ramadan:camp:awareness:ag:lanterns';
     const AD = 'sandbox:acc:ramadan:camp:awareness:ag:lanterns:ad:video-a';
-    // Account surface renders and links to the campaign (the account→campaign hop exists).
-    await page.goto(`/dashboard/accounts/${ACC}`);
+    const e = encodeURIComponent;
+    // Canonical URLs encode each id segment exactly as the in-app links do (the loaders are proven to
+    // resolve these ids; see loader-adgroups.test.ts). Account surface links to the campaign.
+    await page.goto(`/dashboard/accounts/${e(ACC)}`);
     await expect(page.locator('main:not([aria-busy="true"])')).toBeVisible();
     await expect(page.locator('a[href*="/campaigns/"][href*="awareness"]').first()).toBeVisible();
     // Campaign detail renders the right campaign (name from the seed).
-    await page.goto(`/dashboard/accounts/${ACC}/campaigns/${CAMP}`);
+    await page.goto(`/dashboard/accounts/${e(ACC)}/campaigns/${e(CAMP)}`);
     await expect(page.getByText(/Awareness|توعية/).first()).toBeVisible();
     // Ad set / ad group detail renders real content (the seeded group name, not a not-connected fallback).
-    await page.goto(`/dashboard/accounts/${ACC}/campaigns/${CAMP}/groups/${GROUP}`);
+    await page.goto(`/dashboard/accounts/${e(ACC)}/campaigns/${e(CAMP)}/groups/${e(GROUP)}`);
     await expect(page.locator('main:not([aria-busy="true"])')).toBeVisible();
     await expect(page.getByText(/Lanterns/).first()).toBeVisible();
     // Ad detail renders real content (the seeded ad name) at the deepest level of the hierarchy.
-    await page.goto(`/dashboard/accounts/${ACC}/campaigns/${CAMP}/groups/${GROUP}/ads/${AD}`);
+    await page.goto(`/dashboard/accounts/${e(ACC)}/campaigns/${e(CAMP)}/groups/${e(GROUP)}/ads/${e(AD)}`);
     await expect(page.locator('main:not([aria-busy="true"])')).toBeVisible();
     await expect(page.getByText(/Lantern Video A/).first()).toBeVisible();
     await expect(page).toHaveURL(/\/ads\//);
