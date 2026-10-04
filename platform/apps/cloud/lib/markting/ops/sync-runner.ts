@@ -38,6 +38,10 @@ export interface SyncJob {
   /** Lower number = higher priority. REAUTH/webhook are time-sensitive; initial backfill is low. */
   priority: number;
   enqueuedAtMs: number;
+  /** Last execution error (diagnostics), if any. */
+  lastError?: string;
+  /** Last safety-guard reason that returned the job to the queue, if any. */
+  lastAttemptBlocked?: string;
 }
 
 export interface SyncLimits {
