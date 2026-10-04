@@ -1,37 +1,35 @@
 # 15 — Final Admin Capability Matrix
 
-Status at exit of this implementation program. READY = built, reachable, server-guarded, and CI-verified.
-PARTIAL = backend/evidence exists and an honest stub surface is present, but the operator feature is not yet built.
-DEFERRED = intentionally not built, with rationale.
+Status at exit. READY = built, reachable, server-guarded, CI-verified. PARTIAL = core built but a part
+depends on external data/infra. DEFERRED = intentionally not built (rationale given).
 
 | Capability | Status | Evidence / note |
 |---|---|---|
 | **Platform identity & authorization** | **READY** | `platform_operators` roster + guards + SELECT-only `adport_platform_admin` role + append-only `platform_admin_audit`; DB authz test + E2E. |
-| **P0 kill-switch enforcement** | **READY** | `KillGuardedProvider` on the apply seam, fail-closed; real-Postgres test across all 5 scopes. |
-| **Service-account hashing** | **READY** | peppered HMAC + constant-time; regression test. |
-| **MCP token hygiene** | **READY** | daily purge scheduled + revoked-token cleanup (migration). |
-| **Admin shell / IA** | **READY** | `app/(admin)/admin/*`, server-guarded, distinct chrome, full nav. |
+| **P0 kill-switch enforcement** | **READY** | `KillGuardedProvider` on the apply seam, fail-closed; real-Postgres test, all 5 scopes. |
+| **Service-account hashing / MCP purge** | **READY** | peppered HMAC + constant-time; daily MCP purge scheduled. |
+| **Admin shell / IA / nav** | **READY** | `app/(admin)/admin/*`, server-guarded, distinct chrome, full nav incl. Audit/DQ/Notifications/Search. |
 | **Overview** | **READY** | cross-tenant KPIs; NOT_AVAILABLE where unsupported. |
-| **Organizations (read + drill-down)** | **READY** | list (search/paginate) + detail. |
-| **Org actions** | **PARTIAL** | freeze/unfreeze writes READY (enforced kill switch, audited); disable-AI/extend-trial/assign-plan/override/delete need backend. |
+| **Organizations (read + drill-down)** | **READY** | list (search/paginate) + detail (members, connections, accounts, AI, kill switches, override, AI limit). |
+| **Org actions** | **READY** | freeze/unfreeze writes (enforced kill switch); entitlement override; AI disable/quota — all reason+audit, role-gated. |
 | **Users (read + drill-down)** | **READY** | directory + detail (email not exposed to read role, by design). |
-| **User actions (suspend/sessions/keys/export)** | **PARTIAL** | need auth-provider session APIs. |
-| **Plans catalog / entitlement overrides** | **PARTIAL** | hard-coded catalog preserved; DB catalog + overrides not built. |
-| **Billing / MRR / revenue** | **PARTIAL** | Stripe sync exists; no operator revenue view / failed-payment queue / invoices yet. |
-| **AI Operations** | **PARTIAL** | usage captured; fleet cost/quota/model controls not built; cost NOT_AVAILABLE in deterministic mode. |
-| **Provider fleet health** | **PARTIAL** | per-org status shown; cross-tenant fleet view not built. |
-| **Commerce fleet health** | **PARTIAL** | per-tenant data exists; fleet view not built. |
-| **Jobs / System health** | **PARTIAL** | job tables exist, no runner/UI; no /health endpoint. |
-| **Security Center** | **READY (baseline)** | posture + active kill switches + platform audit feed. |
-| **Global Audit** | **PARTIAL** | platform-action audit READY; unified tenant+provider+billing audit with rich filters not built. |
-| **Kill-switch UI (GLOBAL + per-org)** | **READY** | GLOBAL (SUPER_ADMIN) + per-org freeze, reason-required, audited, enforced. |
-| **Support / customer health** | **PARTIAL** | feedback status lifecycle unused; triage/health not built. |
-| **Feature flags** | **PARTIAL** | only env provider-rollout; DB flag model not built. |
-| **Platform settings** | **PARTIAL** | stub; no secrets editable. |
-| **Data quality fleet** | **PARTIAL** | per-tenant DQ exists; fleet view not built. |
-| **Admin notifications** | **DEFERRED** | not built this program (roadmap Wave 19). |
-| **Global search** | **PARTIAL** | per-section search (orgs/users) built; unified search not built. |
-| **Impersonation** | **DEFERRED** | high-risk; no silent-login primitive built. Requires the bounded design in docs/platform-admin/12 (reason, short-lived, banner, start/end audit, action restrictions) before implementation. |
-| **Admin E2E** | **READY** | operator access + tenant-owner/anon denial in a real browser. |
-| **DB/RLS authz tests** | **READY** | tenant/browser cannot read platform data; role denials; append-only audit. |
-| **Destructive-action four-eyes** | **PARTIAL** | SoD primitive exists and is reused for the apply path; a platform-level four-eyes wrapper for org-delete etc. is not built (those actions are not built yet). |
+| **User actions (suspend/sessions/export)** | **PARTIAL** | needs auth-provider session APIs → BLOCKED_EXTERNAL. |
+| **Plans & Entitlements** | **READY** | DB catalog (admin-editable) + per-org overrides, wired into the single resolver with safety ceiling; resolver DB-tested. |
+| **Billing & Subscriptions** | **READY (core) / PARTIAL (external)** | MRR/ARR, subscribers, payment-failure capture + resolve queue. Invoice history / churn / tax-VAT-SAR = BLOCKED_EXTERNAL. |
+| **AI Operations** | **READY (controls+rollups) / PARTIAL (cost)** | fleet cost by org/model, per-org disable+quota stored. Live cost + model routing = BLOCKED_EXTERNAL (dormant gateway). |
+| **Provider Fleet Health** | **READY** | cross-tenant connection-status + provider-health rollups. |
+| **Commerce Fleet Health** | **READY** | store/sync health, stuck-sync list, dead-letter count. |
+| **Jobs / System Health** | **READY (read) / PARTIAL** | job-queue state + migration posture; no in-repo worker (runner roadmap); edge health = BLOCKED_EXTERNAL. |
+| **Security Center** | **READY** | posture + active kill switches + platform audit feed. |
+| **Global Audit** | **READY** | unified platform + tenant audit with org filter. |
+| **Kill-switch UI (GLOBAL + per-org)** | **READY** | GLOBAL (SUPER_ADMIN) + per-org freeze; reason+audit; enforced. |
+| **Support / Customer Health** | **READY** | ticket triage over feedback.status + deterministic customer-health score. |
+| **Feature Flags** | **READY** | DB global/plan/org, server-eval, admin CRUD; never authorization. |
+| **Platform Settings** | **READY** | non-secret JSON settings; secrets never stored here. |
+| **Data Quality (fleet)** | **READY** | cross-tenant sync-gap/stale/errored view with drill-down. |
+| **Admin Notifications** | **READY** | deduped inbox + generator script (schedulable); acknowledge action. |
+| **Global Search** | **READY** | orgs / users / stripe customer+subscription ids. |
+| **Impersonation** | **DEFERRED** | high-risk; no silent-login primitive. Requires the bounded design in docs/platform-admin/12 (reason, short-lived, banner, start/end audit, action restrictions) + auth-provider session APIs before build. |
+| **Admin E2E** | **READY** | operator access (overview/orgs/users/security/billing/flags/audit) + tenant-owner/anon denial. |
+| **DB/RLS authz tests** | **READY** | platform data isolation, role denials, append-only audit, override resolution, new-table RLS. |
+| **Destructive four-eyes** | **PARTIAL** | SoD primitive reused on the apply path; a platform four-eyes wrapper for org-delete etc. is not built (org-delete itself not built). |

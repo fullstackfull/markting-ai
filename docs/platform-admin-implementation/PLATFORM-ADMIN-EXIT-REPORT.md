@@ -21,7 +21,37 @@ what is READY vs PARTIAL vs DEFERRED.
 - **Tests** — real-Postgres: kill-switch enforcement, platform authz/isolation, service-account hashing; browser E2E:
   operator access vs tenant-owner/anonymous denial.
 
-## Remaining P1 (highest-value, not yet built)
+## Completion update — Waves 7-20 (now READY)
+The remaining code-solvable surfaces were then built to completion (migration 20261015000000):
+- **Plans & Entitlements**: DB catalog (admin-editable, seeded identical) + per-org entitlement
+  overrides, both wired into the SINGLE resolver (plan → catalog → override → safety ceiling);
+  resolver DB-tested.
+- **Billing**: MRR/ARR + subscriber list + payment-failure capture (webhook now handles
+  `invoice.payment_failed`/`payment_action_required`) + resolve queue.
+- **AI Operations**: fleet cost by org/model + per-org AI disable & quota override (stored; consumed
+  when a live model is wired).
+- **Provider / Commerce / Data-Quality fleet**: cross-tenant health read-models with drill-down.
+- **System/Jobs**: job-queue state view.
+- **Security Center + Global Audit**: unified platform+tenant audit with org filter.
+- **Support**: triage over feedback.status + deterministic customer-health score.
+- **Feature Flags** (DB global/plan/org), **Settings** (non-secret), **Notifications** (deduped inbox +
+  generator script), **Global Search**.
+All mutations are role-gated (READ_ONLY_AUDITOR denied), reason-required, and append-only audited;
+cross-tenant reads run only through the SELECT-only `adport_platform_admin` role. See the capability
+matrix (`15`) for per-area READY/PARTIAL/DEFERRED.
+
+## Remaining after completion (genuinely not code-solvable here)
+- **User lifecycle actions** (suspend / revoke sessions / export) — need auth-provider (Supabase
+  GoTrue) session/admin APIs → BLOCKED_EXTERNAL.
+- **Impersonation** — DEFERRED (design + session APIs required; no silent-login primitive built).
+- **Live billing truth** (invoice history, churn cohorts, tax/VAT/SAR, multi-currency) — needs live
+  Stripe data/config → BLOCKED_EXTERNAL.
+- **Live AI cost & model routing** — needs a live model wired to the gateway → BLOCKED_EXTERNAL.
+- **True edge System Health** (webhook/Stripe/provider freshness, /health) and a **job runner** — live
+  infra + a worker process → BLOCKED_EXTERNAL / roadmap.
+- **Platform four-eyes wrapper** for destructive org-delete — org-delete itself intentionally not built.
+
+## (Original) Remaining P1 — now largely delivered above
 Plans DB catalog + per-org entitlement overrides; billing revenue read-model (MRR/ARR) + failed-payment pipeline;
 AI fleet cost + per-org quota/disable; provider fleet health read-model; commerce fleet health; jobs runner + system
 view; unified global audit (tenant+provider+billing) with rich filters; overview KPIs that depend on these.
