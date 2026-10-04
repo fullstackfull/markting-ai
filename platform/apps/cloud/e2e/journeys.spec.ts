@@ -107,4 +107,16 @@ test.describe('authenticated media-buyer journeys', () => {
     // No cross-tenant leakage of another org's name.
     await expect(page.getByText(/E2E Org B/)).toHaveCount(0);
   });
+
+  test('E2E-13 Workspace has a date-range control + freshness/window disclosure (Phase A)', async ({ page }) => {
+    await page.goto('/dashboard/workspace');
+    await expect(page.locator('main:not([aria-busy="true"])')).toBeVisible();
+    // A6: the range control is present and the freshness bar discloses the window + timezone + source.
+    await expect(page.locator('.range-control .range-chip').first()).toBeVisible();
+    await expect(page.locator('.freshness-bar')).toContainText(/Range|النطاق/);
+    await expect(page.locator('.freshness-bar')).toContainText(/Timezone|المنطقة الزمنية/);
+    // Selecting a preset propagates via the range search param.
+    await page.getByRole('button', { name: /Last 7 days|آخر 7/ }).click();
+    await expect(page).toHaveURL(/range=last_7_days/);
+  });
 });

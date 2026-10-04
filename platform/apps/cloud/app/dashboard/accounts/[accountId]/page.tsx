@@ -4,6 +4,10 @@ import { requireDashboardTenant } from '@/lib/cloud/dashboard';
 import Link from 'next/link';
 import { loadSection, loadWorkspaceIntelligence, loadCampaignList } from '@/lib/cloud/intelligence';
 import { getT } from '@/lib/i18n/server';
+import { RangeControl } from '@/components/range-control';
+import { FreshnessBar } from '@/components/freshness-bar';
+import { parseRangeParam } from '@/lib/cloud/date-range';
+import { loadBusinessContext } from '@/lib/markting/business-context';
 
 export const metadata = { title: 'Account' };
 
@@ -12,22 +16,24 @@ export const metadata = { title: 'Account' };
  * → commerce → outcomes) for one account, composed from the orchestrator. The user does not hop across
  * unrelated modules: each leg is a section of the same composed view.
  */
-export default async function AccountPage({ params }: { params: Promise<{ accountId: string }> }) {
+export default async function AccountPage({ params, searchParams }: { params: Promise<{ accountId: string }>; searchParams: Promise<{ range?: string }> }) {
   const { accountId } = await params;
   const tenant = await requireDashboardTenant();
   const { locale } = await getT();
+  const selection = parseRangeParam((await searchParams).range);
   const scope = { locale, accountId } as const;
-  const [brief, pacing, anomaly, forecast, creative, commerce, outcomes, breakdown, crossChannel, memory] = await Promise.all([
-    loadWorkspaceIntelligence(tenant, 'PROFITABILITY_DECLINE', scope),
-    loadSection(tenant, 'PACING', scope),
-    loadSection(tenant, 'ANOMALY', scope),
-    loadSection(tenant, 'FORECAST', scope),
-    loadSection(tenant, 'CREATIVE_REVIEW', scope),
-    loadSection(tenant, 'COMMERCE_PROFIT', scope),
-    loadSection(tenant, 'OUTCOMES_HISTORY', scope),
-    loadSection(tenant, 'BREAKDOWN', scope),
-    loadSection(tenant, 'CROSS_CHANNEL', scope),
-    loadSection(tenant, 'MEMORY_CONTEXT', scope),
+  const [brief, pacing, anomaly, forecast, creative, commerce, outcomes, breakdown, crossChannel, memory, business] = await Promise.all([
+    loadWorkspaceIntelligence(tenant, 'PROFITABILITY_DECLINE', scope, selection),
+    loadSection(tenant, 'PACING', scope, selection),
+    loadSection(tenant, 'ANOMALY', scope, selection),
+    loadSection(tenant, 'FORECAST', scope, selection),
+    loadSection(tenant, 'CREATIVE_REVIEW', scope, selection),
+    loadSection(tenant, 'COMMERCE_PROFIT', scope, selection),
+    loadSection(tenant, 'OUTCOMES_HISTORY', scope, selection),
+    loadSection(tenant, 'BREAKDOWN', scope, selection),
+    loadSection(tenant, 'CROSS_CHANNEL', scope, selection),
+    loadSection(tenant, 'MEMORY_CONTEXT', scope, selection),
+    loadBusinessContext(tenant.organizationId),
   ]);
   const campaignList = await loadCampaignList(tenant, accountId);
   const L = (en: string, ar: string) => (locale === 'ar' ? ar : en);
@@ -40,6 +46,8 @@ export default async function AccountPage({ params }: { params: Promise<{ accoun
   return (
     <main className="page">
       <PageHeader title={L('Account Intelligence', 'ذكاء الحساب')} description={accountId} />
+      <RangeControl />
+      <FreshnessBar selection={selection} timezone={business.timezone.value} source={brief.source} live={brief.result.trust.live} locale={locale} />
       <IntelMeta locale={locale} trustTier={brief.trustTier} live={brief.result.trust.live} source={brief.source} />
       <section className="card" style={{ marginBottom: 12 }}><div className="card-head"><h2>{L('Diagnosis', 'التشخيص')}</h2><span className={`status ${brief.nextAction === 'ATTENTION' ? 'critical' : 'warn'}`}>{brief.nextAction}</span></div><p style={{ whiteSpace: 'pre-line' }}>{locale === 'ar' ? brief.text.ar : brief.text.en}</p></section>
       {campaignList.length > 0 && (

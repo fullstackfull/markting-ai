@@ -1,8 +1,10 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { Empty, Metric, Provider, formatNumber } from '@/components/ui';
+import { Empty, Metric, Provider, formatNumber, formatMoney } from '@/components/ui';
 import { useI18n } from '@/components/i18n-provider';
+import { providerLabel } from '@/lib/cloud/providers';
+import { summarizeLiveRows } from '@/lib/cloud/live-summary';
 
 interface Summary {
   rows: Array<{ provider: string; accountId: string; currency?: string; entity: { id: string; name: string; status?: string }; metrics: Record<string, number> }>;
@@ -31,31 +33,25 @@ export function LiveData({ organizationId, connected }: { organizationId: string
   }, [connected, organizationId]);
 
   const rows = summary?.rows ?? [];
-  // Counts are currency-free and safe to sum. Money (spend, conversion_value) must NOT be summed
-  // across currencies, and ROAS must not blend currencies — we never invent an FX rate (R0-04).
-  const totals = rows.reduce((sum, row) => ({
-    impressions: sum.impressions + (row.metrics.impressions ?? 0),
-    clicks: sum.clicks + (row.metrics.clicks ?? 0),
-    conversions: sum.conversions + (row.metrics.conversions ?? 0),
-  }), { impressions: 0, clicks: 0, conversions: 0 });
-  const byCurrency = new Map<string, { spend: number; value: number }>();
-  for (const row of rows) {
-    const ccy = row.currency ?? '';
-    const acc = byCurrency.get(ccy) ?? { spend: 0, value: 0 };
-    acc.spend += row.metrics.spend ?? 0;
-    acc.value += row.metrics.conversion_value ?? 0;
-    byCurrency.set(ccy, acc);
-  }
-  const currencies = [...byCurrency.entries()];
+  // A1: conversions/ROAS per provider (never blended across providers); spend per currency (never
+  // blended across currencies); impressions/clicks are raw counts and safe to sum. See summarizeLiveRows.
+  const agg = summarizeLiveRows(rows);
+  const totals = { impressions: agg.impressions, clicks: agg.clicks };
+  const currencies = agg.spendByCurrency;
   const singleCurrency = currencies.length === 1 ? currencies[0]! : undefined;
-  // One currency: show its total and a real ROAS. Multiple: show each currency's spend and suppress
-  // a blended ROAS (would require FX). Zero rows: blank.
   const spendDisplay = singleCurrency
-    ? `${fmt(singleCurrency[1].spend)}${singleCurrency[0] ? ` ${singleCurrency[0]}` : ''}`
-    : currencies.map(([ccy, m]) => `${fmt(m.spend)}${ccy ? ` ${ccy}` : ''}`).join(' · ') || fmt(0);
-  const roasDisplay = singleCurrency && singleCurrency[1].spend > 0
-    ? `${fmt(singleCurrency[1].value / singleCurrency[1].spend)}×`
-    : '—';
+    ? `${fmt(singleCurrency.spend)}${singleCurrency.currency ? ` ${singleCurrency.currency}` : ''}`
+    : currencies.map((c) => `${fmt(c.spend)}${c.currency ? ` ${c.currency}` : ''}`).join(' · ') || fmt(0);
+
+  const providers = agg.perProvider;
+  const multiProvider = providers.length > 1;
+  const conversionsDisplay = providers.length === 0 ? '—'
+    : providers.map((m) => multiProvider ? `${providerLabel(m.provider)} ${fmt(m.conversions)}` : fmt(m.conversions)).join(' · ');
+  const roasDisplay = providers.length === 0 ? '—'
+    : providers.map((m) => {
+        const r = m.roas === undefined ? '—' : `${fmt(m.roas)}×`;
+        return multiProvider ? `${providerLabel(m.provider)} ${r}` : r;
+      }).join(' · ');
   const loading = connected && !summary && !error;
 
   return (
@@ -67,7 +63,7 @@ export function LiveData({ organizationId, connected }: { organizationId: string
       <section className="metrics" aria-label={t('overview.performanceSummary')} aria-busy={loading}>
         <Metric label={t('overview.spend')} value={loading ? '…' : spendDisplay} foot={t('overview.spendFoot')} />
         <Metric label={t('overview.clicks')} value={loading ? '…' : fmt(totals.clicks)} foot={loading ? t('common.loading') : t('overview.impressionsFoot', { impressions: fmt(totals.impressions) })} />
-        <Metric label={t('overview.conversions')} value={loading ? '…' : fmt(totals.conversions)} foot={t('overview.conversionsFoot')} />
+        <Metric label={t('overview.conversions')} value={loading ? '…' : conversionsDisplay} foot={t('overview.conversionsFoot')} />
         <Metric label="ROAS" value={loading ? '…' : roasDisplay} foot={t('overview.roasFoot')} />
       </section>
       <section className="card">
@@ -87,7 +83,7 @@ export function LiveData({ organizationId, connected }: { organizationId: string
                   <td><strong>{row.entity.name || row.entity.id}</strong><div className="cell-sub">{row.accountId}</div></td>
                   <td><Provider name={row.provider} /></td>
                   <td>{row.entity.status ? <span className={`status ${/paused|disabled|removed/i.test(row.entity.status) ? 'neutral' : ''}`}>{row.entity.status}</span> : '—'}</td>
-                  <td className="numeric">{fmt(row.metrics.spend)}</td>
+                  <td className="numeric">{row.currency ? formatMoney(row.metrics.spend ?? 0, row.currency, locale) : fmt(row.metrics.spend)}</td>
                   <td className="numeric">{fmt(row.metrics.clicks)}</td>
                   <td className="numeric">{fmt(row.metrics.conversions)}</td>
                   <td className="numeric">{fmt(row.metrics.roas)}×</td>

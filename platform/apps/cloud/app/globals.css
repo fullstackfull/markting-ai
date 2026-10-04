@@ -835,3 +835,13 @@ a:focus-visible, button:focus-visible, summary:focus-visible, [tabindex]:focus-v
 
 .admin-actions-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(14rem, 1fr)); gap: 0.9rem; }
 .admin-actions-grid h3 { margin: 0 0 0.3rem; }
+
+/* ===== Phase A — date-range control + freshness ===== */
+.range-control { display: flex; flex-wrap: wrap; gap: 0.4rem; align-items: center; margin-bottom: 0.7rem; }
+.range-chip { border: 1px solid var(--line); background: #fff; color: var(--ink); border-radius: 999px; padding: 0.28rem 0.7rem; font-size: 0.74rem; cursor: pointer; }
+.range-chip.active { border-color: var(--orange); color: var(--orange-dark); font-weight: 650; }
+.range-chip:disabled { color: var(--faint); cursor: not-allowed; }
+.range-custom { display: inline-flex; align-items: center; gap: 0.3rem; margin-inline-start: 0.4rem; }
+.range-custom input[type="date"] { border: 1px solid var(--line); border-radius: 0.4rem; padding: 0.2rem 0.4rem; font-size: 0.74rem; background: #fff; }
+.freshness-bar { border: 1px solid var(--line-soft); border-radius: 0.6rem; padding: 0.5rem 0.75rem; background: var(--paper); }
+.freshness-bar strong { color: var(--faint); font-weight: 620; }

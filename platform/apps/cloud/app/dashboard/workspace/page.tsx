@@ -5,6 +5,11 @@ import { loadWorkspaceIntelligence } from '@/lib/cloud/intelligence';
 import { getT } from '@/lib/i18n/server';
 import type { Locale } from '@/lib/i18n/config';
 import type { ContributingFactor, NextAction } from '@/lib/markting/orchestrator/envelope';
+import { RangeControl } from '@/components/range-control';
+import { FreshnessBar } from '@/components/freshness-bar';
+import { parseRangeParam } from '@/lib/cloud/date-range';
+import { loadBusinessContext } from '@/lib/markting/business-context';
+import { isDemoMode } from '@/lib/markting/env';
 
 export const metadata = { title: 'Workspace' };
 
@@ -34,10 +39,14 @@ function FactorCard({ factor, locale }: { factor: ContributingFactor; locale: Lo
   );
 }
 
-export default async function WorkspacePage() {
+export default async function WorkspacePage({ searchParams }: { searchParams: Promise<{ range?: string }> }) {
   const tenant = await requireDashboardTenant();
   const { locale } = await getT();
-  const answer = await loadWorkspaceIntelligence(tenant, 'DAILY_REVIEW', { locale });
+  const selection = parseRangeParam((await searchParams).range);
+  const [answer, business] = await Promise.all([
+    loadWorkspaceIntelligence(tenant, 'DAILY_REVIEW', { locale }, selection),
+    loadBusinessContext(tenant.organizationId),
+  ]);
   const { result } = answer;
   const factors = result.diagnosis.factors;
 
@@ -47,6 +56,8 @@ export default async function WorkspacePage() {
         title={L(locale, 'Needs attention', 'يحتاج انتباهًا')}
         description={L(locale, 'What changed, why, and what to do first — composed across your ad, commerce and creative signals.', 'ما الذي تغيّر ولماذا وما الذي تبدأ به — مُجمَّعًا عبر إشارات الإعلانات والتجارة والإبداع.')}
       />
+      <RangeControl />
+      <FreshnessBar selection={selection} timezone={business.timezone.value} source={answer.source} live={result.trust.live} locale={locale} />
 
       <section className="card" style={{ marginBottom: 16 }}>
         <div className="card-head">

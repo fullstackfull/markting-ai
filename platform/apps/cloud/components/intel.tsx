@@ -3,6 +3,7 @@ import type { Locale } from '@/lib/i18n/config';
 import type { BiText } from '@/lib/markting/intelligence/decision-model';
 import type { AnswerSection } from '@/lib/markting/orchestrator/sections';
 import { TrustBadge, StatusChip } from './kit';
+import { formatMoneyMinor } from './ui';
 
 /**
  * Coherence-2 — a reusable server component that renders any orchestrator AnswerSection consistently
@@ -22,11 +23,12 @@ export function SectionView({ section, locale }: { section: AnswerSection; local
       return <div><KV label={L(locale, 'Status', 'الحالة')} value={<span className="status neutral">{section.result.status}</span>} /><KV label={L(locale, 'Expected %', 'المتوقع %')} value={`${Math.round(section.result.expectedFraction * 100)}%`} /><KV label={L(locale, 'Actual %', 'الفعلي %')} value={`${Math.round(section.result.actualFraction * 100)}%`} /><KV label={L(locale, 'Projected', 'المتوقع')} value={section.result.projectedOverUnderPct == null ? L(locale, 'withheld (too early)', 'محجوب (مبكر جدًا)') : `${Math.round(section.result.projectedOverUnderPct)}%`} /></div>;
     case 'forecast': {
       const lims = [...new Set([...section.spend.limitations, ...section.conversions.limitations, ...section.cpa.limitations])];
+      const m = (v: number) => formatMoneyMinor(v, section.currency, locale);
       return <div>
         <KV label={L(locale, 'Method', 'الطريقة')} value={`${section.spend.method} · ${L(locale, 'window', 'نافذة')} ${section.spend.windowDays}d · ${L(locale, 'horizon', 'أفق')} ${section.horizonDays}d`} />
-        <KV label={L(locale, 'Spend', 'الإنفاق')} value={`${section.spend.estimate} (${section.spend.low}–${section.spend.high}, ${section.spend.confidence})`} />
+        <KV label={L(locale, 'Spend', 'الإنفاق')} value={`${m(section.spend.estimate)} (${m(section.spend.low)}–${m(section.spend.high)}, ${section.spend.confidence})`} />
         <KV label={L(locale, 'Conversions', 'التحويلات')} value={`${section.conversions.estimate} (${section.conversions.low}–${section.conversions.high})`} />
-        <KV label="CPA" value={`${section.cpa.estimate} (${section.cpa.low}–${section.cpa.high})`} />
+        <KV label="CPA" value={`${m(section.cpa.estimate)} (${m(section.cpa.low)}–${m(section.cpa.high)})`} />
         <p className="cell-sub">{L(locale, 'Transparent method only — no hidden model. The band is the uncertainty, not a promise.', 'طريقة شفافة فقط — لا نموذج خفي. النطاق هو عدم اليقين وليس وعدًا.')}{lims.length ? ` ${L(locale, 'Limitations', 'قيود')}: ${lims.join('; ')}.` : ''}</p>
       </div>;
     }
@@ -35,11 +37,11 @@ export function SectionView({ section, locale }: { section: AnswerSection; local
     case 'trend':
       return <div><KV label="CPA" value={`${T(locale, section.cpa.label)} (${section.cpa.direction})`} /><KV label={L(locale, 'Spend', 'الإنفاق')} value={`${section.spend.direction}, ${section.spend.state}`} /></div>;
     case 'response':
-      return <div><KV label={L(locale, 'Curve', 'المنحنى')} value={section.curve.form} /><KV label={L(locale, 'Saturation', 'التشبّع')} value={T(locale, section.saturation.label)} /><KV label={L(locale, 'Marginal CPA', 'CPA الحدّي')} value={section.marginal.marginalCpa ?? section.marginal.reason ?? '—'} /></div>;
+      return <div><KV label={L(locale, 'Curve', 'المنحنى')} value={section.curve.form} /><KV label={L(locale, 'Saturation', 'التشبّع')} value={T(locale, section.saturation.label)} /><KV label={L(locale, 'Marginal CPA', 'CPA الحدّي')} value={typeof section.marginal.marginalCpa === 'number' ? formatMoneyMinor(section.marginal.marginalCpa, section.currency, locale) : section.marginal.reason ?? '—'} /></div>;
     case 'scaling':
       return <table><thead><tr><th>{L(locale, 'Campaign', 'الحملة')}</th><th>{L(locale, 'State', 'الحالة')}</th></tr></thead><tbody>{section.rows.map((r) => <tr key={r.campaignId}><td>{r.name}</td><td><span className="status neutral">{r.result.state}</span></td></tr>)}</tbody></table>;
     case 'scenario':
-      return <div>{([['Conservative', section.conservative], ['Balanced', section.balanced], ['Aggressive (review)', section.aggressiveReview]] as const).map(([name, res]) => <div key={name} style={{ marginBottom: 8 }}><strong>{name}</strong><div className="cell-sub">{res.moves.length ? res.moves.map((m) => `${m.candidateId.split(':').pop()} ${m.direction} ${m.deltaMinor} ${m.currency} (${m.confidence})`).join('; ') : L(locale, 'no responsible move', 'لا تحرّك مسؤول')}</div></div>)}</div>;
+      return <div>{([['Conservative', section.conservative], ['Balanced', section.balanced], ['Aggressive (review)', section.aggressiveReview]] as const).map(([name, res]) => <div key={name} style={{ marginBottom: 8 }}><strong>{name}</strong><div className="cell-sub">{res.moves.length ? res.moves.map((m) => `${m.candidateId.split(':').pop()} ${m.direction} ${formatMoneyMinor(m.deltaMinor, m.currency, locale)} (${m.confidence})`).join('; ') : L(locale, 'no responsible move', 'لا تحرّك مسؤول')}</div></div>)}</div>;
     case 'creative':
       return <table><thead><tr><th>{L(locale, 'Creative', 'الإعلان')}</th><th>{L(locale, 'Hook', 'العنوان')}</th><th>CTR</th><th>{L(locale, 'State', 'الحالة')}</th><th>{L(locale, 'Fatigue', 'الإجهاد')}</th><th>{L(locale, 'Spend %', 'الإنفاق %')}</th></tr></thead><tbody>{section.rows.map((r) => <tr key={r.id}><td><Link href={`/dashboard/creative/${encodeURIComponent(r.id)}`} prefetch={false}>{r.name}</Link></td><td>{r.hook}</td><td>{r.ctr}%</td><td><span className="status neutral">{r.state}</span></td><td>{r.fatigue}</td><td>{r.spendSharePct}%</td></tr>)}</tbody></table>;
     case 'commerce':
@@ -65,7 +67,15 @@ export function SectionView({ section, locale }: { section: AnswerSection; local
           <span>{L(locale, 'Role', 'الدور')}: {section.role}</span><span>{L(locale, 'Currency', 'العملة')}: {section.currency}</span>
         </div>
         <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', marginBottom: 8 }}>
-          {([['Spend', section.kpis.spendMinor], ['Conv', section.kpis.conversions], ['CPA', section.kpis.cpaMinor], ['ROAS', section.kpis.roas], ['CTR%', section.kpis.ctr], ['CPM', section.kpis.cpmMinor], ['CPC', section.kpis.cpcMinor]] as const).map(([k, v]) => <span key={k} className="status neutral">{k}: {v}</span>)}
+          {([
+            ['Spend', formatMoneyMinor(section.kpis.spendMinor, section.currency, locale)],
+            ['Conv', String(section.kpis.conversions)],
+            ['CPA', formatMoneyMinor(section.kpis.cpaMinor, section.currency, locale)],
+            ['ROAS', String(section.kpis.roas)],
+            ['CTR%', String(section.kpis.ctr)],
+            ['CPM', formatMoneyMinor(section.kpis.cpmMinor, section.currency, locale)],
+            ['CPC', formatMoneyMinor(section.kpis.cpcMinor, section.currency, locale)],
+          ] as const).map(([k, v]) => <span key={k} className="status neutral">{k}: {v}</span>)}
         </div>
         <KV label={L(locale, 'Pacing', 'الوتيرة')} value={section.pacing?.status} />
         <KV label={L(locale, 'CPA trend', 'اتجاه CPA')} value={`${section.trend?.direction} / ${section.trend?.state}`} />

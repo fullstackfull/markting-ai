@@ -1,4 +1,4 @@
-import { Empty, PageHeader, Provider, formatNumber } from '@/components/ui';
+import { Empty, PageHeader, Provider, formatNumber, formatMoney } from '@/components/ui';
 import { requireDashboardTenant } from '@/lib/cloud/dashboard';
 import { readReport } from '@/lib/cloud/reads';
 import { EngineReports } from './engine-reports';
@@ -37,7 +37,7 @@ export default async function ReportsPage() {
                     <td><strong>{row.entity.name || row.entity.id}</strong><div className="cell-sub">{row.accountId}</div></td>
                     <td><Provider name={row.provider} /></td>
                     <td>{row.entity.status ? <span className={`status ${/paused|disabled|removed/i.test(row.entity.status) ? 'neutral' : ''}`}>{row.entity.status}</span> : '—'}</td>
-                    <td className="numeric">{fmt(row.metrics.spend)}</td>
+                    <td className="numeric">{row.currency ? formatMoney(row.metrics.spend ?? 0, row.currency, locale) : fmt(row.metrics.spend)}</td>
                     <td className="numeric">{fmt(row.metrics.impressions)}</td>
                     <td className="numeric">{fmt(row.metrics.clicks)}</td>
                     <td className="numeric">{fmt(row.metrics.conversions)}</td>

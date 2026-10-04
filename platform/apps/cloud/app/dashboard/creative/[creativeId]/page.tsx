@@ -1,5 +1,5 @@
 import Link from 'next/link';
-import { PageHeader } from '@/components/ui';
+import { PageHeader, formatMoneyMinor } from '@/components/ui';
 import { IntelMeta } from '@/components/intel';
 import { requireDashboardTenant } from '@/lib/cloud/dashboard';
 import { loadCreativeDetail } from '@/lib/cloud/intelligence';
@@ -30,7 +30,15 @@ export default async function CreativeDetailPage({ params }: { params: Promise<{
       <section className="card" style={{ marginBottom: 12 }}>
         <div className="card-head"><h2>{L('Performance', 'الأداء')}</h2></div>
         <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
-          {([['Spend', d.spendMinor], ['Impr', d.impressions], ['Clicks', d.clicks], ['Conv', d.conversions], ['CTR%', d.ctr], ['CPC', d.cpcMinor], ['CPA', d.cpaMinor]] as const).map(([k, v]) => <span key={k} className="status neutral">{k}: {v}</span>)}
+          {([
+            ['Spend', formatMoneyMinor(d.spendMinor, d.currency, locale)],
+            ['Impr', String(d.impressions ?? '—')],
+            ['Clicks', String(d.clicks ?? '—')],
+            ['Conv', String(d.conversions ?? '—')],
+            ['CTR%', String(d.ctr ?? '—')],
+            ['CPC', formatMoneyMinor(d.cpcMinor, d.currency, locale)],
+            ['CPA', formatMoneyMinor(d.cpaMinor, d.currency, locale)],
+          ] as const).map(([k, v]) => <span key={k} className="status neutral">{k}: {v}</span>)}
         </div>
         <p className="cell-sub" style={{ marginTop: 8 }}>{L('Lifecycle', 'دورة الحياة')}: {d.lifecycle} · {L('State', 'الحالة')}: {d.state} · {L('Cluster', 'العنقود')}: {d.cluster}</p>
       </section>

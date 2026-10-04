@@ -44,19 +44,36 @@ export async function readAccounts(principal: TenantPrincipal): Promise<ReadResu
   }
 }
 
-/** Server-side campaign report across connected providers, via the shared registry. */
-export async function readReport(principal: TenantPrincipal, dateRange: 'last_7_days' | 'last_30_days'): Promise<ReadResult<{ rows: ReportRow[]; truncated: boolean }>> {
+/** A concrete inclusive window (YYYY-MM-DD) or one of the core date presets. */
+export type ReportDateRange = { start: string; end: string } | 'last_7_days' | 'last_30_days';
+
+/**
+ * Generalized server-side report read across connected providers (Phase A / A4): any entity level and any
+ * concrete window (so the live gatherer can request the previous comparison window and the account level,
+ * not just the hard-coded campaign/last-7). Metrics include conversion_value so profit/ROAS compute.
+ */
+export async function readReportRows(
+  principal: TenantPrincipal,
+  opts: { level?: 'account' | 'campaign' | 'ad_group' | 'ad'; dateRange: ReportDateRange; limit?: number },
+): Promise<ReadResult<{ rows: ReportRow[]; truncated: boolean }>> {
   const connected = await hasConnectedProvider(principal.organizationId);
   if (!connected) return { ok: true, data: { rows: [], truncated: false }, connected, warnings: [] };
   try {
     const runtime = await createTenantRuntime(principal);
     const result = await runtime.registry.call('report', {
-      level: 'campaign', metrics: ['spend', 'impressions', 'clicks', 'conversions', 'roas'], date_range: dateRange,
-      limit: 250, continue_on_error: true,
+      level: opts.level ?? 'campaign',
+      metrics: ['spend', 'impressions', 'clicks', 'conversions', 'conversion_value', 'roas'],
+      date_range: opts.dateRange,
+      limit: opts.limit ?? 250, continue_on_error: true,
     }, runtime.ctx) as { rows: ReportRow[]; truncated: boolean; errors: Array<{ provider: string; message: string }> };
     result.errors.forEach((error) => message(new Error(error.message), error.provider));
     return { ok: true, data: { rows: result.rows, truncated: result.truncated }, connected, warnings: warnings(result.errors) };
   } catch (error) {
     return { ok: false, error: message(error), connected, warnings: [] };
   }
+}
+
+/** Server-side campaign report across connected providers (back-compat wrapper over readReportRows). */
+export async function readReport(principal: TenantPrincipal, dateRange: 'last_7_days' | 'last_30_days'): Promise<ReadResult<{ rows: ReportRow[]; truncated: boolean }>> {
+  return readReportRows(principal, { level: 'campaign', dateRange });
 }

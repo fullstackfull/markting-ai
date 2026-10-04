@@ -22,10 +22,23 @@ import type { MarginObservation } from '../commerce/model';
 import { reconcile, type ReconciliationResult } from '../commerce/reconciliation';
 import { analyzeBreakdown, type BreakdownAnalysis, type BreakdownDimension, type BreakdownRow } from '../intelligence/audience';
 import { compareChannels, type ChannelSummary, type CrossChannelComparison } from '../intelligence/cross-channel';
+import { CURRENCY_EXPONENTS } from '@adport/core';
 import type { SeedAccount, SeedCampaign, SeedClient, SeedCreative } from './seed';
 import { SEED_PORTFOLIO } from './seed';
 
 const sum = (xs: number[]): number => xs.reduce((a, b) => a + b, 0);
+/**
+ * PHASE A (A2): render an integer minor-unit amount as a human decimal string scaled by the currency's
+ * own exponent, with the currency code appended (no raw cents/fils in user-facing text). Unknown currency
+ * → the raw number + code, never a guessed scale. Used in every section summary / answer-text line.
+ */
+const minorText = (minor: number, currency: string | undefined): string => {
+  const code = (currency ?? '').trim().toUpperCase();
+  const exp = CURRENCY_EXPONENTS[code];
+  if (!code) return `${Math.round(minor)}`;
+  if (exp === undefined) return `${Math.round(minor)} ${code}`;
+  return `${(minor / 10 ** exp).toFixed(exp)} ${code}`;
+};
 const half = <T,>(xs: T[]): [T[], T[]] => [xs.slice(0, Math.floor(xs.length / 2)), xs.slice(Math.floor(xs.length / 2))];
 const money = (minorUnits: number, currency: string) => ({ minorUnits, currency });
 const cpaOf = (c: SeedCampaign) => { const conv = sum(c.dailyConversions); return conv ? Math.round(sum(c.dailySpendMinor) / conv) : 0; };
@@ -55,7 +68,7 @@ export function buildAnomaly(acc: SeedAccount): AnomalySection {
 }
 
 // ---------- Forecast ----------
-export interface ForecastSection { kind: 'forecast'; summary: BiText; spend: Forecast; conversions: Forecast; cpa: Forecast; horizonDays: number; }
+export interface ForecastSection { kind: 'forecast'; summary: BiText; spend: Forecast; conversions: Forecast; cpa: Forecast; horizonDays: number; currency: string; }
 export function buildForecast(acc: SeedAccount): ForecastSection {
   const n = acc.campaigns[0]?.dailySpendMinor.length ?? 1;
   const dailySpend = Array.from({ length: n }, (_, i) => sum(acc.campaigns.map((c) => c.dailySpendMinor[i] ?? 0)));
@@ -64,9 +77,10 @@ export function buildForecast(acc: SeedAccount): ForecastSection {
   const spend = forecastCumulative('spend', dailySpend, horizon);
   const conversions = forecastCumulative('conversions', dailyConv, horizon);
   const cpa = forecastCpa(dailySpend, dailyConv);
+  const cur = acc.reportingCurrency;
   return {
-    kind: 'forecast', spend, conversions, cpa, horizonDays: horizon,
-    summary: { en: `Projected ${horizon}-day spend ≈ ${spend.estimate} (band ${spend.low}–${spend.high}); CPA trend ≈ ${cpa.estimate}.`, ar: `الإنفاق المتوقع لـ ${horizon} يومًا ≈ ${spend.estimate} (النطاق ${spend.low}–${spend.high})؛ اتجاه CPA ≈ ${cpa.estimate}.` },
+    kind: 'forecast', spend, conversions, cpa, horizonDays: horizon, currency: cur,
+    summary: { en: `Projected ${horizon}-day spend ≈ ${minorText(spend.estimate, cur)} (band ${minorText(spend.low, cur)}–${minorText(spend.high, cur)}); CPA trend ≈ ${minorText(cpa.estimate, cur)}.`, ar: `الإنفاق المتوقع لـ ${horizon} يومًا ≈ ${minorText(spend.estimate, cur)} (النطاق ${minorText(spend.low, cur)}–${minorText(spend.high, cur)})؛ اتجاه CPA ≈ ${minorText(cpa.estimate, cur)}.` },
   };
 }
 
@@ -80,7 +94,7 @@ export function buildTrend(acc: SeedAccount): TrendSection {
 }
 
 // ---------- Response curve / saturation / marginal ----------
-export interface ResponseSection { kind: 'response'; summary: BiText; curve: ResponseCurve; saturation: SaturationResult; marginal: MarginalResult; }
+export interface ResponseSection { kind: 'response'; summary: BiText; curve: ResponseCurve; saturation: SaturationResult; marginal: MarginalResult; currency: string; }
 export function buildResponse(acc: SeedAccount): ResponseSection {
   const c = acc.campaigns[0]!;
   const points: ResponsePoint[] = c.dailySpendMinor.map((s, i) => ({ spendMinor: s, conversions: c.dailyConversions[i], revenueMinor: c.dailyRevenueMinor[i] }));
@@ -91,7 +105,7 @@ export function buildResponse(acc: SeedAccount): ResponseSection {
   const prev = { spendMinor: Math.round(sum(a.map((p) => p.spendMinor)) / Math.max(1, a.length)), conversions: Math.round(sum(a.map((p) => p.conversions ?? 0)) / Math.max(1, a.length)) };
   const next = { spendMinor: Math.round(sum(b.map((p) => p.spendMinor)) / Math.max(1, b.length)), conversions: Math.round(sum(b.map((p) => p.conversions ?? 0)) / Math.max(1, b.length)) };
   const marginal = marginalMetrics(prev, next);
-  return { kind: 'response', curve, saturation, marginal, summary: saturation.label };
+  return { kind: 'response', curve, saturation, marginal, currency: c.currency, summary: saturation.label };
 }
 
 // ---------- Scaling readiness (per campaign) ----------
@@ -133,7 +147,7 @@ export function buildScenario(acc: SeedAccount, extraMinor = 100000): ScenarioSe
   const conservative = allocateExtra({ extraMinor, currency, candidates, hard, soft: { conservativeScaling: true, preserveBrandCampaigns: true } });
   const balanced = allocateExtra({ extraMinor, currency, candidates, hard, soft: { favorProfitableGrowth: true } });
   const aggressiveReview = allocateExtra({ extraMinor, currency, candidates, hard, soft: { favorAcquisitionVolume: true } });
-  return { kind: 'scenario', extraMinor, currency, conservative, balanced, aggressiveReview, summary: { en: `Where to review allocating an extra ${extraMinor} ${currency} across ${candidates.length} eligible campaigns.`, ar: `أين تراجع تخصيص ${extraMinor} ${currency} إضافية عبر ${candidates.length} حملات مؤهلة.` } };
+  return { kind: 'scenario', extraMinor, currency, conservative, balanced, aggressiveReview, summary: { en: `Where to review allocating an extra ${minorText(extraMinor, currency)} across ${candidates.length} eligible campaigns.`, ar: `أين تراجع تخصيص ${minorText(extraMinor, currency)} إضافية عبر ${candidates.length} حملات مؤهلة.` } };
 }
 
 // ---------- Creative ----------
@@ -164,7 +178,7 @@ export function buildCreative(acc: SeedAccount): CreativeSection {
 
 // ---------- Creative detail (one creative) ----------
 export interface CreativeDetailSection {
-  kind: 'creativeDetail'; found: boolean; summary: BiText;
+  kind: 'creativeDetail'; found: boolean; summary: BiText; currency?: string;
   id: string; name?: string; campaignId?: string; hook?: string; angle?: string; format?: string; cluster?: string;
   spendMinor?: number; impressions?: number; clicks?: number; conversions?: number; ctr?: number; cpcMinor?: number; cpaMinor?: number; roas?: number;
   lifecycle?: string; fatigue?: 'NO_SIGNAL' | 'WATCH' | 'FATIGUE_SIGNAL'; fatigueEvidence?: string[];
@@ -183,7 +197,7 @@ export function buildCreativeDetail(acc: SeedAccount, creativeId: string): Creat
   const ctr = cr.impressions ? Math.round((cr.clicks / cr.impressions) * 10000) / 100 : 0;
   const row = buildCreative(acc).rows.find((r) => r.id === creativeId);
   return {
-    kind: 'creativeDetail', found: true, id: cr.id, name: cr.name, campaignId: cr.campaignId, hook: cr.hook, angle: cr.angle, format: cr.format, cluster: `cluster:${cr.hook}`,
+    kind: 'creativeDetail', found: true, id: cr.id, name: cr.name, campaignId: cr.campaignId, hook: cr.hook, angle: cr.angle, format: cr.format, cluster: `cluster:${cr.hook}`, currency: acc.reportingCurrency,
     spendMinor: cr.spendMinor, impressions: cr.impressions, clicks: cr.clicks, conversions: cr.conversions, ctr,
     cpcMinor: cr.clicks ? Math.round(cr.spendMinor / cr.clicks) : 0, cpaMinor: cr.conversions ? Math.round(cr.spendMinor / cr.conversions) : 0, roas: 0,
     lifecycle, fatigue, fatigueEvidence, state: row?.state, multimodal: 'MULTIMODAL_NOT_CONFIGURED',
@@ -205,8 +219,8 @@ export function buildCommerce(acc: SeedAccount): CommerceSection {
   const aovChangePct = c.aovMinorPrev ? Math.round(((c.aovMinorNow - c.aovMinorPrev) / c.aovMinorPrev) * 1000) / 10 : undefined;
   const be = breakEvenRoas(margin);
   const summary: BiText = {
-    en: `Net revenue ${net} ${c.currency}, refunds ${refundRatePct}% of gross, MER ${mer.value ?? 'UNKNOWN'}, ${margin.notComputableReason ? 'margin UNKNOWN (COGS missing)' : `contribution margin ${margin.contributionMarginPct}%`}; ${be.state === 'BREAK_EVEN_KNOWN' ? `break-even ROAS ${be.breakEvenRoas}` : 'break-even unknown'}.`,
-    ar: `صافي الإيراد ${net} ${c.currency}، الاستردادات ${refundRatePct}% من الإجمالي، MER ${mer.value ?? 'غير معروف'}، ${margin.notComputableReason ? 'الهامش غير معروف (COGS مفقود)' : `هامش المساهمة ${margin.contributionMarginPct}%`}.`,
+    en: `Net revenue ${minorText(net, c.currency)}, refunds ${refundRatePct}% of gross, MER ${mer.value ?? 'UNKNOWN'}, ${margin.notComputableReason ? 'margin UNKNOWN (COGS missing)' : `contribution margin ${margin.contributionMarginPct}%`}; ${be.state === 'BREAK_EVEN_KNOWN' ? `break-even ROAS ${be.breakEvenRoas}` : 'break-even unknown'}.`,
+    ar: `صافي الإيراد ${minorText(net, c.currency)}، الاستردادات ${refundRatePct}% من الإجمالي، MER ${mer.value ?? 'غير معروف'}، ${margin.notComputableReason ? 'الهامش غير معروف (COGS مفقود)' : `هامش المساهمة ${margin.contributionMarginPct}%`}.`,
   };
   return { kind: 'commerce', available: true, refundRatePct, mer, margin, reconciliation, aovChangePct, summary };
 }
@@ -319,7 +333,7 @@ export function buildCampaign(acc: SeedAccount, campaignId: string): CampaignSec
   return {
     kind: 'campaign', found: true, campaignId, name: c.name, role: c.role, currency: c.currency,
     kpis, comparison, pacing, trend, scaling, creatives: creativeAll, fatigue: c.dominantCreativeFatigue,
-    summary: { en: `${c.name}: CPA ${kpis.cpaMinor}, ROAS ${kpis.roas}, pacing ${pacing.status}, scaling ${scaling.state}.`, ar: `${c.name}: CPA ${kpis.cpaMinor}، ROAS ${kpis.roas}، الوتيرة ${pacing.status}.` },
+    summary: { en: `${c.name}: CPA ${minorText(kpis.cpaMinor, c.currency)}, ROAS ${kpis.roas}, pacing ${pacing.status}, scaling ${scaling.state}.`, ar: `${c.name}: CPA ${minorText(kpis.cpaMinor, c.currency)}، ROAS ${kpis.roas}، الوتيرة ${pacing.status}.` },
   };
 }
 
@@ -374,15 +388,15 @@ export function sectionText(section: AnswerSection, locale: 'en' | 'ar'): { en: 
     case 'portfolio': for (const r of section.rows) push(`• ${r.clientName} (${r.currency}) attention ${r.attentionScore}: ${r.reasons.map(pick).join(', ') || '—'}`, `• ${r.clientName} (${r.currency}) انتباه ${r.attentionScore}: ${r.reasons.map(pick).join('، ') || '—'}`); break;
     case 'breakdown': for (const a of section.analyses.filter((x) => x.supported)) push(`• ${a.dimension}: ${a.concentration ?? '—'}${a.efficiencySpread ? `, best ${a.efficiencySpread.best.value} / worst ${a.efficiencySpread.worst.value}` : a.protectedDimension ? ' (protected: reported only)' : ''}`, `• ${a.dimension}: ${a.concentration ?? '—'}`); break;
     case 'crossChannel': { const rk = section.roas.ranking ?? []; push(`• ROAS ${section.roas.comparability.state}: ${rk.map((r) => `${r.provider} ${r.value}`).join(' > ') || 'not comparable'}`, `• ROAS ${section.roas.comparability.state}: ${rk.map((r) => `${r.provider} ${r.value}`).join(' > ') || 'غير قابل للمقارنة'}`); break; }
-    case 'scenario': for (const [name, res] of [['Conservative', section.conservative], ['Balanced', section.balanced], ['Aggressive', section.aggressiveReview]] as const) push(`• ${name}: ${res.moves.map((m) => `${m.candidateId.split(':').pop()} ${m.direction} ${m.deltaMinor}`).join('; ') || 'no responsible move'}`, `• ${name}: ${res.moves.map((m) => `${m.candidateId.split(':').pop()} ${m.direction} ${m.deltaMinor}`).join('؛ ') || 'لا تحرّك مسؤول'}`); break;
+    case 'scenario': for (const [name, res] of [['Conservative', section.conservative], ['Balanced', section.balanced], ['Aggressive', section.aggressiveReview]] as const) push(`• ${name}: ${res.moves.map((m) => `${m.candidateId.split(':').pop()} ${m.direction} ${minorText(m.deltaMinor, m.currency ?? section.currency)}`).join('; ') || 'no responsible move'}`, `• ${name}: ${res.moves.map((m) => `${m.candidateId.split(':').pop()} ${m.direction} ${minorText(m.deltaMinor, m.currency ?? section.currency)}`).join('؛ ') || 'لا تحرّك مسؤول'}`); break;
     case 'commerce': if (section.available) push(`• refunds ${section.refundRatePct}%, MER ${section.mer?.value ?? 'UNKNOWN'}, margin ${section.margin?.notComputableReason ? 'UNKNOWN' : section.margin?.contributionMarginPct + '%'}, reconciliation ${section.reconciliation?.state}`, `• الاستردادات ${section.refundRatePct}%، MER ${section.mer?.value ?? 'غير معروف'}`); break;
     case 'pacing': push(`• status ${section.result.status}, expected ${Math.round(section.result.expectedFraction * 100)}% vs actual ${Math.round(section.result.actualFraction * 100)}%`, `• الحالة ${section.result.status}`); break;
-    case 'forecast': push(`• ${section.horizonDays}d spend ≈ ${section.spend.estimate} (${section.spend.low}–${section.spend.high}), CPA ≈ ${section.cpa.estimate}`, `• الإنفاق لـ ${section.horizonDays} يوم ≈ ${section.spend.estimate}`); break;
-    case 'response': push(`• curve ${section.curve.form}, ${pick(section.saturation.label)}, marginal CPA ${section.marginal.marginalCpa ?? section.marginal.reason ?? '—'}`, `• المنحنى ${section.curve.form}`); break;
+    case 'forecast': push(`• ${section.horizonDays}d spend ≈ ${minorText(section.spend.estimate, section.currency)} (${minorText(section.spend.low, section.currency)}–${minorText(section.spend.high, section.currency)}), CPA ≈ ${minorText(section.cpa.estimate, section.currency)}`, `• الإنفاق لـ ${section.horizonDays} يوم ≈ ${minorText(section.spend.estimate, section.currency)}`); break;
+    case 'response': push(`• curve ${section.curve.form}, ${pick(section.saturation.label)}, marginal CPA ${typeof section.marginal.marginalCpa === 'number' ? minorText(section.marginal.marginalCpa, section.currency) : section.marginal.reason ?? '—'}`, `• المنحنى ${section.curve.form}`); break;
     case 'anomaly': push(`• ${section.report.actionable ? `top z=${section.report.top?.z}, ${section.report.top?.pct}%` : 'no actionable anomaly'}`, `• ${section.report.actionable ? `z=${section.report.top?.z}` : 'لا شذوذ قابل للتنفيذ'}`); break;
     case 'trend': push(`• CPA ${section.cpa.direction}/${section.cpa.state}, spend ${section.spend.direction}`, `• CPA ${section.cpa.direction}`); break;
     case 'dataQuality': for (const i of section.issues) push(`• [${i.code}] ${pick(i.label)}`, `• [${i.code}] ${pick(i.label)}`); break;
-    case 'campaign': if (section.found && section.kpis) push(`• spend ${section.kpis.spendMinor}, CPA ${section.kpis.cpaMinor}, ROAS ${section.kpis.roas}, CTR ${section.kpis.ctr}%, pacing ${section.pacing?.status}, scaling ${section.scaling?.state}`, `• الإنفاق ${section.kpis.spendMinor}، CPA ${section.kpis.cpaMinor}`); break;
+    case 'campaign': if (section.found && section.kpis) push(`• spend ${minorText(section.kpis.spendMinor, section.currency)}, CPA ${minorText(section.kpis.cpaMinor, section.currency)}, ROAS ${section.kpis.roas}, CTR ${section.kpis.ctr}%, pacing ${section.pacing?.status}, scaling ${section.scaling?.state}`, `• الإنفاق ${minorText(section.kpis.spendMinor, section.currency)}، CPA ${minorText(section.kpis.cpaMinor, section.currency)}`); break;
   }
   return { en: lines_en.join('\n'), ar: lines_ar.join('\n') };
 }

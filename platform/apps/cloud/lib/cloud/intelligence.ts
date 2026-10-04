@@ -3,7 +3,10 @@ import type { DashboardTenant } from './dashboard';
 import { resolveRuntimeMode } from '@/lib/markting/runtime-mode';
 import { isDemoMode } from '@/lib/markting/env';
 import { AssistantIntelligenceService } from '@/lib/markting/orchestrator/assistant-service';
-import { demoGatherer, emptyGatherer } from '@/lib/markting/orchestrator/demo-gatherer';
+import { demoGatherer } from '@/lib/markting/orchestrator/demo-gatherer';
+import { createLiveGatherer } from './live-gatherer';
+import type { RangeSelection } from './date-range';
+import type { TenantPrincipal } from './types';
 import type { IntelligenceRequestContext, IntelligenceIntent } from '@/lib/markting/orchestrator/context';
 import type { AssistantAnswer } from '@/lib/markting/orchestrator/answer';
 import { assertResultPostureAllowed } from '@/lib/markting/ops/source-guard';
@@ -42,20 +45,30 @@ export function contextForTenant(tenant: DashboardTenant, extra: Partial<Intelli
   };
 }
 
-function serviceForMode(): AssistantIntelligenceService {
-  return new AssistantIntelligenceService(isDemoMode() ? demoGatherer : emptyGatherer);
+function principalFromTenant(tenant: DashboardTenant): TenantPrincipal {
+  return { organizationId: tenant.organizationId, userId: tenant.userId, role: tenant.role, scopes: ['tools:read'] };
 }
 
-export async function loadWorkspaceIntelligence(tenant: DashboardTenant, intent: IntelligenceIntent = 'DAILY_REVIEW', extra: Partial<IntelligenceRequestContext> = {}): Promise<AssistantAnswer> {
+/**
+ * Select the data source honestly by runtime posture: DEMO → the clearly-SYNTHETIC demo gatherer; a live
+ * deployment → the LIVE gatherer, which reads the tenant's connected providers through the real engine
+ * and degrades to a truthful NOT_CONNECTED empty state when nothing is wired (never demo content).
+ */
+function serviceForMode(principal: TenantPrincipal, range: RangeSelection = 'last_30_days'): AssistantIntelligenceService {
+  if (isDemoMode()) return new AssistantIntelligenceService(demoGatherer);
+  return new AssistantIntelligenceService(createLiveGatherer(principal, range));
+}
+
+export async function loadWorkspaceIntelligence(tenant: DashboardTenant, intent: IntelligenceIntent = 'DAILY_REVIEW', extra: Partial<IntelligenceRequestContext> = {}, range: RangeSelection = 'last_30_days'): Promise<AssistantAnswer> {
   const start = Date.now();
-  const answer = guardAnswerPosture(await serviceForMode().run(contextForTenant(tenant, extra), intent));
+  const answer = guardAnswerPosture(await serviceForMode(principalFromTenant(tenant), range).run(contextForTenant(tenant, extra), intent));
   emitIntelEvent({ kind: 'orchestrator_answer', organizationId: tenant.organizationId, intent, durationMs: Date.now() - start, aiMode: answer.source, sourceType: isDemoMode() ? 'SYNTHETIC' : 'LIVE', trustTier: answer.trustTier });
   return answer;
 }
 
 /** Load a single typed-intent answer (with its analytical section) for a product surface. */
-export async function loadSection(tenant: DashboardTenant, intent: IntelligenceIntent, extra: Partial<IntelligenceRequestContext> = {}) {
-  return guardAnswerPosture(await serviceForMode().run(contextForTenant(tenant, extra), intent));
+export async function loadSection(tenant: DashboardTenant, intent: IntelligenceIntent, extra: Partial<IntelligenceRequestContext> = {}, range: RangeSelection = 'last_30_days') {
+  return guardAnswerPosture(await serviceForMode(principalFromTenant(tenant), range).run(contextForTenant(tenant, extra), intent));
 }
 
 /** Load the campaign-detail section (campaign scope is not a free-text intent, so built directly). */
@@ -90,7 +103,7 @@ export async function loadCreativeDetail(_tenant: DashboardTenant, creativeId: s
 }
 
 export async function askAssistant(tenant: DashboardTenant, question: string, extra: Partial<IntelligenceRequestContext> = {}): Promise<AssistantAnswer & { intent: IntelligenceIntent }> {
-  return guardAnswerPosture(await serviceForMode().ask(contextForTenant(tenant, extra), question));
+  return guardAnswerPosture(await serviceForMode(principalFromTenant(tenant)).ask(contextForTenant(tenant, extra), question));
 }
 
 /**
@@ -111,5 +124,9 @@ export async function askAssistantForPrincipal(
     locale: 'en',
     ...extra,
   };
-  return guardAnswerPosture(await serviceForMode().ask(context, question));
+  const tenantPrincipal: TenantPrincipal = {
+    organizationId: principal.organizationId, userId: principal.userId,
+    role: principal.role as TenantPrincipal['role'], scopes: principal.scopes ?? ['tools:read'],
+  };
+  return guardAnswerPosture(await serviceForMode(tenantPrincipal).ask(context, question));
 }
