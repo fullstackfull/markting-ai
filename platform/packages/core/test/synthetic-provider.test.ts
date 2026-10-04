@@ -90,5 +90,12 @@ it('honors currency, account grouping, metric selection, range and limits', asyn
   const usd = await provider.report({ ...query, metrics: ['spend'], accountIds: ['demo-usd'], dateRange: 'yesterday' });
   expect(usd.rows[0]).toMatchObject({ currency: 'USD', metrics: { spend: 22 } });
   expect((await provider.report({ ...query, metrics: ['spend'], limit: 1 })).truncated).toBe(true);
-  await expect(provider.report({ ...query, metrics: ['spend'], level: 'ad' })).rejects.toMatchObject({ code: 'INVALID_INPUT' });
+  // Lower-hierarchy depth (Phase B): ad_group/ad levels synthesize parent-linked children with the
+  // provider-native entity type preserved — no longer rejected.
+  const groups = await provider.report({ ...query, metrics: ['spend'], level: 'ad_group', accountIds: ['demo-eur'] });
+  expect(groups.rows.length).toBe(6); // 3 campaigns × 2 ad groups
+  expect(groups.rows[0]).toMatchObject({ entity: { level: 'ad_group', parentId: 'demo-search', entityType: 'ad_group' } });
+  const ads = await provider.report({ ...query, metrics: ['spend'], level: 'ad', accountIds: ['demo-eur'], limit: 100 });
+  expect(ads.rows.length).toBe(12); // 3 campaigns × 2 ad groups × 2 ads
+  expect(ads.rows[0]).toMatchObject({ entity: { level: 'ad', parentId: 'demo-search-ag1', entityType: 'ad' } });
 });

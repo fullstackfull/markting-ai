@@ -40,7 +40,24 @@ export interface ReportRow {
   accountId: string;
   /** Account currency; absent when the provider cannot supply it. Never infer FX. */
   currency?: string;
-  entity: { level: EntityLevel; id: string; name: string; status?: string };
+  entity: {
+    level: EntityLevel;
+    id: string;
+    name: string;
+    status?: string;
+    /**
+     * Provider-native id of the immediate parent, when the adapter supplies it (e.g. the campaign id
+     * on an ad_group row, the ad_group id on an ad row). Lets the canonical layer build the hierarchy
+     * without flattening away the tree. Absent when the provider does not expose it.
+     */
+    parentId?: string;
+    /**
+     * Provider-native entity type preserved verbatim (e.g. Meta "adset", Google "ad_group",
+     * X "line_item"). The canonical `level` normalizes these; `entityType` keeps the real label so the
+     * UI can show "Ad Set" vs "Ad Group" rather than forcing one vocabulary onto every provider.
+     */
+    entityType?: string;
+  };
   metrics: Partial<Record<MetricName, number>>;
 }
 

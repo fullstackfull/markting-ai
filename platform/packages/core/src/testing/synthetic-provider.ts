@@ -47,39 +47,51 @@ export class SyntheticProvider implements AdProvider {
   }
   async report(query: NormalizedQuery): Promise<Report> {
     for (const id of query.accountIds ?? []) this.assertAccount(id);
-    if (!['account', 'campaign'].includes(query.level)) throw new AdportError('INVALID_INPUT', 'Synthetic reports support account and campaign levels only.');
     const range = resolveDateRange(query.dateRange);
     const days = rangeDayCount(range);
     if (!Number.isFinite(days) || range.start > range.end || days > 366) throw new AdportError('INVALID_INPUT', 'Use a valid synthetic report range of at most 366 days.');
     const campaigns = syntheticStateSchema.parse(await this.store.load());
+    type SBase = { spend: number; impressions: number; clicks: number; conversions: number; conversion_value: number };
+    const campBase = (c: SyntheticCampaign): SBase => {
+      // Stable historical fixture: changing a current budget never rewrites past performance.
+      const seed = syntheticSeed().findIndex(s => s.id === c.id) + 1;
+      const conversions = (c.id === 'demo-discovery' ? 1 : 2 + seed) * days;
+      return { spend: (10 + seed * 3) * days, impressions: (1500 + seed * 850) * days, clicks: (45 + seed * 17) * days, conversions, conversion_value: conversions * 24 };
+    };
+    const scale = (b: SBase, f: number): SBase => ({ spend: b.spend * f, impressions: Math.round(b.impressions * f), clicks: Math.round(b.clicks * f), conversions: Math.round(b.conversions * f), conversion_value: b.conversion_value * f });
+    const project = (b: SBase): Record<MetricName, number> => {
+      const m: Record<MetricName, number> = { ...b,
+        ctr: b.impressions ? b.clicks / b.impressions * 100 : 0, cpc: b.clicks ? b.spend / b.clicks : 0,
+        cpm: b.impressions ? b.spend / b.impressions * 1000 : 0,
+        cpa: b.conversions ? b.spend / b.conversions : 0, roas: b.spend ? b.conversion_value / b.spend : 0 };
+      return Object.fromEntries(query.metrics.map(metric => [metric, Math.round(m[metric] * 100) / 100])) as Record<MetricName, number>;
+    };
     const rows: ReportRow[] = [];
     for (const account of accounts.filter(a => !query.accountIds || query.accountIds.includes(a.id))) {
       const selected = campaigns.filter(c => c.accountId === account.id);
-      const groups = query.level === 'account' ? [selected] : selected.map(c => [c]);
-      for (const group of groups) {
-        if (!group.length) continue;
-        const totals = { spend: 0, impressions: 0, clicks: 0, conversions: 0, conversion_value: 0 };
-        for (const c of group) {
-          // Stable historical fixture: changing a current budget never rewrites past performance.
-          const seed = syntheticSeed().findIndex(seed => seed.id === c.id) + 1;
-          totals.spend += (10 + seed * 3) * days;
-          totals.impressions += (1500 + seed * 850) * days;
-          totals.clicks += (45 + seed * 17) * days;
-          // Three converting EUR campaigns expose a historical CPA outlier
-          // without marking any campaign active or enabling a real write.
-          const conversions = (c.id === 'demo-discovery' ? 1 : 2 + seed) * days;
-          totals.conversions += conversions;
-          totals.conversion_value += conversions * 24;
+      if (query.level === 'account') {
+        if (!selected.length) continue;
+        const total = selected.reduce<SBase>((acc, c) => { const b = campBase(c); return { spend: acc.spend + b.spend, impressions: acc.impressions + b.impressions, clicks: acc.clicks + b.clicks, conversions: acc.conversions + b.conversions, conversion_value: acc.conversion_value + b.conversion_value }; }, { spend: 0, impressions: 0, clicks: 0, conversions: 0, conversion_value: 0 });
+        rows.push({ provider: this.id, accountId: account.id, currency: account.currency, entity: { level: 'account', id: account.id, name: account.name, status: 'PAUSED' }, metrics: project(total) });
+        continue;
+      }
+      for (const c of selected) {
+        const base = campBase(c);
+        if (query.level === 'campaign') {
+          rows.push({ provider: this.id, accountId: account.id, currency: account.currency, entity: { level: 'campaign', id: c.id, name: c.name, status: 'PAUSED' }, metrics: project(base) });
+          continue;
         }
-        const metrics: Record<MetricName, number> = { ...totals,
-          ctr: totals.clicks / totals.impressions * 100, cpc: totals.spend / totals.clicks,
-          cpm: totals.spend / totals.impressions * 1000,
-          cpa: totals.conversions ? totals.spend / totals.conversions : 0, roas: totals.conversion_value / totals.spend,
-        };
-        const entity = query.level === 'account' ? account : group[0]!;
-        rows.push({ provider: this.id, accountId: account.id, currency: account.currency,
-          entity: { level: query.level, id: entity.id, name: entity.name, status: 'PAUSED' },
-          metrics: Object.fromEntries(query.metrics.map(metric => [metric, Math.round(metrics[metric] * 100) / 100])),
+        [0.6, 0.4].forEach((gShare, gi) => {
+          const gBase = scale(base, gShare);
+          const groupId = `${c.id}-ag${gi + 1}`;
+          const groupName = `${c.name} · Ad group ${gi + 1}`;
+          if (query.level === 'ad_group') {
+            rows.push({ provider: this.id, accountId: account.id, currency: account.currency, entity: { level: 'ad_group', id: groupId, name: groupName, status: 'PAUSED', parentId: c.id, entityType: 'ad_group' }, metrics: project(gBase) });
+            return;
+          }
+          [0.55, 0.45].forEach((aShare, ai) => {
+            rows.push({ provider: this.id, accountId: account.id, currency: account.currency, entity: { level: 'ad', id: `${groupId}-ad${ai + 1}`, name: `${groupName} · Ad ${ai + 1}`, status: 'PAUSED', parentId: groupId, entityType: 'ad' }, metrics: project(scale(gBase, aShare)) });
+          });
         });
       }
     }

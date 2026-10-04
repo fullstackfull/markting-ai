@@ -78,11 +78,17 @@ export async function gatherLive(
   // Deterministic completeness from the resolver (a window ending today is partial), not a preset guess.
   const windowComplete = range.windowComplete;
 
-  const [curAcc, prevAcc, curCamp, prevCamp] = await Promise.all([
+  const [curAcc, prevAcc, curCamp, prevCamp, curGroup, prevGroup, curAd, prevAd] = await Promise.all([
     readReportRows(principal, { level: 'account', dateRange: range.current }),
     readReportRows(principal, { level: 'account', dateRange: range.previous }),
     readReportRows(principal, { level: 'campaign', dateRange: range.current }),
     readReportRows(principal, { level: 'campaign', dateRange: range.previous }),
+    // Lower-hierarchy depth (B2): best-effort — a provider/level that does not support these returns
+    // an empty/degraded result and the engine simply produces no child nodes (never fabricated ones).
+    readReportRows(principal, { level: 'ad_group', dateRange: range.current }),
+    readReportRows(principal, { level: 'ad_group', dateRange: range.previous }),
+    readReportRows(principal, { level: 'ad', dateRange: range.current }),
+    readReportRows(principal, { level: 'ad', dateRange: range.previous }),
   ]);
 
   const connected = curCamp.connected;
@@ -97,7 +103,11 @@ export async function gatherLive(
   const pp = partition(prevCamp.ok ? prevCamp.data.rows : []);
   const pa = partition(curAcc.ok ? curAcc.data.rows : []);
   const ppa = partition(prevAcc.ok ? prevAcc.data.rows : []);
-  const rejected = [...pc.rejected, ...pp.rejected, ...pa.rejected, ...ppa.rejected];
+  const pg = partition(curGroup.ok ? curGroup.data.rows : []);
+  const pgp = partition(prevGroup.ok ? prevGroup.data.rows : []);
+  const pad = partition(curAd.ok ? curAd.data.rows : []);
+  const padp = partition(prevAd.ok ? prevAd.data.rows : []);
+  const rejected = [...pc.rejected, ...pp.rejected, ...pa.rejected, ...ppa.rejected, ...pg.rejected, ...pgp.rejected, ...pad.rejected, ...padp.rejected];
 
   const mk = (rows: ReportRow[], dateRange: { start: string; end: string }) =>
     normalizeReportRows(rows, { tier: 'PLATFORM_REPORTED', dateRange, windowComplete, timezone, readAt });
@@ -114,10 +124,16 @@ export async function gatherLive(
     dataset: 'LIVE',
     period: { current: range.current, previous: range.previous },
     currentAccount, previousAccount, currentCampaigns, previousCampaigns,
+    currentAdGroups: mk(pg.valid, range.current), previousAdGroups: mk(pgp.valid, range.previous),
+    currentAds: mk(pad.valid, range.current), previousAds: mk(padp.valid, range.previous),
     business,
   });
 
-  const diagnoses = [...intel.accountDiagnoses, ...intel.campaigns.flatMap((c) => c.diagnoses)];
+  // Flatten diagnoses from every hierarchy level (account → campaign → ad_group → ad) into the media
+  // slice; each diagnosis still carries its own scope.entityLevel so level is never lost.
+  const flattenNodes = (nodes: typeof intel.campaigns): typeof intel.accountDiagnoses =>
+    nodes.flatMap((n) => [...n.diagnoses, ...(n.children ? flattenNodes(n.children) : [])]);
+  const diagnoses = [...intel.accountDiagnoses, ...flattenNodes(intel.campaigns)];
   const gathered: GatheredIntelligence = {
     media: { diagnoses, recommendations: intel.recommendations },
     availability: {

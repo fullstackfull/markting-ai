@@ -28,6 +28,41 @@ import {
 
 export const SANDBOX_PROVIDER_ID = 'sandbox';
 
+/** Provider-native lower-hierarchy label per sandbox account, so the demo shows "Ad set" (Meta) vs
+ *  "Ad group" (Google) rather than forcing one vocabulary — mirrors the real adapters' semantics. */
+const SANDBOX_GROUP_TYPE: Record<string, string> = {
+  'fixture-google-0001': 'ad_group',
+  'fixture-meta-0001': 'adset',
+  'fixture-reddit-0001': 'ad_group',
+  'fixture-snap-0001': 'ad_squad',
+};
+
+/** Additive base metrics (ratios are derived, never summed). */
+type Base = { spend: number; impressions: number; clicks: number; conversions: number; conversion_value: number };
+const emptyBase = (): Base => ({ spend: 0, impressions: 0, clicks: 0, conversions: 0, conversion_value: 0 });
+const addBase = (a: Base, b: Base): Base => ({ spend: a.spend + b.spend, impressions: a.impressions + b.impressions, clicks: a.clicks + b.clicks, conversions: a.conversions + b.conversions, conversion_value: a.conversion_value + b.conversion_value });
+const scaleBase = (b: Base, f: number): Base => ({ spend: b.spend * f, impressions: Math.round(b.impressions * f), clicks: Math.round(b.clicks * f), conversions: Math.round(b.conversions * f), conversion_value: b.conversion_value * f });
+/** Deterministic synthetic history for one campaign derived from its seed budget — a budget change
+ *  never rewrites the past. Identical formula to the original account/campaign aggregation. */
+function campaignBase(campaign: SandboxCampaign, days: number): Base {
+  const seedBudget = (sandboxSeed().find((seed) => seed.id === campaign.id)?.dailyBudgetMicros ?? 100_000_000) / 1e6;
+  const index = sandboxSeed().findIndex((seed) => seed.id === campaign.id) + 1;
+  const spend = seedBudget * 0.82 * days;
+  const clicks = Math.round(spend / (1.1 + index * 0.35));
+  const conversions = Math.round(clicks * (0.02 + (index % 3) * 0.015));
+  return { spend, impressions: clicks * (28 + index * 4), clicks, conversions, conversion_value: conversions * (38 + index * 6) };
+}
+function withDerived(b: Base): Record<MetricName, number> {
+  return {
+    ...b,
+    ctr: b.impressions ? (b.clicks / b.impressions) * 100 : 0,
+    cpc: b.clicks ? b.spend / b.clicks : 0,
+    cpm: b.impressions ? (b.spend / b.impressions) * 1000 : 0,
+    cpa: b.conversions ? b.spend / b.conversions : 0,
+    roas: b.spend ? b.conversion_value / b.spend : 0,
+  };
+}
+
 export const sandboxCampaignSchema = z.object({
   id: z.string(),
   accountId: z.string(),
@@ -98,44 +133,53 @@ export class SandboxProvider implements AdProvider {
   }
   async report(query: NormalizedQuery): Promise<Report> {
     for (const id of query.accountIds ?? []) this.account(id);
-    if (!['account', 'campaign'].includes(query.level)) throw new AdportError('INVALID_INPUT', 'Sandbox reports support account and campaign levels only.');
     const range = resolveDateRange(query.dateRange);
     const days = rangeDayCount(range);
     if (!Number.isFinite(days) || range.start > range.end || days > 366) throw new AdportError('INVALID_INPUT', 'Use a valid report range of at most 366 days.');
     const campaigns = sandboxStateSchema.parse(await this.store.load());
+    const project = (base: Base): Record<MetricName, number> => {
+      const m = withDerived(base);
+      return Object.fromEntries(query.metrics.map((metric) => [metric, Math.round(m[metric] * 100) / 100])) as Record<MetricName, number>;
+    };
     const rows: ReportRow[] = [];
     for (const account of SANDBOX_ACCOUNTS.filter((candidate) => !query.accountIds || query.accountIds.includes(candidate.id))) {
       const selected = campaigns.filter((campaign) => campaign.accountId === account.id);
-      const groups = query.level === 'account' ? [selected] : selected.map((campaign) => [campaign]);
-      for (const group of groups) {
-        if (!group.length) continue;
-        const totals = { spend: 0, impressions: 0, clicks: 0, conversions: 0, conversion_value: 0 };
-        for (const campaign of group) {
-          // Deterministic synthetic history derived from the seed budget; a budget change never rewrites the past.
-          const seedBudget = (sandboxSeed().find((seed) => seed.id === campaign.id)?.dailyBudgetMicros ?? 100_000_000) / 1e6;
-          const index = sandboxSeed().findIndex((seed) => seed.id === campaign.id) + 1;
-          const spend = seedBudget * 0.82 * days;
-          const clicks = Math.round(spend / (1.1 + index * 0.35));
-          const conversions = Math.round(clicks * (0.02 + (index % 3) * 0.015));
-          totals.spend += spend;
-          totals.impressions += clicks * (28 + index * 4);
-          totals.clicks += clicks;
-          totals.conversions += conversions;
-          totals.conversion_value += conversions * (38 + index * 6);
+      const nativeType = SANDBOX_GROUP_TYPE[account.id] ?? 'ad_group';
+      if (query.level === 'account') {
+        if (!selected.length) continue;
+        const total = selected.reduce<Base>((acc, c) => addBase(acc, campaignBase(c, days)), emptyBase());
+        rows.push({ provider: this.id, accountId: account.id, currency: account.currency,
+          entity: { level: 'account', id: account.id, name: account.name, status: account.status }, metrics: project(total) });
+        continue;
+      }
+      for (const campaign of selected) {
+        const base = campaignBase(campaign, days);
+        if (query.level === 'campaign') {
+          rows.push({ provider: this.id, accountId: account.id, currency: account.currency,
+            entity: { level: 'campaign', id: campaign.id, name: campaign.name, status: campaign.status }, metrics: project(base) });
+          continue;
         }
-        const metrics: Record<MetricName, number> = {
-          ...totals,
-          ctr: totals.impressions ? (totals.clicks / totals.impressions) * 100 : 0,
-          cpc: totals.clicks ? totals.spend / totals.clicks : 0,
-          cpm: totals.impressions ? (totals.spend / totals.impressions) * 1000 : 0,
-          cpa: totals.conversions ? totals.spend / totals.conversions : 0,
-          roas: totals.spend ? totals.conversion_value / totals.spend : 0,
-        };
-        const entity = query.level === 'account' ? account : group[0]!;
-        rows.push({
-          provider: this.id, accountId: account.id, currency: account.currency,
-          entity: { level: query.level, id: entity.id, name: entity.name, status: 'status' in entity ? entity.status : undefined },
-          metrics: Object.fromEntries(query.metrics.map((metric) => [metric, Math.round(metrics[metric] * 100) / 100])),
+        // Lower-hierarchy synthesis: deterministic ad_groups per campaign, ads per ad_group. Parent
+        // linkage + provider-native entity type are preserved so the canonical hierarchy is real (the
+        // data is CLEARLY SYNTHETIC — demo only). Child shares deliberately do not sum to the parent
+        // exactly, mirroring how providers report overlapping attribution across levels.
+        const groupSplits = [0.62, 0.38];
+        groupSplits.forEach((gShare, gi) => {
+          const gBase = scaleBase(base, gShare);
+          const groupId = `${campaign.id}-ag${gi + 1}`;
+          const groupName = `${campaign.name} · ${nativeType === 'adset' ? 'Ad set' : nativeType === 'ad_squad' ? 'Ad squad' : 'Ad group'} ${gi + 1}`;
+          if (query.level === 'ad_group') {
+            rows.push({ provider: this.id, accountId: account.id, currency: account.currency,
+              entity: { level: 'ad_group', id: groupId, name: groupName, status: campaign.status, parentId: campaign.id, entityType: nativeType }, metrics: project(gBase) });
+            return;
+          }
+          // query.level === 'ad'
+          const adSplits = [0.56, 0.44];
+          adSplits.forEach((aShare, ai) => {
+            const aBase = scaleBase(gBase, aShare);
+            rows.push({ provider: this.id, accountId: account.id, currency: account.currency,
+              entity: { level: 'ad', id: `${groupId}-ad${ai + 1}`, name: `${groupName} · Ad ${ai + 1}`, status: campaign.status, parentId: groupId, entityType: 'ad' }, metrics: project(aBase) });
+          });
         });
       }
     }

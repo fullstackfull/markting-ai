@@ -40,6 +40,11 @@ export interface CanonicalEntityRef {
   status?: string;
   sourceProvider: string;
   accountId: string;
+  /** Provider-native id of the immediate parent (campaign id on an ad_group, ad_group id on an ad),
+   *  when the provider exposes it — the linkage used to build the hierarchy. */
+  parentRawId?: string;
+  /** Provider-native entity type preserved verbatim (e.g. "adset", "ad_group", "line_item"). */
+  entityType?: string;
 }
 
 /** A single normalized metric reading for one entity over one window from one provider. */
@@ -76,4 +81,30 @@ export interface RevenueSignal { source: 'platform_reported' | 'merchant'; curre
 
 export function canonicalId(provider: string, accountId: string, rawId: string): string {
   return `${provider}:${accountId}:${rawId}`;
+}
+
+/** Canonical breakdown dimensions (Phase B, B4). Mirrors the connection registry's dimension vocabulary. */
+export type BreakdownDimensionName =
+  | 'placement' | 'device' | 'geography' | 'audience' | 'age' | 'gender' | 'network' | 'keyword' | 'search_term';
+
+/**
+ * A single metric reading for ONE value of ONE breakdown dimension (e.g. spend+conversions for the
+ * "Instagram Stories" placement of an ad set). It reuses the observation metadata — provider, account,
+ * parent entity, window, currency and trust — so a breakdown is never mistaken for a different data
+ * tier or blended across incompatible currencies/attribution. This does NOT replace MetricObservation;
+ * it is the entity-scoped segmentation sibling. Provenance travels via `trust` exactly as observations.
+ */
+export interface BreakdownObservation {
+  provider: string;
+  accountId: string;
+  /** The entity whose spend this dimension slices (usually a campaign or ad_group). */
+  entity: CanonicalEntityRef;
+  dimension: BreakdownDimensionName;
+  /** The provider-native dimension value, verbatim (e.g. "mobile", "feed", "25-34"). */
+  value: string;
+  dateRange: { start: string; end: string };
+  currency?: string;
+  attribution?: AttributionBasis;
+  trust: DataTrust;
+  metrics: Partial<Record<CanonicalMetric, number>>;
 }

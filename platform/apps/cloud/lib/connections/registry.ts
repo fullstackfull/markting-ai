@@ -33,6 +33,31 @@ export interface ConnectionCapabilities {
   sync: boolean;                 // has a sync engine (NOTE: no background runner exists in-repo)
 }
 
+/**
+ * REPORTING capability (Phase B) — the machine-readable "which hierarchy levels and which breakdown
+ * dimensions does this provider's normalized report path actually return", grounded in the adapter
+ * audit (docs/pro-depth/01). This is the SINGLE source of truth the drill-down surfaces and the
+ * Breakdown Explorer gate on, so the UI never offers a level/dimension the adapter cannot produce.
+ */
+export const HIERARCHY_LEVELS = ['account', 'campaign', 'ad_group', 'ad'] as const;
+export type HierarchyLevel = (typeof HIERARCHY_LEVELS)[number];
+/** READY = real rows at this level; PARTIAL = rows but id-only names; NOT_SUPPORTED = provider has no
+ *  such level; NOT_IMPLEMENTED = adapter does not yet return it (provider could). */
+export type LevelSupport = 'READY' | 'PARTIAL' | 'NOT_SUPPORTED' | 'NOT_IMPLEMENTED';
+
+export const BREAKDOWN_DIMENSIONS = ['placement', 'device', 'geography', 'audience', 'age', 'gender', 'network', 'keyword', 'search_term'] as const;
+export type BreakdownDimension = (typeof BREAKDOWN_DIMENSIONS)[number];
+/** READY = flows into the canonical report path; RAW_ONLY = reachable via a raw passthrough tool but
+ *  NOT the normalized ReportRow; NOT_SUPPORTED/NOT_IMPLEMENTED as above. No provider is READY today. */
+export type DimensionSupport = 'READY' | 'RAW_ONLY' | 'NOT_SUPPORTED' | 'NOT_IMPLEMENTED';
+
+export interface ReportingCapability {
+  levels: Record<HierarchyLevel, LevelSupport>;
+  /** Provider-native label for the ad_group level ("Ad set" / "Ad group" / "Line item"). */
+  adGroupTerm: { en: string; ar: string };
+  dimensions: Partial<Record<BreakdownDimension, DimensionSupport>>;
+}
+
 export interface ProviderRegistryEntry {
   id: string;
   label: string;
@@ -40,6 +65,8 @@ export interface ProviderRegistryEntry {
   authType: AuthType;
   liveTransportImplemented: boolean;
   capabilities: ConnectionCapabilities;
+  /** Reporting hierarchy/dimension support (paid-media providers only). */
+  reporting?: ReportingCapability;
   /** For providers without server-side revoke, the console where the user removes access manually. */
   manualRevokeNote?: string;
   notes?: string;
@@ -78,6 +105,30 @@ function ad(
 
 const MANUAL = 'No server-side token revocation API — the local grant is deleted and you must remove app access in the provider console.';
 
+const FULL_LEVELS: Record<HierarchyLevel, LevelSupport> = { account: 'READY', campaign: 'READY', ad_group: 'READY', ad: 'READY' };
+const CAMPAIGN_ONLY_NI: Record<HierarchyLevel, LevelSupport> = { account: 'READY', campaign: 'READY', ad_group: 'NOT_IMPLEMENTED', ad: 'NOT_IMPLEMENTED' };
+const PARTIAL_DEEP: Record<HierarchyLevel, LevelSupport> = { account: 'READY', campaign: 'READY', ad_group: 'PARTIAL', ad: 'PARTIAL' };
+
+/**
+ * Reporting support per provider, grounded in docs/pro-depth/01. Dimensions default to NOT_SUPPORTED
+ * when absent; a dimension is only RAW_ONLY where the adapter exposes a raw passthrough tool (meta /
+ * tiktok / reddit) — NO provider feeds a breakdown into the normalized ReportRow path (hence none are
+ * READY). Levels and the native ad_group term are the audited truth.
+ */
+const REPORTING: Record<string, ReportingCapability> = {
+  meta: { levels: FULL_LEVELS, adGroupTerm: { en: 'Ad set', ar: 'مجموعة إعلانية' }, dimensions: { placement: 'RAW_ONLY', device: 'RAW_ONLY', geography: 'RAW_ONLY', age: 'RAW_ONLY', gender: 'RAW_ONLY' } },
+  google: { levels: FULL_LEVELS, adGroupTerm: { en: 'Ad group', ar: 'مجموعة إعلانية' }, dimensions: { keyword: 'NOT_SUPPORTED', search_term: 'NOT_SUPPORTED', network: 'NOT_SUPPORTED', device: 'NOT_SUPPORTED' } },
+  tiktok: { levels: FULL_LEVELS, adGroupTerm: { en: 'Ad group', ar: 'مجموعة إعلانية' }, dimensions: { placement: 'RAW_ONLY', device: 'RAW_ONLY', age: 'RAW_ONLY', gender: 'RAW_ONLY' } },
+  pinterest: { levels: FULL_LEVELS, adGroupTerm: { en: 'Ad group', ar: 'مجموعة إعلانية' }, dimensions: {} },
+  spotify: { levels: FULL_LEVELS, adGroupTerm: { en: 'Ad set', ar: 'مجموعة إعلانية' }, dimensions: {} },
+  x: { levels: FULL_LEVELS, adGroupTerm: { en: 'Line item', ar: 'بند' }, dimensions: {} },
+  reddit: { levels: PARTIAL_DEEP, adGroupTerm: { en: 'Ad group', ar: 'مجموعة إعلانية' }, dimensions: { placement: 'RAW_ONLY', geography: 'RAW_ONLY', device: 'RAW_ONLY' } },
+  snapchat: { levels: PARTIAL_DEEP, adGroupTerm: { en: 'Ad squad', ar: 'سرب إعلاني' }, dimensions: {} },
+  linkedin: { levels: { account: 'READY', campaign: 'READY', ad_group: 'NOT_SUPPORTED', ad: 'READY' }, adGroupTerm: { en: 'Ad group', ar: 'مجموعة إعلانية' }, dimensions: {} },
+  microsoft: { levels: CAMPAIGN_ONLY_NI, adGroupTerm: { en: 'Ad group', ar: 'مجموعة إعلانية' }, dimensions: {} },
+  apple: { levels: CAMPAIGN_ONLY_NI, adGroupTerm: { en: 'Ad group', ar: 'مجموعة إعلانية' }, dimensions: {} },
+};
+
 /** The 11 live ad-platform adapters. Facts grounded in the provider-package + OAuth-broker audit. */
 export const AD_PROVIDERS: ProviderRegistryEntry[] = [
   ad('google', 'Google Ads', 'oauth2_pkce', { refresh: true, revokeProviderSide: true, permissionDiscovery: 'partial', serverDryRun: true, notes: 'OAuth2 + PKCE, server-side refresh; validate_only server dry-run; manager (login-customer-id) aware.' }),
@@ -92,6 +143,8 @@ export const AD_PROVIDERS: ProviderRegistryEntry[] = [
   ad('linkedin', 'LinkedIn Ads', 'oauth2', { refresh: true, revokeProviderSide: false, permissionDiscovery: 'none', manualRevokeNote: MANUAL, notes: 'Refresh-token expiry tracked; non-political/non-discrimination consent enforced.' }),
   ad('x', 'X Ads', 'oauth1', { refresh: false, revokeProviderSide: true, permissionDiscovery: 'none', notes: 'OAuth 1.0a (HMAC-SHA1 three-legged). Tokens persist until revoked.' }),
 ];
+// Attach the audited reporting capability to each ad provider (single source of truth for gating).
+for (const entry of AD_PROVIDERS) entry.reporting = REPORTING[entry.id];
 
 /**
  * Commerce connectors. Adapters + sync engine + webhook verifier + schema are built and unit-tested, but
@@ -150,4 +203,25 @@ export function connectionRegistry(id: string): ProviderRegistryEntry | undefine
 
 export function allRegistryEntries(): ProviderRegistryEntry[] {
   return [...AD_PROVIDERS, ...COMMERCE_PROVIDERS, ...PLATFORM_SERVICES];
+}
+
+/** Level support for a provider (unknown provider or no reporting capability → NOT_SUPPORTED). */
+export function reportingLevelSupport(providerId: string, level: HierarchyLevel): LevelSupport {
+  return connectionRegistry(providerId)?.reporting?.levels[level] ?? 'NOT_SUPPORTED';
+}
+
+/** Breakdown-dimension support for a provider (absent → NOT_SUPPORTED). */
+export function reportingDimensionSupport(providerId: string, dimension: BreakdownDimension): DimensionSupport {
+  return connectionRegistry(providerId)?.reporting?.dimensions[dimension] ?? 'NOT_SUPPORTED';
+}
+
+/** The provider-native label for the ad_group level (defaults to the canonical "Ad group"). */
+export function adGroupTerm(providerId: string): { en: string; ar: string } {
+  return connectionRegistry(providerId)?.reporting?.adGroupTerm ?? { en: 'Ad group', ar: 'مجموعة إعلانية' };
+}
+
+/** Dimensions a provider can surface in SOME form (READY or RAW_ONLY) — used to gate the Explorer. */
+export function reachableBreakdownDimensions(providerId: string): BreakdownDimension[] {
+  const dims = connectionRegistry(providerId)?.reporting?.dimensions ?? {};
+  return BREAKDOWN_DIMENSIONS.filter((d) => dims[d] === 'READY' || dims[d] === 'RAW_ONLY');
 }

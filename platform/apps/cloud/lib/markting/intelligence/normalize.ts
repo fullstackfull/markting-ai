@@ -59,6 +59,8 @@ export function normalizeReportRow(row: ReportRow, ctx: NormalizeContext): Metri
       status: row.entity.status,
       sourceProvider: row.provider,
       accountId: row.accountId,
+      parentRawId: row.entity.parentId,
+      entityType: row.entity.entityType,
     },
     dateRange: ctx.dateRange,
     timezone: ctx.timezone,

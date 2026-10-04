@@ -19,7 +19,7 @@ import { analyzeCreatives, type CreativePerf } from './creative';
 import { evaluateEvidence, MIN_SAMPLE_FOR_CONFIDENCE, type DataTier } from '../data-trust';
 import type { BusinessContext } from '../business-context';
 import type { EngineContext } from '../engine-context';
-import type { MetricObservation } from './model';
+import type { EntityLevel, MetricObservation } from './model';
 import type { DatasetLabel } from './context';
 import type { BiText, Diagnosis, EvidenceRef, Recommendation } from './decision-model';
 
@@ -31,6 +31,13 @@ export interface AnalyzeInput {
   previousAccount: MetricObservation[];
   currentCampaigns: MetricObservation[];
   previousCampaigns: MetricObservation[];
+  /** Lower-hierarchy observations (B2). Each child's `entity.parentRawId` links it to its parent
+   *  (ad_group → campaign rawId, ad → ad_group rawId). Optional: absent when a provider/level is not
+   *  read or not supported — the engine simply produces no child nodes, never fabricated ones. */
+  currentAdGroups?: MetricObservation[];
+  previousAdGroups?: MetricObservation[];
+  currentAds?: MetricObservation[];
+  previousAds?: MetricObservation[];
   business: BusinessContext;
   pacing?: { plannedBudget: number; daysElapsed: number; daysInPeriod: number };
   options?: DiagnoseOptions;
@@ -49,6 +56,14 @@ export interface CampaignIntelligence {
   diagnoses: Diagnosis[];
   recommendations: Recommendation[];
   spendShare: number;
+  /** Canonical level of this node (campaign | ad_group | ad). Omitted for back-compat = campaign. */
+  level?: EntityLevel;
+  /** Provider-native entity type preserved ("adset"/"ad_group"/"line_item"), for native labelling. */
+  entityType?: string;
+  /** Lower-hierarchy children (ad_groups under a campaign; ads under an ad_group), when present. */
+  children?: CampaignIntelligence[];
+  /** Which direct children explain most of this node's spend movement (contribution decomposition). */
+  childContribution?: Contributor[];
 }
 
 export interface AccountIntelligence {
@@ -125,10 +140,10 @@ export function analyzeAccount(input: AnalyzeInput): AccountIntelligence {
     ? analyzeCreatives(input.creatives, { now }).fatigue.some((f) => f.verdict === 'FATIGUE_SIGNAL')
     : undefined;
 
-  // Per-campaign intelligence.
-  const prevByCampaign = new Map(input.previousCampaigns.map((o) => [o.entity.id, o]));
-  const campaigns: CampaignIntelligence[] = input.currentCampaigns.map((cur) => {
-    const prev = prevByCampaign.get(cur.entity.id);
+  // Per-entity intelligence builder — reused verbatim at campaign, ad_group and ad level (the engine
+  // is level-generic; only the scope entityLevel differs). `sharePctById` is the sibling-set spend
+  // contribution share for display at that level.
+  const buildNode = (cur: MetricObservation, prev: MetricObservation | undefined, sharePctById: Map<string, number>): CampaignIntelligence => {
     const scope = { organizationId: org, accountId: cur.accountId, entityId: cur.entity.id, entityLevel: cur.entity.level, name: cur.entity.name };
     const { diagnoses } = diagnoseEntity({ scope, current: [cur], previous: prev ? [prev] : [], period: input.period, options: input.options });
     const anom = anomalyDiagnosis(scope, series[cur.entity.id], aggregate([cur]).worstTier as DataTier);
@@ -161,7 +176,49 @@ export function analyzeAccount(input: AnalyzeInput): AccountIntelligence {
       diagnoses, facts: { spend, conversions, accountSpendShare: totalSpend > 0 ? spend / totalSpend : 0 },
       scaling, downscale, now, idFactory: input.idFactory,
     });
-    return { entityId: cur.entity.id, name: cur.entity.name, diagnoses, recommendations, spendShare: Math.round((shareById.get(cur.entity.id) ?? 0) * 10) / 10 };
+    return {
+      entityId: cur.entity.id, name: cur.entity.name, diagnoses, recommendations,
+      spendShare: Math.round((sharePctById.get(cur.entity.id) ?? 0) * 10) / 10,
+      level: cur.entity.level, entityType: cur.entity.entityType,
+    };
+  };
+
+  // Build the child nodes of one parent from a pool, grouped by provider-native parent linkage.
+  // Returns the nodes (each still missing its own children) alongside the observations so the next
+  // level down can be attached, plus the spend-contribution of these children within the parent.
+  const childrenOf = (parentRawId: string, curPool: MetricObservation[], prevPool: MetricObservation[]) => {
+    const cur = curPool.filter((o) => o.entity.parentRawId === parentRawId);
+    if (!cur.length) return { entries: [] as Array<{ obs: MetricObservation; node: CampaignIntelligence }>, contribution: [] as Contributor[] };
+    const prev = prevPool.filter((o) => o.entity.parentRawId === parentRawId);
+    const prevMap = new Map(prev.map((o) => [o.entity.id, o]));
+    const contribution = campaignContribution(cur, prev, 'spend').contributors;
+    const shareById = new Map(contribution.map((c) => [c.entityId, c.sharePct]));
+    const entries = cur.map((obs) => ({ obs, node: buildNode(obs, prevMap.get(obs.entity.id), shareById) }));
+    return { entries, contribution };
+  };
+
+  const adGroupsCur = input.currentAdGroups ?? [];
+  const adGroupsPrev = input.previousAdGroups ?? [];
+  const adsCur = input.currentAds ?? [];
+  const adsPrev = input.previousAds ?? [];
+
+  // Per-campaign intelligence, descending campaign → ad_group → ad where child observations exist.
+  const prevByCampaign = new Map(input.previousCampaigns.map((o) => [o.entity.id, o]));
+  const campaigns: CampaignIntelligence[] = input.currentCampaigns.map((cur) => {
+    const node = buildNode(cur, prevByCampaign.get(cur.entity.id), shareById);
+    const groups = childrenOf(cur.entity.rawId, adGroupsCur, adGroupsPrev);
+    if (groups.entries.length) {
+      node.children = groups.entries.map(({ obs: groupObs, node: groupNode }) => {
+        const ads = childrenOf(groupObs.entity.rawId, adsCur, adsPrev);
+        if (ads.entries.length) {
+          groupNode.children = ads.entries.map((a) => a.node);
+          groupNode.childContribution = ads.contribution;
+        }
+        return groupNode;
+      });
+      node.childContribution = groups.contribution;
+    }
+    return node;
   });
 
   // Account-level recommendations (from account diagnoses — e.g. account overspend/tracking).
