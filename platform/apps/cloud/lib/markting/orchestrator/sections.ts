@@ -345,24 +345,28 @@ export function buildDataQuality(acc: SeedAccount): DataQualitySection {
 }
 
 // ---------- Portfolio (agency) ----------
-export interface PortfolioRow { clientId: string; clientName: string; accountId: string; currency: string; attentionScore: number; reasons: BiText[]; }
+/** B25 — one deterministic signal that contributes to the attention score, with its point weight. */
+export interface AttentionFactor { label: BiText; contribution: number; }
+export interface PortfolioRow { clientId: string; clientName: string; accountId: string; currency: string; attentionScore: number; reasons: BiText[]; factors: AttentionFactor[]; }
 export interface PortfolioSection { kind: 'portfolio'; summary: BiText; rows: PortfolioRow[]; note: BiText; }
 export function buildPortfolio(portfolio: SeedClient[] = SEED_PORTFOLIO): PortfolioSection {
   const rows: PortfolioRow[] = portfolio.map((cl) => {
     const acc = cl.account;
-    const reasons: BiText[] = [];
-    let score = 0;
+    // Each factor is a deterministic signal (data-quality, KPI deterioration, creative fatigue, revenue
+    // variance, pending outcome) with an explicit point contribution — the score is their sum, so the
+    // ranking is explained, never an opaque AI number (B25).
+    const factors: AttentionFactor[] = [];
     const dq = buildDataQuality(acc);
-    if (dq.issues.some((i) => i.code === 'STALE_SYNC')) { score += 30; reasons.push({ en: 'Stale data sync', ar: 'مزامنة بيانات قديمة' }); }
+    if (dq.issues.some((i) => i.code === 'STALE_SYNC')) factors.push({ label: { en: 'Stale data sync', ar: 'مزامنة بيانات قديمة' }, contribution: 30 });
     const cpaTrend = acc.campaigns.length ? classifyTrend(dailyCpa(acc.campaigns[0]!)) : null;
-    if (cpaTrend && cpaTrend.direction === 'up' && cpaTrend.state !== 'NOISE') { score += 40; reasons.push({ en: 'CPA deteriorating on the largest campaign', ar: 'تدهور CPA في أكبر حملة' }); }
-    if (acc.campaigns.some((c) => c.dominantCreativeFatigue === 'FATIGUE_SIGNAL' || c.dominantCreativeFatigue === 'STRONG_FATIGUE_SIGNAL')) { score += 20; reasons.push({ en: 'Creative fatigue signal', ar: 'إشارة إجهاد إبداعي' }); }
+    if (cpaTrend && cpaTrend.direction === 'up' && cpaTrend.state !== 'NOISE') factors.push({ label: { en: 'CPA deteriorating on the largest campaign', ar: 'تدهور CPA في أكبر حملة' }, contribution: 40 });
+    if (acc.campaigns.some((c) => c.dominantCreativeFatigue === 'FATIGUE_SIGNAL' || c.dominantCreativeFatigue === 'STRONG_FATIGUE_SIGNAL')) factors.push({ label: { en: 'Creative fatigue signal', ar: 'إشارة إجهاد إبداعي' }, contribution: 20 });
     const commerce = buildCommerce(acc);
-    if (commerce.available && (commerce.reconciliation?.state === 'MATERIAL_VARIANCE')) { score += 25; reasons.push({ en: 'Platform-vs-merchant variance', ar: 'تباين المنصّة مقابل المتجر' }); }
-    const pendingOutcome = acc.outcomes.some((o) => o.outcomeClass === 'OUTCOME_PENDING');
-    if (pendingOutcome) { score += 10; reasons.push({ en: 'Recommendation outcome pending', ar: 'نتيجة توصية معلّقة' }); }
-    return { clientId: cl.id, clientName: cl.name, accountId: acc.accountId, currency: cl.reportingCurrency, attentionScore: score, reasons };
-  }).sort((a, b) => b.attentionScore - a.attentionScore);
+    if (commerce.available && (commerce.reconciliation?.state === 'MATERIAL_VARIANCE')) factors.push({ label: { en: 'Platform-vs-merchant variance', ar: 'تباين المنصّة مقابل المتجر' }, contribution: 25 });
+    if (acc.outcomes.some((o) => o.outcomeClass === 'OUTCOME_PENDING')) factors.push({ label: { en: 'Recommendation outcome pending', ar: 'نتيجة توصية معلّقة' }, contribution: 10 });
+    const score = factors.reduce((a, f) => a + f.contribution, 0);
+    return { clientId: cl.id, clientName: cl.name, accountId: acc.accountId, currency: cl.reportingCurrency, attentionScore: score, reasons: factors.map((f) => f.label), factors };
+  }).sort((a, b) => b.attentionScore - a.attentionScore || a.accountId.localeCompare(b.accountId));
   return { kind: 'portfolio', rows, summary: { en: `${rows.length} clients ranked by deterministic attention score. "${rows[0]?.clientName}" needs attention first.`, ar: `${rows.length} عملاء مرتبون بدرجة انتباه حتمية. "${rows[0]?.clientName}" يحتاج الانتباه أولًا.` }, note: { en: 'Currencies are never blended into one fake total; each client keeps its own currency.', ar: 'لا تُدمج العملات في إجمالي واحد زائف؛ يحتفظ كل عميل بعملته.' } };
 }
 

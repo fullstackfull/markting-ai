@@ -308,6 +308,13 @@ function primaryAccount(): SeedAccount {
       { dimension: 'geography', value: 'Dammam', spend: 800000, conversions: 100, conversion_value: 1200000, currency: 'SAR' },
       { dimension: 'audience_segment', value: 'Gift shoppers', spend: 2000000, conversions: 420, conversion_value: 7400000, currency: 'SAR' },
       { dimension: 'audience_segment', value: 'Lookalike 2%', spend: 1600000, conversions: 220, conversion_value: 2600000, currency: 'SAR' },
+      // Protected characteristics (age/gender): seeded so the Breakdown Explorer can demonstrate the
+      // guard — the distribution is reported for transparency but NEVER turned into a targeting cut.
+      { dimension: 'age', value: '18-24', spend: 800000, conversions: 120, conversion_value: 1300000, currency: 'SAR' },
+      { dimension: 'age', value: '25-34', spend: 1700000, conversions: 340, conversion_value: 6000000, currency: 'SAR' },
+      { dimension: 'age', value: '35-44', spend: 1100000, conversions: 180, conversion_value: 2700000, currency: 'SAR' },
+      { dimension: 'gender', value: 'Female', spend: 2200000, conversions: 430, conversion_value: 7600000, currency: 'SAR' },
+      { dimension: 'gender', value: 'Male', spend: 1400000, conversions: 210, conversion_value: 2400000, currency: 'SAR' },
     ],
     channels: [
       { provider: 'meta', currency: 'SAR', spend: 2600000, conversions: 520, conversion_value: 9200000, roas: 3.5, cpa: 5000, attributionBasis: '7d-click', conversionDefinition: 'omni_purchase' },

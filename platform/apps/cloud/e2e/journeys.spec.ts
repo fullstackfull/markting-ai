@@ -140,6 +140,25 @@ test.describe('authenticated media-buyer journeys', () => {
     await expect(page.locator('main:not([aria-busy="true"])')).toBeVisible();
   });
 
+  test('E2E-16 Breakdown Explorer: supported dimension shows rows; unsupported shows honest unavailable (Phase B B11)', async ({ page }) => {
+    // Open the explorer at a supported (reachable) dimension — placement is RAW_ONLY for the demo
+    // provider, so the synthetic rows render through the real engine with findings.
+    await page.goto(`/dashboard/accounts/${ACC}/breakdowns?dim=placement`);
+    await expect(page.locator('main:not([aria-busy="true"])')).toBeVisible();
+    // The dimension selector is present (same URL-param pattern as the range control).
+    await expect(page.locator('.range-control .range-chip').first()).toBeVisible();
+    // Synthetic honesty disclosure + at least one dimension-value row.
+    await expect(page.getByText(/Synthetic|اصطناعية|SYNTHETIC/i).first()).toBeVisible();
+    await expect(page.getByText(/Feed|Stories|Reels/).first()).toBeVisible();
+    // A protected dimension is reported but non-actionable — the guard note is shown, no exclusion.
+    await page.goto(`/dashboard/accounts/${ACC}/breakdowns?dim=age`);
+    await expect(page.getByText(/never used as a targeting exclusion|لا تُستخدم أبدًا كاستبعاد/i).first()).toBeVisible();
+    // An unsupported dimension (keyword is NOT_SUPPORTED for the demo provider) is shown as unavailable,
+    // never as empty/fabricated data.
+    await page.goto(`/dashboard/accounts/${ACC}/breakdowns?dim=keyword`);
+    await expect(page.getByText(/Not reported by this provider|لا يوفّره هذا المزوّد/i).first()).toBeVisible();
+  });
+
   test('E2E-13 Workspace has a date-range control + freshness/window disclosure (Phase A)', async ({ page }) => {
     await page.goto('/dashboard/workspace');
     await expect(page.locator('main:not([aria-busy="true"])')).toBeVisible();

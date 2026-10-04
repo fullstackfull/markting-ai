@@ -151,6 +151,31 @@ export async function loadCreativeDetail(_tenant: DashboardTenant, creativeId: s
   return buildCreativeDetail(seedClientForAccount(accountId).account, creativeId);
 }
 
+/**
+ * PHASE B (B11) — the Breakdown Explorer view for an account. Capability-gated by the connection
+ * registry (via buildBreakdownExplorerView): a dimension is shown ONLY when reachable for the account's
+ * provider, and even then at best RAW_ONLY (no provider feeds breakdowns into the normalized path).
+ * DEMO reads the CLEARLY SYNTHETIC seed breakdown rows; a live deployment is honestly NOT_CONNECTED
+ * (never demo content), because no live breakdown flows into the canonical rows path.
+ */
+export async function loadBreakdownExplorer(_tenant: DashboardTenant, accountId: string, requested?: string | null) {
+  const { buildBreakdownExplorerView } = await import('./breakdown-explorer');
+  if (!isDemoMode()) {
+    // Live: breakdowns are never in the normalized ReportRow path for ANY provider, so the surface is
+    // honestly NOT_CONNECTED and never shows demo content (no provider id is asserted on the tenant here).
+    return buildBreakdownExplorerView({ providerId: '', connected: false, requested, rawRowsFor: () => [] });
+  }
+  const { seedClientForAccount } = await import('@/lib/markting/orchestrator/seed');
+  const acc = seedClientForAccount(accountId).account;
+  const providerId = acc.nativeAdProvider ?? acc.provider;
+  return buildBreakdownExplorerView({
+    providerId,
+    connected: true,
+    requested,
+    rawRowsFor: (dimension) => acc.breakdowns.filter((b) => b.dimension === dimension).map((b) => ({ ...b, dimension })),
+  });
+}
+
 export async function askAssistant(tenant: DashboardTenant, question: string, extra: Partial<IntelligenceRequestContext> = {}): Promise<AssistantAnswer & { intent: IntelligenceIntent }> {
   return guardAnswerPosture(await serviceForMode(principalFromTenant(tenant)).ask(contextForTenant(tenant, extra), question));
 }

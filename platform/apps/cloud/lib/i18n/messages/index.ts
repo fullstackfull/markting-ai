@@ -10,6 +10,7 @@ import { assistant } from './assistant';
 import { audit } from './audit';
 import { auth } from './auth';
 import { billing } from './billing';
+import { breakdowns } from './breakdowns';
 import { common } from './common';
 import { connections } from './connections';
 import { findings } from './findings';
@@ -22,7 +23,7 @@ import { reports } from './reports';
 import { support } from './support';
 import { team } from './team';
 
-const areas = { accounts, adgroups, agents, approvals, assistant, audit, auth, billing, common, connections, findings, misc, nav, onboarding, overview, policies, reports, support, team };
+const areas = { accounts, adgroups, agents, approvals, assistant, audit, auth, billing, breakdowns, common, connections, findings, misc, nav, onboarding, overview, policies, reports, support, team };
 
 type Areas = typeof areas;
 export type Messages = { [K in keyof Areas]: Areas[K]['en'] };

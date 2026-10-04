@@ -35,7 +35,10 @@ test('A11Y-00 @public landing has no critical/serious axe violations', async ({ 
 // The Phase-B ad-set/ad-group drill-down route uses concrete seeded ids (sandbox:acc:ramadan → the
 // Awareness campaign → the "Lanterns – Broad reach" ad set), so axe scans a fully-rendered drill surface.
 const GROUP_ROUTE = '/dashboard/accounts/sandbox:acc:ramadan/campaigns/sandbox:acc:ramadan:camp:awareness/groups/sandbox:acc:ramadan:camp:awareness:ag:lanterns';
-const DASHBOARD = ['/dashboard/workspace', '/dashboard/commerce', '/dashboard/creative', '/dashboard/agency', '/dashboard/executive', '/dashboard/assistant', '/dashboard/recommendations', '/dashboard/data-quality', '/dashboard/governance', GROUP_ROUTE];
+// B11 — the Breakdown Explorer with a supported (reachable) dimension selected, so axe scans the rows
+// table + findings, not just the gate.
+const BREAKDOWN_ROUTE = '/dashboard/accounts/sandbox:acc:ramadan/breakdowns?dim=placement';
+const DASHBOARD = ['/dashboard/workspace', '/dashboard/commerce', '/dashboard/creative', '/dashboard/agency', '/dashboard/executive', '/dashboard/assistant', '/dashboard/recommendations', '/dashboard/data-quality', '/dashboard/governance', GROUP_ROUTE, BREAKDOWN_ROUTE];
 
 for (const route of DASHBOARD) {
   test(`A11Y ${route} (en) has no critical/serious axe violations`, async ({ page }) => {

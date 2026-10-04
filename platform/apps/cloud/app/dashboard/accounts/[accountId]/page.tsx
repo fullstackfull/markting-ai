@@ -1,3 +1,4 @@
+import Link from 'next/link';
 import { PageHeader, formatMoneyMinor } from '@/components/ui';
 import { SectionView, IntelMeta } from '@/components/intel';
 import { EntityLink } from '@/components/kit';
@@ -100,7 +101,7 @@ export default async function AccountPage({ params, searchParams }: { params: Pr
       {card('Forecast', 'التوقّع', forecast)}
       <section className="card" style={{ marginBottom: 12 }}><div className="card-head"><h2>{L('Creatives', 'الإعلانات')}</h2></div><div className="table-wrap">{creative.section && <SectionView section={creative.section} locale={locale} />}</div></section>
       {card('Commerce & profit', 'التجارة والربح', commerce)}
-      <section className="card" style={{ marginBottom: 12 }}><div className="card-head"><h2>{L('Breakdowns', 'التصنيفات')}</h2></div>{breakdown.section && <SectionView section={breakdown.section} locale={locale} />}</section>
+      <section className="card" style={{ marginBottom: 12 }}><div className="card-head"><h2>{L('Breakdowns', 'التصنيفات')}</h2><Link href={`/dashboard/accounts/${encodeURIComponent(accountId)}/breakdowns?range=${encodeURIComponent(typeof sp.range === 'string' ? sp.range : 'last_30_days')}`} prefetch={false} className="card-note">{L('Open Breakdown Explorer →', 'افتح مستكشف التصنيفات ←')}</Link></div>{breakdown.section && <SectionView section={breakdown.section} locale={locale} />}</section>
       {card('Cross-channel', 'عبر القنوات', crossChannel)}
       <section className="card" style={{ marginBottom: 12 }}><div className="card-head"><h2>{L('Business context & memory', 'سياق العمل والذاكرة')}</h2></div><div className="table-wrap">{memory.section && <SectionView section={memory.section} locale={locale} />}</div></section>
       <section className="card"><div className="card-head"><h2>{L('Recent decisions & outcomes', 'القرارات والنتائج الأخيرة')}</h2></div><div className="table-wrap">{outcomes.section && <SectionView section={outcomes.section} locale={locale} />}</div></section>
