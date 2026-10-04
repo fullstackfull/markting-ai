@@ -54,6 +54,18 @@ export interface HealthSignals {
   webhookLastEventAgeMs?: number;
   /** AI gateway error rate (0..1). */
   aiGatewayErrorRate?: number;
+
+  // ---- Phase C.6 (24) — deeper probe signals (all optional; absent = not considered) ----
+  /** Age of the OLDEST still-pending queue job (head-of-line latency, not just depth). */
+  queueOldestJobAgeMs?: number;
+  /** Age of the most recent worker liveness heartbeat (distinct from job-processing tick). */
+  workerHeartbeatAgeMs?: number;
+  /** Count of provider connections currently flagged as needing reauthorization. */
+  providerReauthRequiredCount?: number;
+  /** Rate of webhook deliveries failing signature verification (0..1). */
+  webhookSignatureFailureRate?: number;
+  /** AI gateway circuit-breaker state. */
+  aiGatewayBreakerState?: 'closed' | 'half_open' | 'open';
 }
 
 export interface HealthThresholds {
@@ -67,6 +79,15 @@ export interface HealthThresholds {
   webhookAgeUnavailableMs: number;
   aiGatewayErrorDegraded: number;
   aiGatewayErrorUnavailable: number;
+  // ---- Phase C.6 (24) ----
+  queueOldestJobDegradedMs: number;
+  queueOldestJobUnavailableMs: number;
+  workerHeartbeatDegradedMs: number;
+  workerHeartbeatUnavailableMs: number;
+  providerReauthDegradedCount: number;
+  providerReauthUnavailableCount: number;
+  webhookSigFailureDegraded: number;
+  webhookSigFailureUnavailable: number;
 }
 
 export const DEFAULT_HEALTH_THRESHOLDS: HealthThresholds = {
@@ -80,6 +101,14 @@ export const DEFAULT_HEALTH_THRESHOLDS: HealthThresholds = {
   webhookAgeUnavailableMs: 24 * 60 * 60_000,
   aiGatewayErrorDegraded: 0.1,
   aiGatewayErrorUnavailable: 0.5,
+  queueOldestJobDegradedMs: 5 * 60_000,
+  queueOldestJobUnavailableMs: 30 * 60_000,
+  workerHeartbeatDegradedMs: 60_000,
+  workerHeartbeatUnavailableMs: 5 * 60_000,
+  providerReauthDegradedCount: 1,
+  providerReauthUnavailableCount: 5,
+  webhookSigFailureDegraded: 0.05,
+  webhookSigFailureUnavailable: 0.3,
 };
 
 /** A rate signal: UNKNOWN if absent, else banded against two thresholds. */
@@ -91,6 +120,43 @@ function byErrorRate(rate: number | undefined, degraded: number, unavailable: nu
 }
 
 const SEVERITY: Record<HealthState, number> = { HEALTHY: 0, UNKNOWN: 1, DEGRADED: 2, UNAVAILABLE: 3 };
+
+/**
+ * An ascending-threshold band (bigger is worse): UNKNOWN if the value is absent, else HEALTHY /
+ * DEGRADED / UNAVAILABLE. Returns `null` when absent so it can be combined with other sub-signals
+ * (vs. a standalone UNKNOWN).
+ */
+function byAscending(
+  value: number | undefined,
+  degraded: number,
+  unavailable: number,
+  degradedReason: string,
+  unavailableReason: string,
+): ComponentHealth | null {
+  if (value == null || !Number.isFinite(value)) return null;
+  if (value >= unavailable) return { state: 'UNAVAILABLE', reason: unavailableReason };
+  if (value >= degraded) return { state: 'DEGRADED', reason: degradedReason };
+  return { state: 'HEALTHY', reason: 'ok' };
+}
+
+/** Error-rate band that yields `null` when absent (combinable variant of `byErrorRate`). */
+function byErrorRateOpt(rate: number | undefined, degraded: number, unavailable: number, label: string): ComponentHealth | null {
+  if (rate == null || !Number.isFinite(rate)) return null;
+  return byErrorRate(rate, degraded, unavailable, label);
+}
+
+/**
+ * Combine several sub-verdicts into one component verdict: the WORST present sub-verdict wins. When
+ * EVERY sub-verdict is absent the component is UNKNOWN/no_signal (FAIL HONEST — never fabricated HEALTHY).
+ */
+function worstOf(...verdicts: Array<ComponentHealth | null>): ComponentHealth {
+  let best: ComponentHealth | null = null;
+  for (const v of verdicts) {
+    if (!v) continue;
+    if (!best || SEVERITY[v.state] > SEVERITY[best.state]) best = v;
+  }
+  return best ?? { state: 'UNKNOWN', reason: 'no_signal' };
+}
 
 /**
  * Compute every component's health purely from the given signals + thresholds. Absent signals are
@@ -114,33 +180,43 @@ export function computeHealth(
       ? { state: 'HEALTHY', reason: 'ok' }
       : { state: 'UNAVAILABLE', reason: 'db_unreachable' };
 
-  const queue: ComponentHealth = signals.queueDepth == null || !Number.isFinite(signals.queueDepth)
-    ? { state: 'UNKNOWN', reason: 'no_signal' }
-    : signals.queueDepth >= t.queueDepthUnavailable
-      ? { state: 'UNAVAILABLE', reason: 'queue_backlog_critical' }
-      : signals.queueDepth >= t.queueDepthDegraded
-        ? { state: 'DEGRADED', reason: 'queue_backlog_high' }
+  // QUEUE: worst of backlog depth and oldest-job (head-of-line) age.
+  const queue = worstOf(
+    byAscending(signals.queueDepth, t.queueDepthDegraded, t.queueDepthUnavailable, 'queue_backlog_high', 'queue_backlog_critical'),
+    byAscending(signals.queueOldestJobAgeMs, t.queueOldestJobDegradedMs, t.queueOldestJobUnavailableMs, 'queue_oldest_job_stale', 'queue_oldest_job_stale_critical'),
+  );
+
+  // WORKER: worst of job-processing tick age and liveness-heartbeat staleness.
+  const worker = worstOf(
+    byAscending(signals.workerLastTickAgeMs, t.workerTickDegradedMs, t.workerTickUnavailableMs, 'worker_tick_lagging', 'worker_tick_stalled'),
+    byAscending(signals.workerHeartbeatAgeMs, t.workerHeartbeatDegradedMs, t.workerHeartbeatUnavailableMs, 'worker_heartbeat_stale', 'worker_heartbeat_stalled'),
+  );
+
+  // PROVIDER_AGGREGATE: worst of call error rate and reauth-required backlog.
+  const providerAggregate = worstOf(
+    byErrorRateOpt(signals.providerErrorRate, t.providerErrorDegraded, t.providerErrorUnavailable, 'provider'),
+    byAscending(signals.providerReauthRequiredCount, t.providerReauthDegradedCount, t.providerReauthUnavailableCount, 'provider_reauth_required', 'provider_reauth_required_critical'),
+  );
+
+  // WEBHOOK: worst of silence (no recent verified event) and signature-failure rate.
+  const webhookSilence = byAscending(signals.webhookLastEventAgeMs, t.webhookAgeDegradedMs, t.webhookAgeUnavailableMs, 'webhook_silent', 'webhook_silent_critical');
+  const webhook = worstOf(
+    webhookSilence,
+    byErrorRateOpt(signals.webhookSignatureFailureRate, t.webhookSigFailureDegraded, t.webhookSigFailureUnavailable, 'webhook_signature_failure'),
+  );
+
+  // AI_GATEWAY: worst of error rate and circuit-breaker state.
+  const breaker: ComponentHealth | null = signals.aiGatewayBreakerState == null
+    ? null
+    : signals.aiGatewayBreakerState === 'open'
+      ? { state: 'UNAVAILABLE', reason: 'ai_gateway_breaker_open' }
+      : signals.aiGatewayBreakerState === 'half_open'
+        ? { state: 'DEGRADED', reason: 'ai_gateway_breaker_half_open' }
         : { state: 'HEALTHY', reason: 'ok' };
-
-  const worker: ComponentHealth = signals.workerLastTickAgeMs == null || !Number.isFinite(signals.workerLastTickAgeMs)
-    ? { state: 'UNKNOWN', reason: 'no_signal' }
-    : signals.workerLastTickAgeMs >= t.workerTickUnavailableMs
-      ? { state: 'UNAVAILABLE', reason: 'worker_tick_stalled' }
-      : signals.workerLastTickAgeMs >= t.workerTickDegradedMs
-        ? { state: 'DEGRADED', reason: 'worker_tick_lagging' }
-        : { state: 'HEALTHY', reason: 'ok' };
-
-  const providerAggregate = byErrorRate(signals.providerErrorRate, t.providerErrorDegraded, t.providerErrorUnavailable, 'provider');
-
-  const webhook: ComponentHealth = signals.webhookLastEventAgeMs == null || !Number.isFinite(signals.webhookLastEventAgeMs)
-    ? { state: 'UNKNOWN', reason: 'no_signal' }
-    : signals.webhookLastEventAgeMs >= t.webhookAgeUnavailableMs
-      ? { state: 'UNAVAILABLE', reason: 'webhook_silent_critical' }
-      : signals.webhookLastEventAgeMs >= t.webhookAgeDegradedMs
-        ? { state: 'DEGRADED', reason: 'webhook_silent' }
-        : { state: 'HEALTHY', reason: 'ok' };
-
-  const aiGateway = byErrorRate(signals.aiGatewayErrorRate, t.aiGatewayErrorDegraded, t.aiGatewayErrorUnavailable, 'ai_gateway');
+  const aiGateway = worstOf(
+    byErrorRateOpt(signals.aiGatewayErrorRate, t.aiGatewayErrorDegraded, t.aiGatewayErrorUnavailable, 'ai_gateway'),
+    breaker,
+  );
 
   const components: Record<HealthComponent, ComponentHealth> = {
     APPLICATION: application,

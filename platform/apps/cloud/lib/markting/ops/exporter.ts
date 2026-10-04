@@ -72,6 +72,48 @@ function promLabelValue(value: string): string {
   return value.replace(/\\/g, '\\\\').replace(/"/g, '\\"').replace(/\n/g, '\\n');
 }
 
+/** A pre-aggregated histogram snapshot (cumulative buckets). Rendered, never computed, here. */
+export interface HistogramSnapshot {
+  name: string;
+  /** Upper bounds with their cumulative counts; `Infinity` is the implicit +Inf bucket. */
+  buckets: Array<{ le: number; count: number }>;
+  sum: number;
+  count: number;
+  organizationId?: string;
+  labels?: Record<string, string>;
+  at?: string;
+}
+
+function promLabelPairs(organizationId: string | undefined, labels: Record<string, string> | undefined): Array<[string, string]> {
+  const out: Array<[string, string]> = [];
+  if (organizationId) out.push(['organization_id', organizationId]);
+  for (const [k, v] of Object.entries(labels ?? {})) out.push([promLabelName(k), v]);
+  return out;
+}
+
+function promLabelSet(pairs: Array<[string, string]>): string {
+  return pairs.length ? `{${pairs.map(([k, v]) => `${promLabelName(k)}="${promLabelValue(v)}"`).join(',')}}` : '';
+}
+
+/** Render one histogram deterministically (buckets sorted ascending, +Inf last) in Prometheus text form. */
+export function renderPrometheusHistogram(snap: HistogramSnapshot): string[] {
+  const metric = promMetricName(snap.name);
+  const base = promLabelPairs(snap.organizationId, snap.labels);
+  const ts = snap.at ? Date.parse(snap.at) : NaN;
+  const suffix = Number.isFinite(ts) ? ` ${ts}` : '';
+  const buckets = [...snap.buckets].sort((a, b) => a.le - b.le);
+  const hasInf = buckets.some((b) => !Number.isFinite(b.le));
+  if (!hasInf) buckets.push({ le: Infinity, count: snap.count });
+  const lines: string[] = [`# TYPE ${metric} histogram`];
+  for (const b of buckets) {
+    const le = Number.isFinite(b.le) ? String(b.le) : '+Inf';
+    lines.push(`${metric}_bucket${promLabelSet([...base, ['le', le]])} ${b.count}${suffix}`);
+  }
+  lines.push(`${metric}_sum${promLabelSet(base)} ${snap.sum}${suffix}`);
+  lines.push(`${metric}_count${promLabelSet(base)} ${snap.count}${suffix}`);
+  return lines;
+}
+
 /**
  * Buffers metric points and renders them in the Prometheus text exposition format. PURE string
  * output: `export` only appends to the in-memory buffer and `render` returns the text — nothing is
@@ -81,9 +123,15 @@ function promLabelValue(value: string): string {
  */
 export class PrometheusTextExporter implements MetricExporter {
   private buffer: MetricPoint[] = [];
+  private histBuffer: HistogramSnapshot[] = [];
 
   export(points: MetricPoint[]): void {
     this.buffer.push(...points);
+  }
+
+  /** Buffer a pre-aggregated histogram snapshot for rendering alongside counters/gauges. */
+  exportHistogram(snapshots: HistogramSnapshot | HistogramSnapshot[]): void {
+    this.histBuffer.push(...(Array.isArray(snapshots) ? snapshots : [snapshots]));
   }
 
   /** Points buffered so far (defensive copy). */
@@ -91,8 +139,14 @@ export class PrometheusTextExporter implements MetricExporter {
     return [...this.buffer];
   }
 
+  /** Histogram snapshots buffered so far (defensive copy). */
+  histograms(): HistogramSnapshot[] {
+    return [...this.histBuffer];
+  }
+
   reset(): void {
     this.buffer = [];
+    this.histBuffer = [];
   }
 
   render(): string {
@@ -107,15 +161,58 @@ export class PrometheusTextExporter implements MetricExporter {
       const metric = promMetricName(name);
       lines.push(`# TYPE ${metric} ${PROM_TYPE[name as MetricName] ?? 'gauge'}`);
       for (const p of byName.get(name)!) {
-        const labels: Array<[string, string]> = [];
-        if (p.organizationId) labels.push(['organization_id', p.organizationId]);
-        for (const [k, v] of Object.entries(p.labels ?? {})) labels.push([promLabelName(k), v]);
-        const rendered = labels.length
-          ? `{${labels.map(([k, v]) => `${promLabelName(k)}="${promLabelValue(v)}"`).join(',')}}`
-          : '';
+        const rendered = promLabelSet(promLabelPairs(p.organizationId, p.labels));
         const ts = Date.parse(p.at);
         lines.push(`${metric}${rendered} ${p.value}${Number.isFinite(ts) ? ` ${ts}` : ''}`);
       }
+    }
+    // Histograms render after scalar metrics, grouped by name for determinism.
+    const histByName = new Map<string, HistogramSnapshot[]>();
+    for (const h of this.histBuffer) {
+      const arr = histByName.get(h.name) ?? [];
+      arr.push(h);
+      histByName.set(h.name, arr);
+    }
+    for (const name of [...histByName.keys()].sort()) {
+      for (const snap of histByName.get(name)!) lines.push(...renderPrometheusHistogram(snap));
+    }
+    return lines.length ? `${lines.join('\n')}\n` : '';
+  }
+}
+
+/**
+ * StatsD-style text exporter — a second pure-string renderer (no UDP socket, no I/O). Buffers metric
+ * points and renders one `name:value|<type>` line each (`|c` for counters, `|g` for gauges), appending
+ * secret-redacted DogStatsD-style `|#tag:value` tags built from `organizationId` + `labels`. Deterministic:
+ * lines are emitted in buffer order and tags are sorted by key.
+ */
+export class StatsdTextExporter implements MetricExporter {
+  private buffer: MetricPoint[] = [];
+
+  export(points: MetricPoint[]): void {
+    this.buffer.push(...points);
+  }
+
+  points(): MetricPoint[] {
+    return [...this.buffer];
+  }
+
+  reset(): void {
+    this.buffer = [];
+  }
+
+  render(): string {
+    const lines: string[] = [];
+    for (const p of this.buffer) {
+      const type = (PROM_TYPE[p.name] ?? 'gauge') === 'counter' ? 'c' : 'g';
+      const safeLabels = redactLog(p.labels ?? {});
+      const tags: string[] = [];
+      if (p.organizationId) tags.push(`organization_id:${p.organizationId}`);
+      for (const [k, v] of Object.entries(safeLabels).sort(([a], [b]) => a.localeCompare(b))) {
+        tags.push(`${promLabelName(k)}:${String(v)}`);
+      }
+      const tagStr = tags.length ? `|#${tags.join(',')}` : '';
+      lines.push(`${promMetricName(p.name)}:${p.value}|${type}${tagStr}`);
     }
     return lines.length ? `${lines.join('\n')}\n` : '';
   }
@@ -149,10 +246,72 @@ export class OpenTelemetryExporter implements MetricExporter, TraceExporter {
   }
 }
 
+// ---- Bounded batching buffer ---------------------------------------------
+
+/**
+ * A bounded in-memory batch buffer with a DROP-OLDEST overflow policy. When `add` would exceed
+ * `limit`, the oldest items are evicted (and counted in `dropped`) so memory stays bounded under
+ * backpressure — recent data is kept over stale data. `flush(sink)` hands the batch to a sink and
+ * clears; the sink runs inside a try/catch so a failing backend never throws into the caller, and on
+ * failure the batch is dropped (counted) rather than re-buffered unboundedly.
+ */
+export class BatchBuffer<T> {
+  private items: T[] = [];
+  private droppedCount = 0;
+
+  constructor(readonly limit = 10_000) {}
+
+  add(...next: T[]): void {
+    for (const item of next) {
+      if (this.items.length >= this.limit) {
+        this.items.shift(); // drop oldest
+        this.droppedCount++;
+      }
+      this.items.push(item);
+    }
+  }
+
+  size(): number {
+    return this.items.length;
+  }
+
+  /** Total items evicted by the drop-oldest policy (plus flush-failure drops). */
+  dropped(): number {
+    return this.droppedCount;
+  }
+
+  peek(): T[] {
+    return [...this.items];
+  }
+
+  /** Route the batch to a sink and clear. Never throws; a sink failure drops the batch (counted). */
+  flush(sink: (batch: T[]) => void): void {
+    if (this.items.length === 0) return;
+    const batch = this.items;
+    this.items = [];
+    try {
+      sink(batch);
+    } catch {
+      this.droppedCount += batch.length; // a backend failure must not break the caller or re-storm.
+    }
+  }
+
+  reset(): void {
+    this.items = [];
+    this.droppedCount = 0;
+  }
+}
+
 // ---- Registry + uniform emit ---------------------------------------------
 
 let activeExporter: MetricExporter = new NoopExporter();
 let buffer: MetricPoint[] = [];
+let metricBufferLimit = 10_000;
+let metricsDropped = 0;
+let activeTraceExporter: TraceExporter = new NoopExporter();
+let spanBuffer: TraceSpan[] = [];
+let spanBufferLimit = 10_000;
+let spansDropped = 0;
 
 /** Install the active metric exporter (e.g. in production). Returns a restore function. */
 export function setMetricExporter(next: MetricExporter): () => void {
@@ -183,8 +342,21 @@ export function recordMetric(
     labels: opts.labels,
     at: opts.at ?? new Date().toISOString(),
   };
+  if (buffer.length >= metricBufferLimit) { buffer.shift(); metricsDropped++; } // bounded: drop oldest.
   buffer.push(point);
   return point;
+}
+
+/** Set the max buffered metric points (drop-oldest beyond this). Returns the previous limit. */
+export function setMetricBufferLimit(limit: number): number {
+  const prev = metricBufferLimit;
+  metricBufferLimit = Math.max(1, Math.floor(limit));
+  return prev;
+}
+
+/** Count of metric points evicted by the drop-oldest policy. */
+export function droppedMetrics(): number {
+  return metricsDropped;
 }
 
 /** Points buffered but not yet flushed (defensive copy). */
@@ -204,8 +376,68 @@ export function flushMetrics(): void {
   }
 }
 
-/** Reset the registry + buffer. For tests. */
+// ---- Trace span registry (mirrors the metric seam) -----------------------
+
+/** Install the active trace exporter. Returns a restore function. */
+export function setTraceExporter(next: TraceExporter): () => void {
+  const prev = activeTraceExporter;
+  activeTraceExporter = next;
+  return () => { activeTraceExporter = prev; };
+}
+
+/** The currently installed trace exporter (for tests/introspection). */
+export function getTraceExporter(): TraceExporter {
+  return activeTraceExporter;
+}
+
+/** Set the max buffered spans (drop-oldest beyond this). Returns the previous limit. */
+export function setSpanBufferLimit(limit: number): number {
+  const prev = spanBufferLimit;
+  spanBufferLimit = Math.max(1, Math.floor(limit));
+  return prev;
+}
+
+/** Count of spans evicted by the drop-oldest policy. */
+export function droppedSpans(): number {
+  return spansDropped;
+}
+
+/**
+ * Record a trace span into the bounded in-process buffer. Attributes are secret-redacted on the way in,
+ * so a token/secret-looking attribute can never reach an exporter. Pure + synchronous (append only).
+ */
+export function recordSpan(span: TraceSpan): TraceSpan {
+  const safe: TraceSpan = { ...span, attributes: span.attributes ? redactLog(span.attributes) : undefined };
+  if (spanBuffer.length >= spanBufferLimit) { spanBuffer.shift(); spansDropped++; } // bounded: drop oldest.
+  spanBuffer.push(safe);
+  return safe;
+}
+
+/** Spans buffered but not yet flushed (defensive copy). */
+export function bufferedSpans(): TraceSpan[] {
+  return [...spanBuffer];
+}
+
+/** Hand buffered spans to the active trace exporter and clear. Never throws into the caller. */
+export function flushSpans(): void {
+  if (spanBuffer.length === 0) return;
+  const batch = spanBuffer;
+  spanBuffer = [];
+  try {
+    activeTraceExporter.export(batch);
+  } catch {
+    // an exporter must never break the caller's path.
+  }
+}
+
+/** Reset the registry + buffers (metrics + traces). For tests. */
 export function resetMetricsForTests(): void {
   activeExporter = new NoopExporter();
   buffer = [];
+  metricBufferLimit = 10_000;
+  metricsDropped = 0;
+  activeTraceExporter = new NoopExporter();
+  spanBuffer = [];
+  spanBufferLimit = 10_000;
+  spansDropped = 0;
 }
