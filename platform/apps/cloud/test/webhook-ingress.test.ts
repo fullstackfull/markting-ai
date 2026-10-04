@@ -151,7 +151,7 @@ describe('C.5(3) — webhook ingress', () => {
     const { body, get } = shopifyDelivery();
     const res = await ingestWebhookRequest('shopify', CONN, get, body, d);
     expect(res.outcome).toBe('DISABLED_CONNECTION');
-    expect(res.httpStatus).toBe(403);
+    expect(res.httpStatus).toBe(401); // collapsed denial status (no connection-existence oracle)
     expect(res.organizationId).toBe(ORG);
     expect(enqueue.inputs).toHaveLength(0);
   });
@@ -162,7 +162,7 @@ describe('C.5(3) — webhook ingress', () => {
     const { body, get } = shopifyDelivery();
     const res = await ingestWebhookRequest('shopify', CONN, get, body, d);
     expect(res.outcome).toBe('NOT_CONFIGURED');
-    expect(res.httpStatus).toBe(503);
+    expect(res.httpStatus).toBe(401); // collapsed denial status (no connection-existence oracle)
     expect(enqueue.inputs).toHaveLength(0);
   });
 

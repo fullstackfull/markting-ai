@@ -154,7 +154,7 @@ export class PostgresSyncQueue implements SyncQueueStore {
       update public.markting_sync_jobs
       set state = ${job.state}, attempts = ${job.attempts}, not_before_ms = ${job.notBeforeMs},
           lease_expires_at_ms = ${job.leaseExpiresAtMs ?? null}, last_error = ${job.lastError ?? null},
-          lease_owner = ${job.state === 'LEASED' ? job.id : null}, updated_at = now()
+          lease_owner = null, updated_at = now()
       where id = ${job.id}
     `;
   }

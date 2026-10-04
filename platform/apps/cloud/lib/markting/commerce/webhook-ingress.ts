@@ -52,11 +52,14 @@ export const HTTP_STATUS: Record<IngressOutcome, number> = {
   BODY_TOO_LARGE: 413,
   MALFORMED: 400,
   UNSUPPORTED_EVENT: 400,
-  UNKNOWN_CONNECTION: 400,
-  NOT_CONFIGURED: 503,
+  // Pre-authentication denials are collapsed to a single 401 so the status never reveals whether the
+  // addressed connection exists, is disabled, is unconfigured, or simply failed signature verification
+  // (no connection-existence oracle). The body is already opaque.
+  UNKNOWN_CONNECTION: 401,
+  NOT_CONFIGURED: 401,
   INVALID_SIGNATURE: 401,
+  DISABLED_CONNECTION: 401,
   EXPIRED_TIMESTAMP: 400,
-  DISABLED_CONNECTION: 403,
   DUPLICATE: 409,
   DEAD_LETTER: 500,
 };

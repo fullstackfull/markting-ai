@@ -41,9 +41,20 @@ async function recordAudit(event: WebhookAuditEvent): Promise<void> {
   });
 }
 
+const MAX_WEBHOOK_BYTES = 1_000_000; // 1MB — mirror the in-ingress cap, enforced before buffering.
+
 export async function POST(request: Request, { params }: { params: Promise<{ provider: string }> }) {
   const { provider } = await params;
+
+  // Pre-check Content-Length before buffering the body (memory-DoS hardening on a public endpoint).
+  const declaredLen = Number(request.headers.get('content-length') ?? '');
+  if (Number.isFinite(declaredLen) && declaredLen > MAX_WEBHOOK_BYTES) {
+    return Response.json({ ok: false }, { status: 413 });
+  }
   const rawBody = await request.text();
+  if (rawBody.length > MAX_WEBHOOK_BYTES) {
+    return Response.json({ ok: false }, { status: 413 });
+  }
 
   const connectionId =
     new URL(request.url).searchParams.get('connection') ?? request.headers.get('x-adport-connection-id');
