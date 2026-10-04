@@ -77,7 +77,12 @@ export const BENCHMARK: BenchmarkQuestion[] = [
   { n: 32, q: 'Show spend trend over time', via: 'assistant', ask: 'show my spend trend over time', check: (a) => a.section?.kind === 'trend', note: 'trend section (chart on surface)' },
   { n: 33, q: 'Compare this week vs last week', via: 'surface', note: 'Reports engine weekly report (spend+CPA deltas)' },
   { n: 34, q: 'Break performance down by device/age/geo', via: 'assistant', ask: 'break performance down by device and geography', check: (a) => a.section?.kind === 'breakdown' && (a.section).analyses.some((x) => x.supported), note: 'breakdown engine (device/geo)' },
-  { n: 35, q: 'Which audiences convert best?', via: 'assistant', ask: 'which audience segments convert best', check: (a) => a.section?.kind === 'breakdown' && (a.section).analyses.some((x) => x.dimension === 'audience_segment' && x.supported), note: 'breakdown engine (audience_segment)' },
+  // Meta's insights API exposes DEMOGRAPHIC audience breakdowns (age/gender), not a saved/custom-audience
+  // ("audience_segment") breakdown — the capability registry (the single source of truth, C0.2) reflects
+  // that. "Which audiences convert best?" is therefore answered honestly via the demographic split, which
+  // the breakdown engine reports (and keeps NON-actionable as a protected dimension — reported, never an
+  // exclusion recommendation). A claim of a saved-audience breakdown would be fabricated capability.
+  { n: 35, q: 'Which audiences convert best?', via: 'assistant', ask: 'which audience segments convert best', check: (a) => a.section?.kind === 'breakdown' && (a.section).analyses.some((x) => (x.dimension === 'age' || x.dimension === 'gender') && x.supported), note: 'breakdown engine (demographic age/gender — Meta exposes demographic, not saved-audience, breakdowns)' },
   { n: 36, q: 'Attribution window sensitivity?', via: 'none', note: 'attribution window not a surfaced control', notNow: 'REQUIRES_PROVIDER_CAPABILITY' },
   { n: 37, q: 'Cross-channel view (Meta vs Google) with comparability?', via: 'assistant', ask: 'compare Meta vs Google cross-channel', check: (a) => a.section?.kind === 'crossChannel' && !!(a.section).roas.comparability.state && (((a.section).roas.ranking?.length ?? 0) > 0 || (a.section).roas.comparability.reasons.length > 0), note: 'cross-channel comparison engine' },
   { n: 38, q: 'Portfolio spend across all clients/currencies', via: 'assistant', ask: 'portfolio across all my clients', check: (a) => a.section?.kind === 'portfolio' && (a.section).rows.length >= 2, note: 'portfolio (no fake currency blend)' },
