@@ -63,10 +63,12 @@ describeDatabase('CONNECTIONS control plane (local database)', () => {
     const google = list.find((c) => c.provider === 'google');
     expect(google?.status).toBe('CONNECTED');
     expect(list.filter((c) => c.category === 'paid_media')).toHaveLength(11);
-    // Structural no-secret guarantee: the shape has no token/credential/ciphertext field.
-    const keys = Object.keys(google ?? {});
-    for (const forbidden of ['token', 'ciphertext', 'refreshToken', 'accessToken', 'secret', 'credential']) {
-      expect(keys.some((k) => k.toLowerCase().includes(forbidden.toLowerCase())), `no "${forbidden}" key`).toBe(false);
+    // Structural no-secret guarantee: the shape carries no secret-bearing field. (tokenExpiresAt is a
+    // non-secret expiry timestamp and is explicitly allowed; we match real secret names, not the bare
+    // substring "token".)
+    const keys = Object.keys(google ?? {}).map((k) => k.toLowerCase());
+    for (const forbidden of ['ciphertext', 'refreshtoken', 'accesstoken', 'accesstokensecret', 'secret', 'credential', 'apikey']) {
+      expect(keys.some((k) => k.includes(forbidden)), `no "${forbidden}" key`).toBe(false);
     }
   });
 
